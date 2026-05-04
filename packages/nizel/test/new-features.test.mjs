@@ -23,7 +23,11 @@ test('preset can be passed as a top-level constructor option', async () => {
   const nizel = useNizel({ preset: 'minimal' });
   const result = await nizel('# Hello');
   assert.equal(result.toc.length, 0);
-  assert.match(result.html, /\{\{|\}\}/); // minimal keeps template literals if unresolved
+  // minimal disables anchors so no id attribute on headings
+  assert.doesNotMatch(result.html, /id="hello/);
+  // minimal disables template processing, so {{ }} stays as-is in output
+  const templated = await nizel('# {{ title }}', { data: { title: 'Ignored' } });
+  assert.match(templated.html, /\{\{ title \}\}/);
 });
 
 // 4. .parse() method
