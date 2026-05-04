@@ -12,6 +12,7 @@ The repository is planned as a monorepo, so CI and publishing must work for all 
 - Support core and first-party plugins from the same repository.
 - Avoid accidental publishing.
 - Keep package release flow simple enough for Codex to maintain.
+- Use npm Trusted Publishing instead of long-lived npm tokens.
 
 ## Recommended stack
 
@@ -19,17 +20,26 @@ The repository is planned as a monorepo, so CI and publishing must work for all 
 - TypeScript
 - Changesets
 - GitHub Actions
+- npm Trusted Publishing
 - npm provenance
 
-## Required secrets
+## npm authentication
 
-Add this repository secret in GitHub:
+Do not use `NPM_TOKEN`.
 
-```txt
-NPM_TOKEN
+Nizel packages should use npm Trusted Publishing through GitHub Actions OIDC.
+
+Each npm package must be configured on npmjs.com with this GitHub repository and the release workflow as its trusted publisher.
+
+Required GitHub Actions permissions:
+
+```yaml
+permissions:
+  contents: write
+  id-token: write
 ```
 
-The token must be allowed to publish all Nizel packages.
+`id-token: write` allows npm to verify that the package is being published from the trusted GitHub workflow.
 
 ## Workflows
 
@@ -53,7 +63,7 @@ Uses Changesets.
 
 If there are unreleased changes, it opens or updates a release PR.
 
-When the release PR is merged, it publishes packages to npm.
+When the release PR is merged, it publishes packages to npm using Trusted Publishing.
 
 ## Package release model
 
@@ -93,6 +103,8 @@ nizel-plugin-email
 pnpm changeset publish
 ```
 
+The publish command should rely on npm Trusted Publishing and should not require an npm token.
+
 ## Version command
 
 ```bash
@@ -110,13 +122,14 @@ Packages should include:
 ```json
 {
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   }
 }
 ```
 
 ## Provenance
 
-GitHub Actions should publish with npm provenance when possible.
+GitHub Actions should publish with npm provenance.
 
-This improves trust in the published packages.
+This improves trust in the published packages and aligns with Trusted Publishing.
