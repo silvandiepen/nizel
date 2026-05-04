@@ -9,7 +9,8 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces",
-    "typecheck": "npm run typecheck --workspaces",
+    "prepare": "husky",
+    "typecheck": "npm run build --workspace nizel && npm run typecheck --workspaces",
     "test": "npm run test --workspaces",
     "test:commonmark": "npm run build --workspace nizel && node packages/nizel/conformance/commonmark-spec-runner.mjs",
     "test:commonmark:smoke": "npm run build --workspace nizel && COMMONMARK_SMOKE=1 node packages/nizel/conformance/commonmark-spec-runner.mjs",
@@ -18,6 +19,7 @@
   },
   "devDependencies": {
     "commonmark-spec": "^0.31.2",
+    "husky": "^9.1.7",
     "typescript": "^5.9.3",
     "vitest": "^4.1.5"
   }
