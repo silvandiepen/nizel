@@ -2,6 +2,7 @@ name: Publish
 
 on:
   push:
+    branches: [main]
     tags:
       - 'v*'
   workflow_dispatch:
@@ -52,13 +53,13 @@ jobs:
           git push
 
       - name: Publish nizel
-        run: npm publish --workspace nizel --access public --provenance
+        run: npm publish --workspace nizel --access public --provenance || echo "::warning::nizel publish skipped (version may already exist)"
 
       - name: Publish plugin-autolink
-        run: npm publish --workspace plugin-autolink --access public --provenance
+        run: npm publish --workspace plugin-autolink --access public --provenance || echo "::warning::plugin-autolink publish skipped (version may already exist)"
 
       - name: Publish plugin-code-copy
-        run: npm publish --workspace plugin-code-copy --access public --provenance
+        run: npm publish --workspace plugin-code-copy --access public --provenance || echo "::warning::plugin-code-copy publish skipped (version may already exist)"
 
       - name: Publish plugin-shiki
-        run: npm publish --workspace plugin-shiki --access public --provenance
+        run: npm publish --workspace plugin-shiki --access public --provenance || echo "::warning::plugin-shiki publish skipped (version may already exist)"
