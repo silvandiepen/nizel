@@ -63,3 +63,12 @@ jobs:
 
       - name: Publish plugin-shiki
         run: npm publish --workspace plugin-shiki --access public --provenance || echo "::warning::plugin-shiki publish skipped (version may already exist)"
+
+      - name: Publish plugin-alert
+        run: npm publish --workspace plugin-alert --access public --provenance || echo "::warning::plugin-alert publish skipped (version may already exist)"
+
+      - name: Publish plugin-deflist
+        run: npm publish --workspace plugin-deflist --access public --provenance || echo "::warning::plugin-deflist publish skipped (version may already exist)"
+
+      - name: Publish plugin-emoji
+        run: npm publish --workspace plugin-emoji --access public --provenance || echo "::warning::plugin-emoji publish skipped (version may already exist)"
