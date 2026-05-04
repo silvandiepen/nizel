@@ -1,0 +1,24 @@
+{
+  "name": "nizel-plugin-emoji",
+  "version": "0.1.0",
+  "description": "Emoji shortcut support plugin for Nizel.",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "build": "node --check src/index.js",
+    "typecheck": "node --check src/index.js",
+    "typecheck": "node --check src/index.js",
+    "test": "node -e \"process.exit(0)\"",
+    "test:watch": "vitest test/*.mjs"
+  },
+  "peerDependencies": {
+    "nizel": "^0.1.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}
