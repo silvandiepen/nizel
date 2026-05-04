@@ -32,7 +32,6 @@ jobs:
           node-version: 22
 
       - name: Install dependencies
-        working-directory: documentation
         run: npm ci
 
       - name: Build documentation
