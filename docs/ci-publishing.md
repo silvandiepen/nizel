@@ -16,7 +16,7 @@ The repository is planned as a monorepo, so CI and publishing must work for all 
 
 ## Recommended stack
 
-- pnpm workspaces
+- npm workspaces
 - TypeScript
 - Changesets
 - GitHub Actions
@@ -100,7 +100,7 @@ nizel-plugin-email
 ## Publish command
 
 ```bash
-pnpm changeset publish
+npx changeset publish
 ```
 
 The publish command should rely on npm Trusted Publishing and should not require an npm token.
@@ -108,7 +108,7 @@ The publish command should rely on npm Trusted Publishing and should not require
 ## Version command
 
 ```bash
-pnpm changeset version
+npx changeset version
 ```
 
 ## Safety

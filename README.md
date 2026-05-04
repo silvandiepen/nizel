@@ -112,6 +112,7 @@ Date: {{ publishedAt | format('date', 'dd MMM yyyy') }}
 
 ## Documentation
 
+- [Full reference](./docs/reference.md)
 - [Getting started](./docs/getting-started.md)
 - [API](./docs/api.md)
 - [Result object](./docs/result.md)
@@ -127,6 +128,7 @@ Date: {{ publishedAt | format('date', 'dd MMM yyyy') }}
 - [Presets](./docs/presets.md)
 - [Pipeline](./docs/pipeline.md)
 - [Safety](./docs/safety.md)
+- [Testing](./docs/testing.md)
 - [Implementation plan](./docs/implementation-plan.md)
 
 ## Design principle

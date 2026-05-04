@@ -57,6 +57,7 @@ type NizelOptions<TMeta = Record<string, unknown>> = {
   toc?: boolean | NizelTocOptions;
   anchors?: boolean | NizelAnchorOptions;
   safe?: boolean | NizelSafetyOptions;
+  unwrapStandaloneImages?: boolean;
 
   elements?: NizelElementRules;
   blocks?: NizelBlockMap;

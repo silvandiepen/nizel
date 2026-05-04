@@ -43,7 +43,7 @@ Root files:
 
 ```txt
 package.json
-pnpm-workspace.yaml
+package-lock.json
 tsconfig.json
 tsconfig.base.json
 .changeset/config.json
