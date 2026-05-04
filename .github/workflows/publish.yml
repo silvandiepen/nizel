@@ -50,5 +50,14 @@ jobs:
           git diff --cached --quiet || git commit -m "docs: generate release notes"
           git push
 
-      - name: Publish to npm
+      - name: Publish nizel
         run: npm publish --workspace nizel --access public --provenance
+
+      - name: Publish plugin-autolink
+        run: npm publish --workspace plugin-autolink --access public --provenance
+
+      - name: Publish plugin-code-copy
+        run: npm publish --workspace plugin-code-copy --access public --provenance
+
+      - name: Publish plugin-shiki
+        run: npm publish --workspace plugin-shiki --access public --provenance
