@@ -1,9 +1,22 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 import { useNizel } from 'nizel';
-import { autolinkPlugin } from '../src/index.js';
+import { autolinkPlugin, resolveAutolinkPluginOptions } from '../dist/index.js';
 
-test('configures autolink attributes through a plugin', async () => {
+test('unit: normalizes autolink plugin options', () => {
+  assert.deepEqual(resolveAutolinkPluginOptions(), {
+    enabled: true,
+    target: undefined,
+    rel: undefined,
+  });
+  assert.deepEqual(resolveAutolinkPluginOptions({ enabled: false, target: '_blank' }), {
+    enabled: false,
+    target: '_blank',
+    rel: undefined,
+  });
+});
+
+test('integration: configures autolink attributes through a plugin', async () => {
   const nizel = useNizel({
     plugins: [autolinkPlugin({ target: '_blank', rel: 'noopener noreferrer' })],
   });

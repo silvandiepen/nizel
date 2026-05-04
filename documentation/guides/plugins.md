@@ -83,3 +83,18 @@ const plugin = {
 ## Plugin Order
 
 Plugins run in the order they appear in the `plugins` array. `beforeParse` hooks run left to right. `afterParse` hooks run left to right. `afterRender` hooks run left to right.
+
+## Official Plugins
+
+Nizel publishes first-party plugins from the npm workspace:
+
+| Package | Purpose |
+| --- | --- |
+| `nizel-plugin-alert` | GitHub-style alert custom blocks |
+| `nizel-plugin-autolink` | Bare URL and email autolink configuration |
+| `nizel-plugin-code-copy` | CSP-friendly copy markup for code blocks |
+| `nizel-plugin-deflist` | Definition list syntax |
+| `nizel-plugin-emoji` | `:name:` emoji shortcuts outside code |
+| `nizel-plugin-shiki` | Worker-compatible syntax highlighting integration |
+
+All official plugins are TypeScript packages that publish `dist` JavaScript and `.d.ts` files. Plugin tests include unit coverage for package helpers and integration coverage through `useNizel`.
