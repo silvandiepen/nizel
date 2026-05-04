@@ -3,9 +3,11 @@ name: Deploy Docs
 on:
   workflow_run:
     workflows:
-      - Publish
+      - CI
     types:
       - completed
+    branches:
+      - main
   workflow_dispatch:
 
 concurrency:
