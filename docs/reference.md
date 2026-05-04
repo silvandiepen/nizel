@@ -589,3 +589,21 @@ const nizel = useNizel({
 ```
 
 If no highlighter is provided, it falls back to safe core code block HTML.
+
+For Worker bundles that should avoid Shiki's WASM engine, use the JavaScript regex helper:
+
+```ts
+import { shikiPlugin } from 'nizel-plugin-shiki';
+import { createJavaScriptShikiHighlighter } from 'nizel-plugin-shiki/javascript';
+
+const highlighter = await createJavaScriptShikiHighlighter({
+  themes: ['github-dark'],
+  langs: ['javascript', 'typescript'],
+  defaultTheme: 'github-dark',
+  defaultLang: 'text',
+});
+
+const nizel = useNizel({
+  plugins: [shikiPlugin({ highlighter })],
+});
+```

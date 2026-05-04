@@ -50,6 +50,29 @@ const nizel = useNizel({
 });
 ```
 
+## Worker and no-WASM usage
+
+Use the `nizel-plugin-shiki/javascript` entrypoint when Shiki must run with its JavaScript regex engine instead of the default Oniguruma WASM engine.
+
+```ts
+import { useNizel } from 'nizel';
+import { shikiPlugin } from 'nizel-plugin-shiki';
+import { createJavaScriptShikiHighlighter } from 'nizel-plugin-shiki/javascript';
+
+const highlighter = await createJavaScriptShikiHighlighter({
+  themes: ['github-dark'],
+  langs: ['javascript', 'typescript'],
+  defaultTheme: 'github-dark',
+  defaultLang: 'text',
+});
+
+const nizel = useNizel({
+  plugins: [shikiPlugin({ highlighter })],
+});
+```
+
+The root `nizel-plugin-shiki` entrypoint does not import Shiki. The `/javascript` entrypoint imports Shiki and `shiki/engine/javascript`, which makes the no-WASM choice explicit in your bundle.
+
 ## Options
 
 | Option | Type | Default | Description |

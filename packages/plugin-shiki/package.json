@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./javascript": {
+      "types": "./dist/javascript.d.ts",
+      "import": "./dist/javascript.js"
     }
   },
   "files": [
@@ -22,10 +26,19 @@
     "test:watch": "npm run build && vitest test/*.mjs"
   },
   "peerDependencies": {
-    "nizel": "^0.1.0"
+    "nizel": "^0.1.0",
+    "shiki": "^4.0.2"
+  },
+  "peerDependenciesMeta": {
+    "shiki": {
+      "optional": true
+    }
   },
   "publishConfig": {
     "access": "public",
     "provenance": true
+  },
+  "devDependencies": {
+    "shiki": "^4.0.2"
   }
 }

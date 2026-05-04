@@ -10,6 +10,12 @@ Accepts a Worker-compatible highlighter function and passes code blocks through 
 npm install nizel-plugin-shiki
 ```
 
+Install Shiki separately when you want Shiki-powered output:
+
+```bash
+npm install shiki
+```
+
 ## Usage
 
 ```js
@@ -36,6 +42,29 @@ const processor = useNizel({
 const result = processor.process('```js\nconsole.log("hello")\n```');
 // Highlighted HTML from Shiki
 ```
+
+## Worker and no-WASM usage
+
+Use the `nizel-plugin-shiki/javascript` entrypoint when Shiki must run without the Oniguruma WASM engine, such as in Worker bundles.
+
+```js
+import { useNizel } from 'nizel';
+import { shikiPlugin } from 'nizel-plugin-shiki';
+import { createJavaScriptShikiHighlighter } from 'nizel-plugin-shiki/javascript';
+
+const highlighter = await createJavaScriptShikiHighlighter({
+  themes: ['github-dark'],
+  langs: ['javascript', 'typescript'],
+  defaultTheme: 'github-dark',
+  defaultLang: 'text',
+});
+
+const processor = useNizel({
+  plugins: [shikiPlugin({ highlighter })],
+});
+```
+
+The root `nizel-plugin-shiki` entrypoint does not import Shiki. The `/javascript` entrypoint imports Shiki with `shiki/engine/javascript`, so bundlers can select the JavaScript regex engine intentionally.
 
 ## Options
 

@@ -69,8 +69,10 @@ const nizel = useNizel({
   plugins: [
     shikiPlugin({
       theme: 'github-dark',
-      langs: ['ts', 'js', 'html', 'css', 'md'],
-      mode: 'blocks' // 'blocks' | 'inline' | 'all'
+      highlighter(code, meta) {
+        return highlight(code, meta);
+      },
+      mode: 'blocks' // 'blocks' | 'inline'
     })
   ]
 });
@@ -91,6 +93,24 @@ It should render as normal inline code unless a highlighting plugin is configure
 The first-party highlighting plugin should prefer Shiki, but it must be usable in Worker-style runtimes.
 
 The plugin should avoid Node-only APIs and should support async initialization.
+
+Use `nizel-plugin-shiki/javascript` when the bundle must avoid Shiki's Oniguruma WASM engine:
+
+```ts
+import { shikiPlugin } from 'nizel-plugin-shiki';
+import { createJavaScriptShikiHighlighter } from 'nizel-plugin-shiki/javascript';
+
+const highlighter = await createJavaScriptShikiHighlighter({
+  themes: ['github-dark'],
+  langs: ['javascript', 'typescript'],
+  defaultTheme: 'github-dark',
+  defaultLang: 'text',
+});
+
+const nizel = useNizel({
+  plugins: [shikiPlugin({ highlighter })],
+});
+```
 
 ## Fallback
 
