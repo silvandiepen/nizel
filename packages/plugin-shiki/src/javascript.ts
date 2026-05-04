@@ -1,6 +1,14 @@
-import { createHighlighter, type BundledHighlighterOptions } from 'shiki';
+import { createBundledHighlighter, type BundledHighlighterOptions } from 'shiki/core';
 import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
+import { bundledLanguages } from 'shiki/langs';
+import { bundledThemes } from 'shiki/themes';
 import type { ShikiHighlighterInput } from './index.js';
+
+const createHighlighter = createBundledHighlighter({
+  langs: bundledLanguages,
+  themes: bundledThemes,
+  engine: createJavaScriptRegexEngine,
+});
 
 export type JavaScriptShikiHighlighterOptions = Omit<
   BundledHighlighterOptions<string, string>,

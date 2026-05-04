@@ -42,6 +42,10 @@ Unit tests cover Nizel-specific features beyond the spec:
 npm run test
 ```
 
+## Worker E2E
+
+`nizel-plugin-shiki` includes a Worker e2e test for code highlighting. The test bundles a Worker module with `esbuild`, runs it in Miniflare/workerd, renders Markdown with `useNizel()`, and verifies that highlighted code is produced without bundling Shiki's Oniguruma WASM path.
+
 ## Writing Tests
 
 Tests use Vitest. Example:

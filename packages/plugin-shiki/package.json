@@ -1,6 +1,6 @@
 {
   "name": "nizel-plugin-shiki",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Optional code highlighting integration point for Nizel.",
   "type": "module",
   "main": "./dist/index.js",
@@ -39,6 +39,8 @@
     "provenance": true
   },
   "devDependencies": {
+    "esbuild": "^0.27.3",
+    "miniflare": "^4.20260430.0",
     "shiki": "^4.0.2"
   }
 }

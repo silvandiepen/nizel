@@ -70,6 +70,7 @@ test('unit: keeps Shiki imports isolated to the JavaScript helper entrypoint', a
   ]);
 
   assert.doesNotMatch(rootEntrypoint, /from 'shiki/);
-  assert.match(javascriptEntrypoint, /from 'shiki/);
+  assert.doesNotMatch(javascriptEntrypoint, /from 'shiki';/);
+  assert.match(javascriptEntrypoint, /from 'shiki\/core'/);
   assert.match(javascriptEntrypoint, /shiki\/engine\/javascript/);
 });
