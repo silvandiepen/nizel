@@ -90,11 +90,11 @@ Nizel publishes first-party plugins from the npm workspace:
 
 | Package | Purpose |
 | --- | --- |
-| `nizel-plugin-alert` | GitHub-style alert custom blocks |
-| `nizel-plugin-autolink` | Bare URL and email autolink configuration |
-| `nizel-plugin-code-copy` | CSP-friendly copy markup for code blocks |
-| `nizel-plugin-deflist` | Definition list syntax |
-| `nizel-plugin-emoji` | `:name:` emoji shortcuts outside code |
-| `nizel-plugin-shiki` | Worker-compatible syntax highlighting integration |
+| [`nizel-plugin-alert`](/plugins/alert/index.html) | GitHub-style alert custom blocks |
+| [`nizel-plugin-autolink`](/plugins/autolink/index.html) | Bare URL and email autolink configuration |
+| [`nizel-plugin-code-copy`](/plugins/code-copy/index.html) | CSP-friendly copy markup for code blocks |
+| [`nizel-plugin-deflist`](/plugins/deflist/index.html) | Definition list syntax |
+| [`nizel-plugin-emoji`](/plugins/emoji/index.html) | `:name:` emoji shortcuts outside code |
+| [`nizel-plugin-shiki`](/plugins/shiki/index.html) | Worker-compatible syntax highlighting integration |
 
 All official plugins are TypeScript packages that publish `dist` JavaScript and `.d.ts` files. Plugin tests include unit coverage for package helpers and integration coverage through `useNizel`.

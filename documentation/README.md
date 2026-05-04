@@ -84,6 +84,7 @@ Compliance means your content renders consistently. No surprises. No edge cases.
 - [Table of Contents](/guides/toc/index.html) — automatic heading collection
 - [Elements](/guides/elements/index.html) — customize HTML output
 - [Plugins](/guides/plugins/index.html) — extend Nizel with your own logic
+- [Plugin Packages](/plugins/index.html) — first-party plugin reference pages
 - [Presets](/guides/presets/index.html) — blog, docs, email, and minimal bundles
 - [Safety](/guides/safety/index.html) — safe output defaults
 - [Testing](/guides/testing/index.html) — test suite and conformance

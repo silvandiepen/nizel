@@ -129,6 +129,7 @@ Date: {{ publishedAt | format('date', 'dd MMM yyyy') }}
 - [Inline extensions](./docs/inline.md)
 - [Transforms](./docs/transforms.md)
 - [Plugins](./docs/plugins.md)
+- [Plugin packages](./documentation/plugins/README.md)
 - [Presets](./docs/presets.md)
 - [Pipeline](./docs/pipeline.md)
 - [Safety](./docs/safety.md)
