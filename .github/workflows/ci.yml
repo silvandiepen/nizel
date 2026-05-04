@@ -5,8 +5,12 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
+  verify:
     runs-on: ubuntu-latest
 
     steps:
@@ -16,22 +20,17 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'pnpm'
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
+          node-version: 22
+          cache: npm
 
       - name: Install
-        run: pnpm install
+        run: npm ci
 
       - name: Typecheck
-        run: pnpm -r typecheck || true
+        run: npm run typecheck
 
       - name: Build
-        run: pnpm -r build || true
+        run: npm run build
 
       - name: Test
-        run: pnpm -r test || true
+        run: npm test

@@ -1,0 +1,44 @@
+name: Deploy Docs
+
+on:
+  workflow_run:
+    workflows:
+      - Publish
+    types:
+      - completed
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-docs-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        working-directory: documentation
+        run: npm ci
+
+      - name: Build documentation
+        working-directory: documentation
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages
+        working-directory: documentation
+        run: npx wrangler pages deploy public --project-name=nizel-docs
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
