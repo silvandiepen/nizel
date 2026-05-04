@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./documentation/media/logo.svg" alt="Nizel" width="220">
+</p>
+
 # Nizel
 
 Nizel is a Markdown content processor for modern applications.
