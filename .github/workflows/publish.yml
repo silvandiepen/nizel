@@ -53,22 +53,22 @@ jobs:
           git push
 
       - name: Publish nizel
-        run: npm publish --workspace nizel --access public --provenance || echo "::warning::nizel publish skipped (version may already exist)"
+        run: node scripts/publish-workspace-if-new.mjs nizel
 
       - name: Publish plugin-autolink
-        run: npm publish --workspace nizel-plugin-autolink --access public --provenance || echo "::warning::plugin-autolink publish skipped (version may already exist)"
+        run: node scripts/publish-workspace-if-new.mjs nizel-plugin-autolink
 
       - name: Publish plugin-code-copy
-        run: npm publish --workspace nizel-plugin-code-copy --access public --provenance || echo "::warning::plugin-code-copy publish skipped (version may already exist)"
+        run: node scripts/publish-workspace-if-new.mjs nizel-plugin-code-copy
 
       - name: Publish plugin-shiki
-        run: npm publish --workspace nizel-plugin-shiki --access public --provenance || echo "::warning::plugin-shiki publish skipped (version may already exist)"
+        run: node scripts/publish-workspace-if-new.mjs nizel-plugin-shiki
 
       - name: Publish plugin-alert
-        run: npm publish --workspace nizel-plugin-alert --access public --provenance || echo "::warning::plugin-alert publish skipped (version may already exist)"
+        run: node scripts/publish-workspace-if-new.mjs nizel-plugin-alert
 
       - name: Publish plugin-deflist
-        run: npm publish --workspace nizel-plugin-deflist --access public --provenance || echo "::warning::plugin-deflist publish skipped (version may already exist)"
+        run: node scripts/publish-workspace-if-new.mjs nizel-plugin-deflist
 
       - name: Publish plugin-emoji
-        run: npm publish --workspace nizel-plugin-emoji --access public --provenance || echo "::warning::plugin-emoji publish skipped (version may already exist)"
+        run: node scripts/publish-workspace-if-new.mjs nizel-plugin-emoji
