@@ -1,0 +1,23 @@
+{
+  "name": "nizel-plugin-shiki",
+  "version": "0.1.0",
+  "description": "Optional code highlighting integration point for Nizel.",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "build": "node --check src/index.js",
+    "typecheck": "node --check src/index.js",
+    "test": "vitest run test/*.mjs",
+    "test:watch": "vitest test/*.mjs"
+  },
+  "peerDependencies": {
+    "nizel": "^0.1.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "@nizel/documentation",
+  "private": true,
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0 <26"
+  },
+  "scripts": {
+    "build": "rimraf public && npx girky",
+    "test": "node -e \"process.exit(0)\"",
+    "typecheck": "node -e \"process.exit(0)\"",
+    "serve": "npx serve public",
+    "deploy": "wrangler pages deploy public --project-name=nizel-docs"
+  },
+  "dependencies": {
+    "girky": "^1.27.3",
+    "rimraf": "^4.3.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.76.0"
+  }
+}

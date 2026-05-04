@@ -1,0 +1,31 @@
+{
+  "name": "nizel",
+  "version": "0.1.0",
+  "description": "Markdown content processor for modern applications.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@sil/case": "^1.0.0",
+    "@sil/format": "^0.0.9"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && vitest run test/*.mjs",
+    "test:watch": "npm run build && vitest test/*.mjs"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}
