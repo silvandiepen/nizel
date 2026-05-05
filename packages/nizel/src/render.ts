@@ -19,7 +19,101 @@ export function renderHtml(
   blocks: NizelBlockMap = {},
   options: NizelRenderOptions = {},
 ): string {
+  if (isEmptyObject(elements) && isEmptyObject(blocks) && options.unwrapStandaloneImages !== true) {
+    return ast.children.map(renderBlockFast).join('\n');
+  }
+
   return ast.children.map((node) => renderBlock(node, elements, blocks, options)).join('\n');
+}
+
+/**
+ * Checks whether an object has no enumerable own keys.
+ */
+function isEmptyObject(value: Record<string, unknown>): boolean {
+  for (const _key in value) return false;
+  return true;
+}
+
+/**
+ * Renders one block node with default tags and no dynamic renderer hooks.
+ */
+function renderBlockFast(node: NizelBlockNode): string {
+  if (node.type === 'heading') {
+    return wrap(`h${node.depth}`, renderInlineFast(node.children), { id: node.id });
+  }
+
+  if (node.type === 'paragraph') return wrap('p', renderInlineFast(node.children));
+
+  if (node.type === 'code') {
+    const code = wrap('code', escapeHtml(node.code), {
+      class: node.lang ? `language-${node.lang}` : undefined,
+      'data-filename': node.filename,
+      'data-highlight-lines': node.highlightLines?.join(','),
+    });
+    return wrap('pre', code);
+  }
+
+  if (node.type === 'list') {
+    const tag = node.ordered ? 'ol' : 'ul';
+    const items = node.children
+      .map((item) =>
+        wrap(
+          'li',
+          renderListItemChildrenFast(item.children, node.tight === true),
+          { 'data-checked': item.checked },
+        ),
+      )
+      .join('\n');
+    return wrap(tag, `\n${items}\n`, { start: node.start !== undefined && node.start !== 1 ? node.start : undefined });
+  }
+
+  if (node.type === 'blockquote') {
+    const body = node.children.length > 0
+      ? `\n${node.children.map(renderBlockFast).join('\n')}\n`
+      : '\n';
+    return wrap('blockquote', body);
+  }
+
+  if (node.type === 'table') {
+    const [header, ...rows] = node.children;
+    const head = header
+      ? wrap(
+          'thead',
+          wrap(
+            'tr',
+            header.children
+              .map((cell, index) => wrap('th', renderInlineFast(cell.children), tableCellAttrs(node.align?.[index])))
+              .join(''),
+          ),
+        )
+      : '';
+    const body = wrap(
+      'tbody',
+      rows
+        .map((row) =>
+          wrap(
+            'tr',
+            row.children
+              .map((cell, index) => wrap('td', renderInlineFast(cell.children), tableCellAttrs(node.align?.[index])))
+              .join(''),
+          ),
+        )
+        .join(''),
+    );
+    return wrap('table', head + body);
+  }
+
+  if (node.type === 'thematicBreak') return '<hr />';
+  if (node.type === 'html') return node.value;
+  if (node.type === 'customBlock') {
+    return wrap(
+      'div',
+      (node.children ?? []).map(renderBlockFast).join('\n'),
+      { 'data-nizel-block': node.name },
+    );
+  }
+
+  return '';
 }
 
 /**
@@ -204,6 +298,32 @@ function renderListItemChildren(
 }
 
 /**
+ * Renders list item content with default tags and tight-list paragraph elision.
+ */
+function renderListItemChildrenFast(
+  children: NizelBlockNode[],
+  tight: boolean,
+): string {
+  if (children.length === 0) return '';
+
+  if (!tight) {
+    return `\n${children.map(renderBlockFast).join('\n')}\n`;
+  }
+
+  const hasBlockChild = children.some((child) => child.type !== 'paragraph');
+  const body = children
+    .map((child) => {
+      if (child.type === 'paragraph') return renderInlineFast(child.children);
+      return renderBlockFast(child);
+    })
+    .join('\n');
+
+  if (!hasBlockChild) return body;
+  if (children[children.length - 1]?.type === 'paragraph') return `\n${body}`;
+  return children[0]?.type === 'paragraph' ? `${body}\n` : `\n${body}\n`;
+}
+
+/**
  * Renders inline nodes to HTML.
  */
 function renderInline(nodes: NizelInlineNode[], elements: NizelElementRules): string {
@@ -252,6 +372,44 @@ function renderInlineNode(node: NizelInlineNode, elements: NizelElementRules): s
       href: href,
       title: node.title,
       ...attrsFor('a', node, elements),
+    });
+  }
+  return '';
+}
+
+/**
+ * Renders inline nodes with default tags and no dynamic element hooks.
+ */
+function renderInlineFast(nodes: NizelInlineNode[]): string {
+  if (nodes.length === 0) return '';
+  if (nodes.length === 1) return renderInlineNodeFast(nodes[0]);
+
+  return nodes.map(renderInlineNodeFast).join('');
+}
+
+/**
+ * Renders one inline node with default tags.
+ */
+function renderInlineNodeFast(node: NizelInlineNode): string {
+  if (node.type === 'text') return escapeHtml(node.value);
+  if (node.type === 'inlineHtml') return node.value;
+  if (node.type === 'lineBreak') return node.hard ? '<br />\n' : '\n';
+  if (node.type === 'inlineCode') return wrap('code', escapeHtml(node.code));
+  if (node.type === 'strong') return wrap('strong', renderInlineFast(node.children));
+  if (node.type === 'emphasis') return wrap('em', renderInlineFast(node.children));
+  if (node.type === 'delete') return wrap('del', renderInlineFast(node.children));
+  if (node.type === 'image') {
+    return `<img${serializeAttrs({
+      src: node.src,
+      alt: node.alt ?? '',
+      title: node.title,
+    })} />`;
+  }
+  if (node.type === 'link') {
+    const href = node.href?.toLowerCase().trim().startsWith('javascript:') ? undefined : node.href;
+    return wrap('a', renderInlineFast(node.children), {
+      href,
+      title: node.title,
     });
   }
   return '';
@@ -311,14 +469,28 @@ function wrap(
 function serializeAttrs(
   attrs: Record<string, string | number | boolean | undefined>,
 ): string {
-  return Object.entries(attrs)
-    .filter(([, value]) => value !== undefined && value !== false)
-    .filter(([key]) => !/^on[a-z]+$/i.test(key))
-    .map(([key, value]) => {
-      if (value === true) return ` ${key}`;
-      return ` ${key}="${escapeHtml(value)}"`;
-    })
-    .join('');
+  let serialized = '';
+
+  for (const key in attrs) {
+    const value = attrs[key];
+    if (value === undefined || value === false) continue;
+    if (isEventAttribute(key)) continue;
+    serialized += value === true ? ` ${key}` : ` ${key}="${escapeHtml(value)}"`;
+  }
+
+  return serialized;
+}
+
+/**
+ * Checks whether an attribute name is an unsafe event handler.
+ */
+function isEventAttribute(key: string): boolean {
+  return (
+    key.length > 2 &&
+    key[0].toLowerCase() === 'o' &&
+    key[1].toLowerCase() === 'n' &&
+    /^on[a-z]+$/i.test(key)
+  );
 }
 
 /**
