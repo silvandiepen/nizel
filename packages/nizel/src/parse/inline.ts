@@ -55,7 +55,7 @@ export const parseInlineWithState = (
     return source ? [{ type: 'text', value: source }] : [];
   }
 
-  if (extractNestedLinks) {
+  if (extractNestedLinks && hasBalancedLinkCandidate(source)) {
     const scanned = scanBalancedInlineLinks(source, options, state);
     if (scanned) return resolveRemainingEmphasis(scanned);
   }
@@ -225,6 +225,13 @@ const hasInlineSyntax = (source: string, autolinks: boolean): boolean => {
     source.includes('https://') ||
     source.includes('@')
   );
+};
+
+/**
+ * Checks whether the source can contain a balanced inline link or image label.
+ */
+const hasBalancedLinkCandidate = (source: string): boolean => {
+  return source.includes('[');
 };
 
 /**

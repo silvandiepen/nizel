@@ -307,16 +307,7 @@ function parseBlocks(
     const paragraph: string[] = [normalizeParagraphLine(line)];
     while (
       index + 1 < lines.length &&
-      lines[index + 1].trim() &&
-      !isSetextUnderline(lines[index + 1]) &&
-      !isThematicBreak(lines[index + 1]) &&
-      !/^(#{1,6})\s+/.test(lines[index + 1]) &&
-      !/^ {0,3}(`{3,}|~{3,})/.test(lines[index + 1]) &&
-      !/^::[A-Za-z][\w-]*/.test(lines[index + 1].trim()) &&
-      !isParagraphInterruptingListMarker(lines[index + 1]) &&
-      !/^ {0,3}> ?/.test(lines[index + 1]) &&
-      !(options.safe === false && isInterruptingHtmlBlockStart(lines[index + 1])) &&
-      !isTableStart(lines, index + 1)
+      canContinueParagraph(lines[index + 1], lines, index + 1, options)
     ) {
       index += 1;
       paragraph.push(normalizeParagraphLine(lines[index]));
@@ -346,6 +337,42 @@ function parseBlocks(
   }
 
   return children;
+}
+
+/**
+ * Checks whether a line can continue the current paragraph.
+ */
+function canContinueParagraph(
+  line: string,
+  lines: string[],
+  index: number,
+  options: ParseOptions,
+): boolean {
+  if (!line.trim()) return false;
+  if (!hasParagraphInterruptCandidate(line, options)) return true;
+
+  return Boolean(
+    !isSetextUnderline(line) &&
+      !isThematicBreak(line) &&
+      !/^(#{1,6})\s+/.test(line) &&
+      !/^ {0,3}(`{3,}|~{3,})/.test(line) &&
+      !/^::[A-Za-z][\w-]*/.test(line.trim()) &&
+      !isParagraphInterruptingListMarker(line) &&
+      !/^ {0,3}> ?/.test(line) &&
+      !(options.safe === false && isInterruptingHtmlBlockStart(line)) &&
+      !isTableStart(lines, index),
+  );
+}
+
+/**
+ * Checks whether a paragraph continuation line needs full interrupt tests.
+ */
+function hasParagraphInterruptCandidate(line: string, options: ParseOptions): boolean {
+  const trimmedStart = line.trimStart();
+  const first = trimmedStart[0];
+  if (line.includes('|')) return true;
+  if (options.safe === false && first === '<') return true;
+  return first !== undefined && '#`~:->*+=0123456789'.includes(first);
 }
 
 /**

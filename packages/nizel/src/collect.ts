@@ -94,33 +94,47 @@ function inlineText(
     images: NizelImage[];
   },
 ): string {
+  if (nodes.length === 0) return '';
+  if (nodes.length === 1) return inlineNodeText(nodes[0], state);
+
   return nodes
-    .map((node) => {
-      if (node.type === 'text') return node.value;
-      if (node.type === 'inlineHtml') return '';
-      if (node.type === 'lineBreak') return ' ';
-      if (node.type === 'inlineCode') return node.code;
-      if (node.type === 'image') {
-        state.images.push({
-          src: node.src,
-          alt: node.alt,
-          title: node.title,
-        });
-        return node.alt ?? '';
-      }
-      if (node.type === 'link') {
-        const text = inlineText(node.children, state);
-        state.links.push({
-          href: node.href,
-          text,
-          title: node.title,
-          external: Boolean(node.external),
-        });
-        return text;
-      }
-      return inlineText(node.children, state);
-    })
+    .map((node) => inlineNodeText(node, state))
     .join('');
+}
+
+/**
+ * Converts one inline node to plain text while collecting links and images.
+ */
+function inlineNodeText(
+  node: NizelInlineNode,
+  state: {
+    links: NizelLink[];
+    images: NizelImage[];
+  },
+): string {
+  if (node.type === 'text') return node.value;
+  if (node.type === 'inlineHtml') return '';
+  if (node.type === 'lineBreak') return ' ';
+  if (node.type === 'inlineCode') return node.code;
+  if (node.type === 'image') {
+    state.images.push({
+      src: node.src,
+      alt: node.alt,
+      title: node.title,
+    });
+    return node.alt ?? '';
+  }
+  if (node.type === 'link') {
+    const text = inlineText(node.children, state);
+    state.links.push({
+      href: node.href,
+      text,
+      title: node.title,
+      external: Boolean(node.external),
+    });
+    return text;
+  }
+  return inlineText(node.children, state);
 }
 
 /**

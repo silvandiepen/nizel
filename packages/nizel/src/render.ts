@@ -207,46 +207,54 @@ function renderListItemChildren(
  * Renders inline nodes to HTML.
  */
 function renderInline(nodes: NizelInlineNode[], elements: NizelElementRules): string {
+  if (nodes.length === 0) return '';
+  if (nodes.length === 1) return renderInlineNode(nodes[0], elements);
+
   return nodes
-    .map((node) => {
-      if (node.type === 'text') return escapeHtml(node.value);
-      if (node.type === 'inlineHtml') return node.value;
-      if (node.type === 'lineBreak') {
-        if (!node.hard) return '\n';
-        const brAttrs = attrsFor('br', node, elements);
-        return `<br${serializeAttrs(brAttrs)} />\n`;
-      }
-      if (node.type === 'inlineCode') {
-        return wrap(resolveTag('code', node, elements), escapeHtml(node.code), attrsFor('code', node, elements));
-      }
-      if (node.type === 'strong') {
-        return wrap(resolveTag('strong', node, elements), renderInline(node.children, elements), attrsFor('strong', node, elements));
-      }
-      if (node.type === 'emphasis') {
-        return wrap(resolveTag('em', node, elements), renderInline(node.children, elements), attrsFor('em', node, elements));
-      }
-      if (node.type === 'delete') {
-        return wrap(resolveTag('del', node, elements), renderInline(node.children, elements), attrsFor('del', node, elements));
-      }
-      if (node.type === 'image') {
-        return `<img${serializeAttrs({
-          src: node.src,
-          alt: node.alt ?? '',
-          title: node.title,
-          ...attrsFor('img', node, elements),
-        })} />`;
-      }
-      if (node.type === 'link') {
-        const href = node.href?.toLowerCase().trim().startsWith('javascript:') ? undefined : node.href;
-        return wrap(resolveTag('a', node, elements), renderInline(node.children, elements), {
-          href: href,
-          title: node.title,
-          ...attrsFor('a', node, elements),
-        });
-      }
-      return '';
-    })
+    .map((node) => renderInlineNode(node, elements))
     .join('');
+}
+
+/**
+ * Renders one inline node to HTML.
+ */
+function renderInlineNode(node: NizelInlineNode, elements: NizelElementRules): string {
+  if (node.type === 'text') return escapeHtml(node.value);
+  if (node.type === 'inlineHtml') return node.value;
+  if (node.type === 'lineBreak') {
+    if (!node.hard) return '\n';
+    const brAttrs = attrsFor('br', node, elements);
+    return `<br${serializeAttrs(brAttrs)} />\n`;
+  }
+  if (node.type === 'inlineCode') {
+    return wrap(resolveTag('code', node, elements), escapeHtml(node.code), attrsFor('code', node, elements));
+  }
+  if (node.type === 'strong') {
+    return wrap(resolveTag('strong', node, elements), renderInline(node.children, elements), attrsFor('strong', node, elements));
+  }
+  if (node.type === 'emphasis') {
+    return wrap(resolveTag('em', node, elements), renderInline(node.children, elements), attrsFor('em', node, elements));
+  }
+  if (node.type === 'delete') {
+    return wrap(resolveTag('del', node, elements), renderInline(node.children, elements), attrsFor('del', node, elements));
+  }
+  if (node.type === 'image') {
+    return `<img${serializeAttrs({
+      src: node.src,
+      alt: node.alt ?? '',
+      title: node.title,
+      ...attrsFor('img', node, elements),
+    })} />`;
+  }
+  if (node.type === 'link') {
+    const href = node.href?.toLowerCase().trim().startsWith('javascript:') ? undefined : node.href;
+    return wrap(resolveTag('a', node, elements), renderInline(node.children, elements), {
+      href: href,
+      title: node.title,
+      ...attrsFor('a', node, elements),
+    });
+  }
+  return '';
 }
 
 /**
