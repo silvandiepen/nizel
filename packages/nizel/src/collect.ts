@@ -9,33 +9,6 @@ import type {
 } from './types.js';
 
 /**
- * Pre-compiled pattern and sets for collect utilities.
- */
-const WORD_SPLIT = /\s+/;
-const INLINE_TYPES = new Set([
-  'text',
-  'emphasis',
-  'strong',
-  'delete',
-  'lineBreak',
-  'inlineCode',
-  'link',
-  'image',
-  'inlineHtml',
-]);
-const NON_BLOCK_TYPES = new Set([
-  'root',
-  'text',
-  'emphasis',
-  'strong',
-  'delete',
-  'lineBreak',
-  'inlineCode',
-  'link',
-  'image',
-]);
-
-/**
  * Walks a Nizel AST and extracts text, headings, links, images, and reading time.
  */
 export function collect(ast: NizelRootNode): {
@@ -50,7 +23,7 @@ export function collect(ast: NizelRootNode): {
   const links: NizelLink[] = [];
   const images: NizelImage[] = [];
   const text = blockText(ast.children, { headings, links, images }).trim();
-  const words = text ? text.split(WORD_SPLIT).length : 0;
+  const words = text ? text.split(/\s+/).length : 0;
 
   return {
     text,
@@ -194,12 +167,32 @@ function nestedText(
  * Narrows a mixed node to an inline node.
  */
 function isInline(node: NizelNode): node is NizelInlineNode {
-  return INLINE_TYPES.has(node.type);
+  return [
+    'text',
+    'emphasis',
+    'strong',
+    'delete',
+    'lineBreak',
+    'inlineCode',
+    'link',
+    'image',
+    'inlineHtml',
+  ].includes(node.type);
 }
 
 /**
  * Narrows a mixed node to a block node.
  */
 function isBlock(node: NizelNode): node is NizelBlockNode {
-  return !NON_BLOCK_TYPES.has(node.type);
+  return ![
+    'root',
+    'text',
+    'emphasis',
+    'strong',
+    'delete',
+    'lineBreak',
+    'inlineCode',
+    'link',
+    'image',
+  ].includes(node.type);
 }

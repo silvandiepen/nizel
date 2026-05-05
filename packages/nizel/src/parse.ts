@@ -45,27 +45,6 @@ import { isTableStart, readTable } from './parse/table.js';
 
 export { parseInline, stripInlineMarkdown } from './parse/inline.js';
 
-/**
- * Pre-compiled regex patterns for block parsing.
- */
-const CARRIAGE_RETURN = /\r\n?/g;
-const REFERENCE_DEF_START = /(^|\n)(?: {0,3}> ?| {0,3})\[/;
-const CUSTOM_BLOCK = /^::([A-Za-z][\w-]*)(?:\s+(.*))?$/;
-const FENCE_OPENING = /^( {0,3})(`{3,}|~{3,})[ \t]*(.*)$/;
-const ATX_HEADING = /^ {0,3}(#{1,6})(?:\s+(.*?))?\s*$/;
-const QUOTE_MARKER = /^( {0,3}> ?)(.*)$/;
-const INDENTED_CODE = /^ {4}/;
-
-// Paragraph continuation interrupt patterns
-const ATX_HEADING_START = /^(#{1,6})\s+/;
-const FENCE_START = /^ {0,3}(`{3,}|~{3,})/;
-const CUSTOM_BLOCK_START = /^::[A-Za-z][\w-]*/;
-const BLOCKQUOTE_START = /^ {0,3}> ?/;
-
-// Block start patterns
-const ATX_HEADING_BLOCK = /^ {0,3}(#{1,6})(?:\s|$)/;
-const FENCE_BLOCK = /^ {0,3}(`{3,}|~{3,})/;
-
 export type ParseOptions = {
   anchors: boolean;
   autolinks: boolean | NizelAutolinkOptions | undefined;
@@ -81,18 +60,25 @@ type ParseState = InlineParseState;
  */
 export function parseMarkdown(markdown: string, options: ParseOptions): NizelRootNode {
   const normalizedMarkdown = markdown.includes('\r')
-    ? markdown.replace(CARRIAGE_RETURN, '\n')
+    ? markdown.replace(/\r\n?/g, '\n')
     : markdown;
   const lines = normalizedMarkdown.includes('\t')
     ? expandLeadingTabsToLines(normalizedMarkdown)
     : normalizedMarkdown.split('\n');
   const { contentLines, references } =
-    normalizedMarkdown.includes('[') && REFERENCE_DEF_START.test(normalizedMarkdown)
+    normalizedMarkdown.includes('[') && hasPossibleReferenceDefinitionStart(normalizedMarkdown)
       ? extractReferenceDefinitions(lines)
       : { contentLines: lines, references: new Map() };
   const children = parseBlocks(contentLines, options, new Map<string, number>(), { references });
   return { type: 'root', children };
 }
+
+/**
+ * Checks whether the document has a line that could begin a reference definition.
+ */
+const hasPossibleReferenceDefinitionStart = (markdown: string): boolean => {
+  return /(^|\n)(?: {0,3}> ?| {0,3})\[/.test(markdown);
+};
 
 /**
  * Parses block-level Markdown constructs from a list of normalized lines.
@@ -118,7 +104,7 @@ function parseBlocks(
       }
     }
 
-    const customBlock = CUSTOM_BLOCK.exec(line.trim());
+    const customBlock = /^::([A-Za-z][\w-]*)(?:\s+(.*))?$/.exec(line.trim());
     if (customBlock) {
       const parsed = readCustomBlock(lines, index);
       const args = splitWords(customBlock[2] ?? '');
@@ -141,7 +127,7 @@ function parseBlocks(
       continue;
     }
 
-    const fence = FENCE_OPENING.exec(line);
+    const fence = /^( {0,3})(`{3,}|~{3,})[ \t]*(.*)$/.exec(line);
     if (fence) {
       const code: string[] = [];
       const indent = fence[1].length;
@@ -172,9 +158,9 @@ function parseBlocks(
       }
     }
 
-    if (INDENTED_CODE.test(line)) {
+    if (/^ {4}/.test(line)) {
       const code: string[] = [];
-      while (index < lines.length && (INDENTED_CODE.test(lines[index]) || !lines[index].trim())) {
+      while (index < lines.length && (/^ {4}/.test(lines[index]) || !lines[index].trim())) {
         code.push(lines[index].replace(/^ {0,4}/, ''));
         index += 1;
       }
@@ -189,7 +175,7 @@ function parseBlocks(
       continue;
     }
 
-    const heading = ATX_HEADING.exec(line);
+    const heading = /^ {0,3}(#{1,6})(?:\s+(.*?))?\s*$/.exec(line);
     if (heading) {
       const source = trimClosingHeadingHashes(heading[2] ?? '');
       const inlineChildren = parseInlineWithState(source, options, state);
@@ -229,11 +215,11 @@ function parseBlocks(
       continue;
     }
 
-    if (BLOCKQUOTE_START.test(line)) {
+    if (/^ {0,3}> ?/.test(line)) {
       const quoteLines: string[] = [];
       let allowLazyContinuation = false;
       while (index < lines.length) {
-        const quoteMarker = QUOTE_MARKER.exec(lines[index]);
+        const quoteMarker = /^( {0,3}> ?)(.*)$/.exec(lines[index]);
         if (quoteMarker) {
           const markerColumn = quoteMarker[1].endsWith(' ') ? quoteMarker[1].length : quoteMarker[1].length + 1;
           const quoteLine = expandLeadingTabsFromColumn(quoteMarker[2], markerColumn);
@@ -371,11 +357,11 @@ function canContinueParagraph(
   return Boolean(
     !isSetextUnderline(line) &&
       !isThematicBreak(line) &&
-      !ATX_HEADING_START.test(line) &&
-      !FENCE_START.test(line) &&
-      !CUSTOM_BLOCK_START.test(line.trim()) &&
+      !/^(#{1,6})\s+/.test(line) &&
+      !/^ {0,3}(`{3,}|~{3,})/.test(line) &&
+      !/^::[A-Za-z][\w-]*/.test(line.trim()) &&
       !isParagraphInterruptingListMarker(line) &&
-      !BLOCKQUOTE_START.test(line) &&
+      !/^ {0,3}> ?/.test(line) &&
       !(options.safe === false && isInterruptingHtmlBlockStart(line)) &&
       !isTableStart(lines, index),
   );
@@ -397,10 +383,10 @@ function hasParagraphInterruptCandidate(line: string, options: ParseOptions): bo
  */
 function isBlockStart(line: string, options: ParseOptions, lines: string[], index: number): boolean {
   return Boolean(
-      ATX_HEADING_BLOCK.test(line) ||
-      FENCE_BLOCK.test(line) ||
+      /^ {0,3}(#{1,6})(?:\s|$)/.test(line) ||
+      /^ {0,3}(`{3,}|~{3,})/.test(line) ||
       isThematicBreak(line) ||
-      BLOCKQUOTE_START.test(line) ||
+      /^ {0,3}> ?/.test(line) ||
       parseListMarker(line) ||
       isTableStart(lines, index) ||
       (!options.safe && isRawHtmlBlockLine(line)),

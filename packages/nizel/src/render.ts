@@ -11,26 +11,6 @@ import type {
 import { escapeHtml } from './utils.js';
 
 /**
- * Pre-compiled pattern for event handler attribute detection.
- */
-const EVENT_HANDLER_ATTR = /^on[a-z]+$/i;
-
-/**
- * Set of inline node types for fast lookup.
- */
-const INLINE_NODE_TYPES = new Set([
-  'text',
-  'emphasis',
-  'strong',
-  'delete',
-  'lineBreak',
-  'inlineCode',
-  'link',
-  'image',
-  'inlineHtml',
-]);
-
-/**
  * Renders a Nizel root AST to safe HTML.
  */
 export function renderHtml(
@@ -331,23 +311,29 @@ function wrap(
 function serializeAttrs(
   attrs: Record<string, string | number | boolean | undefined>,
 ): string {
-  let result = '';
-  for (const key in attrs) {
-    const value = attrs[key];
-    if (value === undefined || value === false) continue;
-    if (EVENT_HANDLER_ATTR.test(key)) continue;
-    if (value === true) {
-      result += ` ${key}`;
-    } else {
-      result += ` ${key}="${escapeHtml(value)}"`;
-    }
-  }
-  return result;
+  return Object.entries(attrs)
+    .filter(([, value]) => value !== undefined && value !== false)
+    .filter(([key]) => !/^on[a-z]+$/i.test(key))
+    .map(([key, value]) => {
+      if (value === true) return ` ${key}`;
+      return ` ${key}="${escapeHtml(value)}"`;
+    })
+    .join('');
 }
 
 /**
  * Narrows any Nizel node to an inline node for renderer callbacks.
  */
 function isInline(node: NizelNode): node is NizelInlineNode {
-  return INLINE_NODE_TYPES.has(node.type);
+  return [
+    'text',
+    'emphasis',
+    'strong',
+    'delete',
+    'lineBreak',
+    'inlineCode',
+    'link',
+    'image',
+    'inlineHtml',
+  ].includes(node.type);
 }

@@ -24,18 +24,6 @@ import {
 } from './inline-links.js';
 import { stripInlineNodes, trimTrailingSoftBreakSpace } from './inline-text.js';
 
-/**
- * Pre-compiled regex for inline syntax detection.
- */
-const INLINE_SYNTAX_CHARS = /[\\`<&\n\[\]*_~]/;
-
-/**
- * Pre-compiled master regex for inline tokenization.
- * Note: This regex is used with matchAll() to avoid global state issues with recursive calls.
- */
-const INLINE_PATTERN =
-  /(?<inlineHtml><!-->|<!--->|<!--[\s\S]*?-->|<\?[\s\S]*?\?>|<![A-Z][^>]*>|<!\[CDATA\[[\s\S]*?\]\]>|<\/?[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?)*\s*\/?>)|(?<hardSpaces> {2,}\n)|(?<hardBackslash>\\\n)|(?<softBreak>\n)|(?<!`)(?<codeTicks>`+)(?!`)(?<codeValue>[\s\S]*?)(?<!`)\k<codeTicks>(?!`)|\\(?<escaped>[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])|&(?<entity>[A-Za-z][A-Za-z0-9]+|#[0-9]+|#[xX][0-9A-Fa-f]+);|!\[(?<refImageAlt>[^\]]*)\]\[(?<refImageLabel>[^\]]*)\]|\[(?<refLinkText>[^\]`<\[]+)\]\[(?<refLinkLabel>[^\]]*)\]|!\[(?<inlineImageAlt>[^\]`<]*)\]\([ \t\n]*(?<inlineImageHref><[^<>\n\\]*>|(?!<)(?:\\.|[^() \t\n`\\]|\([^()\n]*(?:\([^()\n]*\)[^()\n]*)*\))*)(?:[ \t\n]+(?:"(?<inlineImageTitle>(?:\\.|[^"`])*)"|'(?<inlineImageTitleSingle>[^']*)'|\((?<inlineImageTitleParen>[^)]*)\)))?[ \t\n]*\)|\[(?<inlineLinkText>[^\]`<]*)\]\([ \t\n]*(?<inlineLinkHref><[^<>\n\\]*>|(?!<)(?:\\.|[^() \t\n`\\]|\([^()\n]*(?:\([^()\n]*\)[^()\n]*)*\))*)(?:[ \t\n]+(?:"(?<inlineLinkTitle>(?:\\.|[^"`])*)"|'(?<inlineLinkTitleSingle>[^']*)'|\((?<inlineLinkTitleParen>[^)]*)\)))?[ \t\n]*\)|<(?<angleUrl>[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*)>|<(?<angleEmail>[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)*)>|!\[(?<shortcutImageAlt>(?:\\\]|[^\]`<\[])+)\]|\[(?<shortcutLinkText>(?:\\\]|[^\]`<\[])+)\]|~~(?<deleteValue>[^~`]+)~~|(?<bareUrl>https?:\/\/[^\s<`]+)|(?<bareEmail>[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/giu;
-
 export type InlineParseOptions = {
   autolinks: boolean | NizelAutolinkOptions | undefined;
   safe?: boolean;
@@ -74,10 +62,12 @@ export const parseInlineWithState = (
 
   const nodes: NizelInlineNode[] = [];
   const safe = options.safe !== false;
+  const pattern =
+    /(?<inlineHtml><!-->|<!--->|<!--[\s\S]*?-->|<\?[\s\S]*?\?>|<![A-Z][^>]*>|<!\[CDATA\[[\s\S]*?\]\]>|<\/?[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?)*\s*\/?>)|(?<hardSpaces> {2,}\n)|(?<hardBackslash>\\\n)|(?<softBreak>\n)|(?<!`)(?<codeTicks>`+)(?!`)(?<codeValue>[\s\S]*?)(?<!`)\k<codeTicks>(?!`)|\\(?<escaped>[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])|&(?<entity>[A-Za-z][A-Za-z0-9]+|#[0-9]+|#[xX][0-9A-Fa-f]+);|!\[(?<refImageAlt>[^\]]*)\]\[(?<refImageLabel>[^\]]*)\]|\[(?<refLinkText>[^\]`<\[]+)\]\[(?<refLinkLabel>[^\]]*)\]|!\[(?<inlineImageAlt>[^\]`<]*)\]\([ \t\n]*(?<inlineImageHref><[^<>\n\\]*>|(?!<)(?:\\.|[^() \t\n`\\]|\([^()\n]*(?:\([^()\n]*\)[^()\n]*)*\))*)(?:[ \t\n]+(?:"(?<inlineImageTitle>(?:\\.|[^"`])*)"|'(?<inlineImageTitleSingle>[^']*)'|\((?<inlineImageTitleParen>[^)]*)\)))?[ \t\n]*\)|\[(?<inlineLinkText>[^\]`<]*)\]\([ \t\n]*(?<inlineLinkHref><[^<>\n\\]*>|(?!<)(?:\\.|[^() \t\n`\\]|\([^()\n]*(?:\([^()\n]*\)[^()\n]*)*\))*)(?:[ \t\n]+(?:"(?<inlineLinkTitle>(?:\\.|[^"`])*)"|'(?<inlineLinkTitleSingle>[^']*)'|\((?<inlineLinkTitleParen>[^)]*)\)))?[ \t\n]*\)|<(?<angleUrl>[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*)>|<(?<angleEmail>[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)*)>|!\[(?<shortcutImageAlt>(?:\\\]|[^\]`<\[])+)\]|\[(?<shortcutLinkText>(?:\\\]|[^\]`<\[])+)\]|~~(?<deleteValue>[^~`]+)~~|(?<bareUrl>https?:\/\/[^\s<`]+)|(?<bareEmail>[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/giu;
   let lastIndex = 0;
+  let match: RegExpExecArray | null;
 
-  // Use matchAll() to avoid shared global state issues with recursive calls
-  for (const match of source.matchAll(INLINE_PATTERN)) {
+  while ((match = pattern.exec(source))) {
     if (match.index > lastIndex) {
       nodes.push({ type: 'text', value: source.slice(lastIndex, match.index) });
     }
@@ -217,7 +207,7 @@ export const parseInlineWithState = (
       nodes.push({ type: 'text', value: match[0] });
     }
 
-    lastIndex = match.index + match[0].length;
+    lastIndex = pattern.lastIndex;
   }
 
   if (lastIndex < source.length) nodes.push({ type: 'text', value: source.slice(lastIndex) });
@@ -229,7 +219,7 @@ export const parseInlineWithState = (
  */
 const hasInlineSyntax = (source: string, autolinks: boolean): boolean => {
   if (!source) return false;
-  if (INLINE_SYNTAX_CHARS.test(source)) return true;
+  if (/[\\`<&\n\[\]*_~]/.test(source)) return true;
   return autolinks && (
     source.includes('http://') ||
     source.includes('https://') ||

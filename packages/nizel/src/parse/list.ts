@@ -7,17 +7,11 @@ export type ListMarker = {
 };
 
 /**
- * Pre-compiled regex patterns for list marker parsing.
- */
-const UNORDERED_MARKER = /^( {0,3})([-*+])([ \t]*)(.*)$/;
-const ORDERED_MARKER = /^( {0,3})(\d{1,9})([.)])([ \t]*)(.*)$/;
-
-/**
  * Parses a CommonMark list marker and its content indentation.
  */
 export const parseListMarker = (line: string): ListMarker | null => {
   const expanded = line.includes('\t') ? expandListMarkerTabs(line) : line;
-  const unordered = UNORDERED_MARKER.exec(expanded);
+  const unordered = /^( {0,3})([-*+])([ \t]*)(.*)$/.exec(expanded);
   if (unordered && (unordered[3].length > 0 || unordered[4] === '')) {
     return {
       body: listMarkerBody(unordered[3], unordered[4]),
@@ -27,7 +21,7 @@ export const parseListMarker = (line: string): ListMarker | null => {
     };
   }
 
-  const ordered = ORDERED_MARKER.exec(expanded);
+  const ordered = /^( {0,3})(\d{1,9})([.)])([ \t]*)(.*)$/.exec(expanded);
   if (ordered && (ordered[4].length > 0 || ordered[5] === '')) {
     return {
       body: listMarkerBody(ordered[4], ordered[5]),
@@ -49,11 +43,6 @@ export const listMarkerBody = (padding: string, body: string): string => {
 };
 
 /**
- * Pre-compiled pattern for list marker prefix check.
- */
-const LIST_MARKER_PREFIX = /^ {0,3}(?:[-*+]|\d{1,9}[.)])$/;
-
-/**
  * Expands tabs that contribute to list marker padding.
  */
 export const expandListMarkerTabs = (line: string): string => {
@@ -63,7 +52,7 @@ export const expandListMarkerTabs = (line: string): string => {
 
   while (cursor < line.length) {
     const character = line[cursor];
-    if (character === '\t' && (inMarkerPadding || LIST_MARKER_PREFIX.test(result))) {
+    if (character === '\t' && (inMarkerPadding || /^ {0,3}(?:[-*+]|\d{1,9}[.)])$/.test(result))) {
       const column = result.length;
       result += ' '.repeat(4 - (column % 4));
       inMarkerPadding = true;
@@ -72,7 +61,7 @@ export const expandListMarkerTabs = (line: string): string => {
     }
 
     result += character;
-    if (LIST_MARKER_PREFIX.test(result)) {
+    if (/^ {0,3}(?:[-*+]|\d{1,9}[.)])$/.test(result)) {
       inMarkerPadding = true;
     } else if (inMarkerPadding && character !== ' ') {
       inMarkerPadding = false;
