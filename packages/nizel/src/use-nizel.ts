@@ -190,7 +190,7 @@ function createNizel<TMeta extends Record<string, unknown> = Record<string, unkn
     }
 
     const templated =
-      resolved.template === false
+      resolved.template === false || !hasTemplateSyntax(extracted.markdown)
         ? extracted.markdown
         : renderTemplate(
             extracted.markdown,
@@ -239,9 +239,18 @@ function renderObjectTemplates(
   return Object.fromEntries(
     Object.entries(object).map(([key, value]) => [
       key,
-      typeof value === 'string' ? renderTemplate(value, data, options) : value,
+      typeof value === 'string' && hasTemplateSyntax(value)
+        ? renderTemplate(value, data, options)
+        : value,
     ]),
   );
+}
+
+/**
+ * Checks whether a value contains Nizel template delimiters.
+ */
+function hasTemplateSyntax(value: string): boolean {
+  return value.includes('{{');
 }
 
 export const useNizel = createNizel as NizelUseNizel;

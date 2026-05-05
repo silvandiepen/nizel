@@ -59,11 +59,23 @@ type ParseState = InlineParseState;
  * Parses Markdown into Nizel's normalized root AST.
  */
 export function parseMarkdown(markdown: string, options: ParseOptions): NizelRootNode {
-  const lines = expandLeadingTabs(markdown.replace(/\r\n/g, '\n')).split('\n');
-  const { contentLines, references } = extractReferenceDefinitions(lines);
+  const normalizedMarkdown = markdown.includes('\r')
+    ? markdown.replace(/\r\n?/g, '\n')
+    : markdown;
+  const lines = expandLeadingTabs(normalizedMarkdown).split('\n');
+  const { contentLines, references } = hasPossibleReferenceDefinitionStart(normalizedMarkdown)
+    ? extractReferenceDefinitions(lines)
+    : { contentLines: lines, references: new Map() };
   const children = parseBlocks(contentLines, options, new Map<string, number>(), { references });
   return { type: 'root', children };
 }
+
+/**
+ * Checks whether the document has a line that could begin a reference definition.
+ */
+const hasPossibleReferenceDefinitionStart = (markdown: string): boolean => {
+  return /(^|\n)(?: {0,3}> ?| {0,3})\[/.test(markdown);
+};
 
 /**
  * Parses block-level Markdown constructs from a list of normalized lines.
