@@ -65,6 +65,7 @@ Compliance means your content renders consistently. No surprises. No edge cases.
 - Heading anchors and slugs
 - Plain-text extraction and excerpts
 - Reading-time calculation
+- HTML to Markdown conversion
 - Link and image extraction
 - Element customization
 - AST transforms
@@ -87,5 +88,6 @@ Compliance means your content renders consistently. No surprises. No edge cases.
 - [Plugin Packages](/plugins/index.html) — first-party plugin reference pages
 - [Presets](/guides/presets/index.html) — blog, docs, email, and minimal bundles
 - [Safety](/guides/safety/index.html) — safe output defaults
+- [HTML to Markdown](/guides/html-to-markdown/index.html) — import HTML while preserving unsupported constructs
 - [Testing](/guides/testing/index.html) — test suite and conformance
 - [Release Notes](/release-notes/index.html) — version history

@@ -81,3 +81,55 @@ Renders an AST to HTML.
 ```ts
 const html = nizel.render(ast);
 ```
+
+## `htmlToMarkdown(html, options?)`
+
+Converts semantic HTML into Markdown.
+
+```ts
+import { htmlToMarkdown } from 'nizel';
+
+const markdown = htmlToMarkdown('<h1>Intro</h1><p>Hello <strong>world</strong>.</p>');
+```
+
+### Options
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `unsupported` | `'preserve' \| 'drop'` | `'preserve'` | Preserve HTML that Markdown cannot represent, or drop unsupported markup and keep readable text where possible. |
+
+See [HTML to Markdown](/guides/html-to-markdown/index.html) for conversion rules and unsupported HTML policy.
+
+## Browser API
+
+Browser-specific helpers are available from `nizel/browser`.
+
+```ts
+import {
+  htmlToMarkdown,
+  markdownToHtml,
+  mountMarkdown,
+  selectionToMarkdown,
+  useBrowserNizel,
+} from 'nizel/browser';
+
+const html = await markdownToHtml('# Preview');
+const markdown = htmlToMarkdown(document.querySelector('article')!);
+const selected = selectionToMarkdown();
+
+await mountMarkdown('#preview', '# Preview');
+
+const nizel = useBrowserNizel();
+await nizel.mount('#preview', '# Preview');
+```
+
+The browser entry also exports the core API (`useNizel`, `defineNizelPlugin`, `defineBlock`, and types), so it can be used as the single Nizel entry in browser bundles.
+
+For embedded webviews such as `WKWebView`, the package build emits explicit browser artifacts:
+
+```txt
+dist/browser/nizel.js       ESM bundle
+dist/browser/nizel.iife.js  IIFE bundle exposing globalThis.Nizel
+```
+
+Use `dist/browser/nizel.iife.js` when loading scripts directly into a webview, then call `Nizel.markdownToHtml()`, `Nizel.htmlToMarkdown()`, or `Nizel.useBrowserNizel()` from the preview bridge.

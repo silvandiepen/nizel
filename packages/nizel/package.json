@@ -13,6 +13,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.js"
     }
   },
   "files": [
@@ -23,13 +27,18 @@
     "@sil/format": "^0.0.9"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && npm run build:browser",
+    "build:browser": "esbuild src/browser.ts --bundle --platform=browser --format=esm --target=safari14 --outfile=dist/browser/nizel.js && esbuild src/browser.ts --bundle --platform=browser --format=iife --global-name=Nizel --target=safari14 --outfile=dist/browser/nizel.iife.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && vitest run test/*.mjs",
+    "test:commonmark:browser": "npm run build && NIZEL_COMMONMARK_ENTRY=../dist/browser/nizel.js node conformance/commonmark-spec-runner.mjs",
     "test:watch": "npm run build && vitest test/*.mjs"
   },
   "publishConfig": {
     "access": "public",
     "provenance": true
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.3"
   }
 }

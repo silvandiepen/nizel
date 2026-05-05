@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { tests } from 'commonmark-spec';
-import { useNizel } from '../dist/index.js';
+
+const entry = process.env.NIZEL_COMMONMARK_ENTRY ?? '../dist/index.js';
+const { useNizel } = await import(entry);
 
 const smokeSections = new Set([
   'ATX headings',
@@ -56,6 +58,7 @@ const bySection = failures.reduce((summary, failure) => {
 console.log(
   JSON.stringify(
     {
+      entry,
       mode: smoke ? 'smoke' : 'full',
       total: selectedTests.length,
       passed: selectedTests.length - failures.length,

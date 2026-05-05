@@ -18,6 +18,14 @@ npm run test:commonmark
 
 This runs all 652 spec tests against the Nizel parser and reports pass/fail for each.
 
+The browser bundle runs the same suite:
+
+```bash
+npm run test:commonmark:browser
+```
+
+This targets `packages/nizel/dist/browser/nizel.js`, the bundled ESM artifact intended for browser and `WKWebView` use.
+
 ## Detailed Report
 
 For a section-by-section breakdown:
@@ -34,6 +42,7 @@ Unit tests cover Nizel-specific features beyond the spec:
 - template variable resolution
 - filter application
 - element customization
+- HTML to Markdown conversion
 - plugin hooks
 - preset behavior
 - metadata collection

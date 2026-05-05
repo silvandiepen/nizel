@@ -17,6 +17,7 @@
     "typecheck": "npm run build --workspace nizel && npm run typecheck --workspaces",
     "test": "npm run test --workspaces",
     "test:commonmark": "npm run build --workspace nizel && node packages/nizel/conformance/commonmark-spec-runner.mjs",
+    "test:commonmark:browser": "npm run test:commonmark:browser --workspace nizel",
     "test:commonmark:smoke": "npm run build --workspace nizel && COMMONMARK_SMOKE=1 node packages/nizel/conformance/commonmark-spec-runner.mjs",
     "test:commonmark:report": "npm run build --workspace nizel && COMMONMARK_REPORT=1 node packages/nizel/conformance/commonmark-spec-runner.mjs",
     "test:commonmark:smoke:report": "npm run build --workspace nizel && COMMONMARK_SMOKE=1 COMMONMARK_REPORT=1 node packages/nizel/conformance/commonmark-spec-runner.mjs"

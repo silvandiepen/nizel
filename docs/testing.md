@@ -16,11 +16,14 @@ Run CommonMark fixture checks:
 ```bash
 npm run test:commonmark:smoke:report
 npm run test:commonmark:report
+npm run test:commonmark:browser
 npm run test:commonmark:smoke
 npm run test:commonmark
 ```
 
 `test:commonmark` runs the official CommonMark 0.31.2 examples from the `commonmark-spec` package against Nizel's own parser. It is a strict conformance target and fails when any fixture fails.
+
+`test:commonmark:browser` runs the same full CommonMark fixture suite against `packages/nizel/dist/browser/nizel.js`, the bundled ESM browser artifact intended for browser and `WKWebView` use.
 
 The `:report` variants print pass/fail counts and section summaries without failing the process. Use those while closing sections incrementally.
 
@@ -38,6 +41,7 @@ Unit tests cover:
 - option resolution
 - inline parsing
 - Markdown parsing
+- HTML to Markdown conversion
 - HTML rendering
 - AST collection
 - frontmatter extraction
@@ -48,6 +52,7 @@ Unit tests cover:
 Integration tests cover:
 
 - Markdown to structured result objects
+- HTML import conversion policy
 - helper methods
 - frontmatter and template interaction
 - table of contents
