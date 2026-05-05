@@ -4,11 +4,14 @@ import { slugCase } from '@sil/case';
  * Escapes a value for safe HTML text or attribute output.
  */
 export const escapeHtml = (value: unknown): string => {
-  return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
+  const text = String(value);
+  return /[&<>"]/.test(text)
+    ? text
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+    : text;
 };
 
 /**

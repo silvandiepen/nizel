@@ -3,6 +3,7 @@ import { test } from 'vitest';
 import {
   countLeadingSpaces,
   expandLeadingTabs,
+  expandLeadingTabsToLines,
   expandLeadingTabsFromColumn,
   nextNonBlankLine,
   stripLeadingSpaces,
@@ -11,6 +12,10 @@ import {
 
 test('expandLeadingTabs expands only leading indentation tabs', () => {
   assert.equal(expandLeadingTabs('\tcode\n  \tcode\nx\tkeep'), '    code\n    code\nx\tkeep');
+});
+
+test('expandLeadingTabsToLines expands and splits in one pass', () => {
+  assert.deepEqual(expandLeadingTabsToLines('\tcode\n  \tcode\nx\tkeep'), ['    code', '    code', 'x\tkeep']);
 });
 
 test('expandLeadingTabsFromColumn respects a consumed block marker column', () => {

@@ -10,7 +10,7 @@ export type ListMarker = {
  * Parses a CommonMark list marker and its content indentation.
  */
 export const parseListMarker = (line: string): ListMarker | null => {
-  const expanded = expandListMarkerTabs(line);
+  const expanded = line.includes('\t') ? expandListMarkerTabs(line) : line;
   const unordered = /^( {0,3})([-*+])([ \t]*)(.*)$/.exec(expanded);
   if (unordered && (unordered[3].length > 0 || unordered[4] === '')) {
     return {
