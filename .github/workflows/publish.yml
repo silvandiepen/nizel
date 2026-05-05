@@ -32,9 +32,6 @@ jobs:
           cache: npm
           registry-url: https://registry.npmjs.org
 
-      - name: Setup npm
-        run: npm install -g npm@11.13.0
-
       - name: Install
         run: npm ci
 

@@ -43,8 +43,8 @@ if (view.status === 0) {
 
 console.log(`${spec} is not published yet; publishing.`);
 const publish = spawnSync(
-  'npm',
-  ['publish', '--workspace', pkg.name, '--access', 'public', '--provenance'],
+  'npx',
+  ['-y', 'npm@11.5.1', 'publish', '--workspace', pkg.name, '--access', 'public', '--provenance'],
   { stdio: 'inherit' },
 );
 
