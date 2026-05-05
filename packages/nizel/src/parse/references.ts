@@ -7,6 +7,20 @@ import {
 import { readHtmlBlock } from './html.js';
 
 /**
+ * Pre-compiled regex patterns for reference definition extraction.
+ */
+const FENCE_OPENING = /^ {0,3}(`{3,}|~{3,})/;
+const INDENTED_CODE = /^ {4}/;
+const BLOCKQUOTE_LINE = /^>\s?(.*)$/;
+const REF_DEF_OPENER = /^ {0,3}\[((?:\\[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]|[^\[\]\n]){1,999})\]:[ \t]*(.*)$/;
+const MULTILINE_REF_OPENER = /^ {0,3}\[((?:\\[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]|[^\[\]\n])*)$/;
+const MULTILINE_REF_CLOSER = /^ {0,3}((?:\\[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]|[^\[\]\n])*)\]:[ \t]*(.*)$/;
+const LINE_INDENT = /^ {1,}/;
+const ATX_HEADING = /^ {0,3}(#{1,6})(?:\s|$)/;
+const THEMATIC_BREAK = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
+const DESTINATION_MATCH = /^\S+/;
+
+/**
  * Extracts link reference definitions before block parsing.
  */
 export const extractReferenceDefinitions = (lines: string[]): {
@@ -26,7 +40,7 @@ export const extractReferenceDefinitions = (lines: string[]): {
       continue;
     }
 
-    const fence = /^ {0,3}(`{3,}|~{3,})/.exec(lines[index]);
+    const fence = FENCE_OPENING.exec(lines[index]);
     if (fence) {
       const marker = fence[1][0];
       const close = new RegExp(`^ {0,3}\\${marker}{${fence[1].length},}\\s*$`);
@@ -41,13 +55,13 @@ export const extractReferenceDefinitions = (lines: string[]): {
       continue;
     }
 
-    if (/^ {4}/.test(lines[index])) {
+    if (INDENTED_CODE.test(lines[index])) {
       contentLines.push(lines[index]);
       previousWasReference = false;
       continue;
     }
 
-    const blockquoteReference = /^>\s?(.*)$/.exec(lines[index]);
+    const blockquoteReference = BLOCKQUOTE_LINE.exec(lines[index]);
     if (blockquoteReference) {
       const parsed = readReferenceDefinition([blockquoteReference[1]], 0);
       if (parsed) {
@@ -96,7 +110,7 @@ export const readReferenceDefinition = (
   const multiline = readMultilineReferenceDefinition(lines, startIndex);
   if (multiline) return multiline;
 
-  const opener = /^ {0,3}\[((?:\\[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]|[^\[\]\n]){1,999})\]:[ \t]*(.*)$/.exec(lines[startIndex]);
+  const opener = REF_DEF_OPENER.exec(lines[startIndex]);
   if (!opener) return null;
 
   const parts = [opener[2]];
@@ -127,12 +141,12 @@ export const readMultilineReferenceDefinition = (
   lines: string[],
   startIndex: number,
 ): { label: string; reference: ReferenceDefinition; endIndex: number } | null => {
-  const opener = /^ {0,3}\[((?:\\[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]|[^\[\]\n])*)$/.exec(lines[startIndex]);
+  const opener = MULTILINE_REF_OPENER.exec(lines[startIndex]);
   if (!opener) return null;
 
   const labelParts = [opener[1]];
   for (let cursor = startIndex + 1; cursor < lines.length; cursor += 1) {
-    const closer = /^ {0,3}((?:\\[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]|[^\[\]\n])*)\]:[ \t]*(.*)$/.exec(lines[cursor]);
+    const closer = MULTILINE_REF_CLOSER.exec(lines[cursor]);
     if (!closer) {
       if (!lines[cursor].trim()) return null;
       labelParts.push(lines[cursor]);
@@ -172,7 +186,7 @@ export const readMultilineReferenceDefinition = (
 export const canContinueReferenceDefinition = (parts: string[], line: string): boolean => {
   const collected = parts.join('\n').trim();
   if (!collected) return true;
-  if (/^ {1,}/.test(line)) return true;
+  if (LINE_INDENT.test(line)) return true;
   if (hasOpenReferenceTitle(parts)) return true;
 
   const parsed = parseReferenceDefinitionContent(collected);
@@ -187,7 +201,7 @@ export const canContinueReferenceDefinition = (parts: string[], line: string): b
  * Checks whether a reference can start after the previous block line.
  */
 export const isReferenceStartAfterBlock = (line: string): boolean => {
-  return /^ {0,3}(#{1,6})(?:\s|$)/.test(line) || isThematicBreak(line);
+  return ATX_HEADING.test(line) || isThematicBreak(line);
 };
 
 /**
@@ -205,7 +219,7 @@ export const parseReferenceDefinitionContent = (content: string): ReferenceDefin
     rest = rest.slice(closeIndex + 1);
     if (rest && !/^\s/.test(rest)) return null;
   } else {
-    const destinationMatch = /^\S+/.exec(rest);
+    const destinationMatch = DESTINATION_MATCH.exec(rest);
     if (!destinationMatch) return null;
     destination = destinationMatch[0];
     rest = rest.slice(destination.length);
@@ -251,5 +265,5 @@ export const hasOpenReferenceTitle = (parts: string[]): boolean => {
  * Checks CommonMark thematic break marker runs with optional spaces.
  */
 const isThematicBreak = (line: string): boolean => {
-  return /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/.test(line);
+  return THEMATIC_BREAK.test(line);
 };

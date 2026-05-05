@@ -1,5 +1,11 @@
 import type { NizelInlineNode, NizelTextNode } from '../types.js';
 
+/**
+ * Pre-compiled patterns for delimiter classification.
+ */
+const WHITESPACE = /\s/u;
+const UNICODE_PUNCTUATION = /[\p{P}\p{S}]/u;
+
 export type EscapedTextNode = NizelTextNode & {
   escaped?: boolean;
 };
@@ -206,8 +212,8 @@ export const classifyDelimiterRun = (
   before: string,
   after: string,
 ): { open: boolean; close: boolean } => {
-  const beforeWhitespace = before === '' || /\s/u.test(before);
-  const afterWhitespace = after === '' || /\s/u.test(after);
+  const beforeWhitespace = before === '' || WHITESPACE.test(before);
+  const afterWhitespace = after === '' || WHITESPACE.test(after);
   const beforePunctuation = isUnicodePunctuation(before);
   const afterPunctuation = isUnicodePunctuation(after);
   const leftFlanking = !afterWhitespace && (!afterPunctuation || beforeWhitespace || beforePunctuation);
@@ -227,7 +233,7 @@ export const classifyDelimiterRun = (
  * Checks whether a character is Unicode punctuation.
  */
 export const isUnicodePunctuation = (character: string): boolean => {
-  return character !== '' && /[\p{P}\p{S}]/u.test(character);
+  return character !== '' && UNICODE_PUNCTUATION.test(character);
 };
 
 /**
