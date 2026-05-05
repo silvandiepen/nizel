@@ -2,6 +2,10 @@
   "name": "nizel-plugin-shiki",
   "version": "0.1.1",
   "description": "Optional code highlighting integration point for Nizel.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/silvandiepen/nizel"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

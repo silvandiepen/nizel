@@ -2,6 +2,10 @@
   "name": "nizel-plugin-alert",
   "version": "0.1.0",
   "description": "GitHub-style alert blocks plugin for Nizel.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/silvandiepen/nizel"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

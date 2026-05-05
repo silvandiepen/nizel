@@ -2,6 +2,10 @@
   "name": "nizel",
   "version": "0.1.0",
   "description": "Markdown content processor for modern applications.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/silvandiepen/nizel"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
