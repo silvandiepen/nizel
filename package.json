@@ -5,10 +5,14 @@
   "packageManager": "npm@11.13.0",
   "workspaces": [
     "packages/*",
+    "apps/*",
     "documentation"
   ],
   "scripts": {
     "build": "npm run build --workspaces",
+    "benchmark": "npm run build --workspace nizel && npm run benchmark --workspace nizel-benchmarks --",
+    "benchmark:nizel": "npm run build --workspace nizel && npm run benchmark:nizel --workspace nizel-benchmarks --",
+    "fixtures:commonmark": "npm run fixtures:commonmark --workspace nizel-benchmarks",
     "prepare": "husky",
     "typecheck": "npm run build --workspace nizel && npm run typecheck --workspaces",
     "test": "npm run test --workspaces",

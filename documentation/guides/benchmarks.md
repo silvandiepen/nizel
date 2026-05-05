@@ -75,50 +75,129 @@ Score is the geometric mean of relative speed across fixtures for the mode. A sc
 - markdown-it: 4 wins
 - marked: 1 wins
 
-## Engine Results
+## Benchmark Tests
 
-| Fixture | Mode | Rank | Engine | Result | Hz | Mean ms | Relative | Slower | Samples |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| code-heavy | parse | 1 | nizel-local | best | 139,733.69 | 0.0073 | 100.0% of fastest |  | 95,299 |
-| code-heavy | parse | 2 | markdown-it |  | 124,013.45 | 0.0083 | 88.7% of fastest | 11.3% | 84,777 |
-| code-heavy | parse | 3 | marked |  | 123,466.58 | 0.0082 | 88.4% of fastest | 11.6% | 85,128 |
-| code-heavy | parse | 4 | remark |  | 5,204.81 | 0.1960 | 3.7% of fastest | 96.3% | 3,572 |
-| code-heavy | render | 1 | marked | best | 92,707.84 | 0.0109 | 100.0% of fastest |  | 63,993 |
-| code-heavy | render | 2 | markdown-it |  | 91,168.95 | 0.0112 | 98.3% of fastest | 1.7% | 62,358 |
-| code-heavy | render | 3 | nizel-local |  | 89,634.40 | 0.0121 | 96.7% of fastest | 3.3% | 57,752 |
-| code-heavy | render | 4 | remark |  | 4,774.63 | 0.2139 | 5.2% of fastest | 94.8% | 3,273 |
-| gfm | parse | 1 | nizel-local | best | 52,830.94 | 0.0197 | 100.0% of fastest |  | 35,603 |
-| gfm | parse | 2 | markdown-it |  | 38,062.06 | 0.0270 | 72.0% of fastest | 28.0% | 25,902 |
-| gfm | parse | 3 | marked |  | 31,147.46 | 0.0328 | 59.0% of fastest | 41.0% | 21,358 |
-| gfm | parse | 4 | remark |  | 2,288.02 | 0.4567 | 4.3% of fastest | 95.7% | 1,533 |
-| gfm | render | 1 | nizel-local | best | 41,937.80 | 0.0247 | 100.0% of fastest |  | 28,386 |
-| gfm | render | 2 | markdown-it |  | 32,623.46 | 0.0318 | 77.8% of fastest | 22.2% | 22,018 |
-| gfm | render | 3 | marked |  | 29,018.39 | 0.0351 | 69.2% of fastest | 30.8% | 19,938 |
-| gfm | render | 4 | remark |  | 1,979.71 | 0.5244 | 4.7% of fastest | 95.3% | 1,335 |
-| large | parse | 1 | markdown-it | best | 17,882.65 | 0.0575 | 100.0% of fastest |  | 12,172 |
-| large | parse | 2 | nizel-local |  | 12,419.42 | 0.0825 | 69.4% of fastest | 30.6% | 8,488 |
-| large | parse | 3 | marked |  | 8,010.82 | 0.1268 | 44.8% of fastest | 55.2% | 5,522 |
-| large | parse | 4 | remark |  | 747.15 | 1.3625 | 4.2% of fastest | 95.8% | 514 |
-| large | render | 1 | markdown-it | best | 14,881.50 | 0.0694 | 100.0% of fastest |  | 10,084 |
-| large | render | 2 | nizel-local |  | 10,220.57 | 0.1010 | 68.7% of fastest | 31.3% | 6,931 |
-| large | render | 3 | marked |  | 7,543.96 | 0.1349 | 50.7% of fastest | 49.3% | 5,191 |
-| large | render | 4 | remark |  | 636.17 | 1.6700 | 4.3% of fastest | 95.7% | 420 |
-| readme | parse | 1 | nizel-local | best | 57,310.52 | 0.0181 | 100.0% of fastest |  | 38,639 |
-| readme | parse | 2 | markdown-it |  | 44,880.98 | 0.0240 | 78.3% of fastest | 21.7% | 29,216 |
-| readme | parse | 3 | marked |  | 25,211.05 | 0.0413 | 44.0% of fastest | 56.0% | 16,954 |
-| readme | parse | 4 | remark |  | 1,873.66 | 0.5426 | 3.3% of fastest | 96.7% | 1,291 |
-| readme | render | 1 | nizel-local | best | 41,532.94 | 0.0263 | 100.0% of fastest |  | 26,648 |
-| readme | render | 2 | markdown-it |  | 38,241.54 | 0.0269 | 92.1% of fastest | 7.9% | 26,030 |
-| readme | render | 3 | marked |  | 23,486.82 | 0.0435 | 56.5% of fastest | 43.5% | 16,076 |
-| readme | render | 4 | remark |  | 1,628.18 | 0.6258 | 3.9% of fastest | 96.1% | 1,120 |
-| small | parse | 1 | markdown-it | best | 136,790.82 | 0.0076 | 100.0% of fastest |  | 91,918 |
-| small | parse | 2 | nizel-local |  | 128,187.77 | 0.0081 | 93.7% of fastest | 6.3% | 86,076 |
-| small | parse | 3 | marked |  | 73,956.43 | 0.0147 | 54.1% of fastest | 45.9% | 47,638 |
-| small | parse | 4 | remark |  | 6,062.50 | 0.1711 | 4.4% of fastest | 95.6% | 4,093 |
-| small | render | 1 | markdown-it | best | 113,782.04 | 0.0093 | 100.0% of fastest |  | 75,126 |
-| small | render | 2 | nizel-local |  | 100,556.02 | 0.0103 | 88.4% of fastest | 11.6% | 67,963 |
-| small | render | 3 | marked |  | 70,298.99 | 0.0147 | 61.8% of fastest | 38.2% | 47,754 |
-| small | render | 4 | remark |  | 5,379.13 | 0.1947 | 4.7% of fastest | 95.3% | 3,596 |
+Each benchmark test is shown first, followed by the result for every implementation in that exact test.
+
+### code-heavy / parse
+
+Test: Markdown string to parser output.
+Fixture: code-heavy (700 bytes, 46 lines).
+
+| Rank | Implementation | Result | Hz | Mean ms | Relative | Slower | Samples |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | nizel-local | best | 139,733.69 | 0.0073 | 100.0% of fastest |  | 95,299 |
+| 2 | markdown-it |  | 124,013.45 | 0.0083 | 88.7% of fastest | 11.3% | 84,777 |
+| 3 | marked |  | 123,466.58 | 0.0082 | 88.4% of fastest | 11.6% | 85,128 |
+| 4 | remark |  | 5,204.81 | 0.1960 | 3.7% of fastest | 96.3% | 3,572 |
+
+### code-heavy / render
+
+Test: Markdown string to HTML string.
+Fixture: code-heavy (700 bytes, 46 lines).
+
+| Rank | Implementation | Result | Hz | Mean ms | Relative | Slower | Samples |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | marked | best | 92,707.84 | 0.0109 | 100.0% of fastest |  | 63,993 |
+| 2 | markdown-it |  | 91,168.95 | 0.0112 | 98.3% of fastest | 1.7% | 62,358 |
+| 3 | nizel-local |  | 89,634.40 | 0.0121 | 96.7% of fastest | 3.3% | 57,752 |
+| 4 | remark |  | 4,774.63 | 0.2139 | 5.2% of fastest | 94.8% | 3,273 |
+
+### gfm / parse
+
+Test: Markdown string to parser output.
+Fixture: gfm (559 bytes, 23 lines).
+
+| Rank | Implementation | Result | Hz | Mean ms | Relative | Slower | Samples |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | nizel-local | best | 52,830.94 | 0.0197 | 100.0% of fastest |  | 35,603 |
+| 2 | markdown-it |  | 38,062.06 | 0.0270 | 72.0% of fastest | 28.0% | 25,902 |
+| 3 | marked |  | 31,147.46 | 0.0328 | 59.0% of fastest | 41.0% | 21,358 |
+| 4 | remark |  | 2,288.02 | 0.4567 | 4.3% of fastest | 95.7% | 1,533 |
+
+### gfm / render
+
+Test: Markdown string to HTML string.
+Fixture: gfm (559 bytes, 23 lines).
+
+| Rank | Implementation | Result | Hz | Mean ms | Relative | Slower | Samples |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | nizel-local | best | 41,937.80 | 0.0247 | 100.0% of fastest |  | 28,386 |
+| 2 | markdown-it |  | 32,623.46 | 0.0318 | 77.8% of fastest | 22.2% | 22,018 |
+| 3 | marked |  | 29,018.39 | 0.0351 | 69.2% of fastest | 30.8% | 19,938 |
+| 4 | remark |  | 1,979.71 | 0.5244 | 4.7% of fastest | 95.3% | 1,335 |
+
+### large / parse
+
+Test: Markdown string to parser output.
+Fixture: large (2093 bytes, 83 lines).
+
+| Rank | Implementation | Result | Hz | Mean ms | Relative | Slower | Samples |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | markdown-it | best | 17,882.65 | 0.0575 | 100.0% of fastest |  | 12,172 |
+| 2 | nizel-local |  | 12,419.42 | 0.0825 | 69.4% of fastest | 30.6% | 8,488 |
+| 3 | marked |  | 8,010.82 | 0.1268 | 44.8% of fastest | 55.2% | 5,522 |
+| 4 | remark |  | 747.15 | 1.3625 | 4.2% of fastest | 95.8% | 514 |
+
+### large / render
+
+Test: Markdown string to HTML string.
+Fixture: large (2093 bytes, 83 lines).
+
+| Rank | Implementation | Result | Hz | Mean ms | Relative | Slower | Samples |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | markdown-it | best | 14,881.50 | 0.0694 | 100.0% of fastest |  | 10,084 |
+| 2 | nizel-local |  | 10,220.57 | 0.1010 | 68.7% of fastest | 31.3% | 6,931 |
+| 3 | marked |  | 7,543.96 | 0.1349 | 50.7% of fastest | 49.3% | 5,191 |
+| 4 | remark |  | 636.17 | 1.6700 | 4.3% of fastest | 95.7% | 420 |
+
+### readme / parse
+
+Test: Markdown string to parser output.
+Fixture: readme (997 bytes, 44 lines).
+
+| Rank | Implementation | Result | Hz | Mean ms | Relative | Slower | Samples |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | nizel-local | best | 57,310.52 | 0.0181 | 100.0% of fastest |  | 38,639 |
+| 2 | markdown-it |  | 44,880.98 | 0.0240 | 78.3% of fastest | 21.7% | 29,216 |
+| 3 | marked |  | 25,211.05 | 0.0413 | 44.0% of fastest | 56.0% | 16,954 |
+| 4 | remark |  | 1,873.66 | 0.5426 | 3.3% of fastest | 96.7% | 1,291 |
+
+### readme / render
+
+Test: Markdown string to HTML string.
+Fixture: readme (997 bytes, 44 lines).
+
+| Rank | Implementation | Result | Hz | Mean ms | Relative | Slower | Samples |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | nizel-local | best | 41,532.94 | 0.0263 | 100.0% of fastest |  | 26,648 |
+| 2 | markdown-it |  | 38,241.54 | 0.0269 | 92.1% of fastest | 7.9% | 26,030 |
+| 3 | marked |  | 23,486.82 | 0.0435 | 56.5% of fastest | 43.5% | 16,076 |
+| 4 | remark |  | 1,628.18 | 0.6258 | 3.9% of fastest | 96.1% | 1,120 |
+
+### small / parse
+
+Test: Markdown string to parser output.
+Fixture: small (191 bytes, 14 lines).
+
+| Rank | Implementation | Result | Hz | Mean ms | Relative | Slower | Samples |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | markdown-it | best | 136,790.82 | 0.0076 | 100.0% of fastest |  | 91,918 |
+| 2 | nizel-local |  | 128,187.77 | 0.0081 | 93.7% of fastest | 6.3% | 86,076 |
+| 3 | marked |  | 73,956.43 | 0.0147 | 54.1% of fastest | 45.9% | 47,638 |
+| 4 | remark |  | 6,062.50 | 0.1711 | 4.4% of fastest | 95.6% | 4,093 |
+
+### small / render
+
+Test: Markdown string to HTML string.
+Fixture: small (191 bytes, 14 lines).
+
+| Rank | Implementation | Result | Hz | Mean ms | Relative | Slower | Samples |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | markdown-it | best | 113,782.04 | 0.0093 | 100.0% of fastest |  | 75,126 |
+| 2 | nizel-local |  | 100,556.02 | 0.0103 | 88.4% of fastest | 11.6% | 67,963 |
+| 3 | marked |  | 70,298.99 | 0.0147 | 61.8% of fastest | 38.2% | 47,754 |
+| 4 | remark |  | 5,379.13 | 0.1947 | 4.7% of fastest | 95.3% | 3,596 |
 
 ## Nizel Internal Costs
 
@@ -202,17 +281,15 @@ The internal benchmark separates public pipeline calls from parser/rendering pha
 
 ## Running Benchmarks
 
-The comparison suite lives outside this repository so different Nizel worktrees can benchmark against their own local build without conflicting with each other.
+The benchmark suite lives in `apps/benchmarks` and writes generated reports to `apps/benchmarks/results`. The result folder is ignored so local benchmark history does not pollute commits.
 
 ~~~bash
-cd ../markdown-benchmarks
-npm run benchmark -- --nizel-repo=../nizel --fixture=small,readme,large,gfm,code-heavy --mode=parse,render --label=local
-npm run benchmark:nizel -- --nizel-repo=../nizel --fixture=small,readme,large,gfm,code-heavy --mode=pipeline,phase,inline --label=local
+npm run benchmark -- --fixture=small,readme,large,gfm,code-heavy --mode=parse,render --label=local
+npm run benchmark:nizel -- --fixture=small,readme,large,gfm,code-heavy --mode=pipeline,phase,inline --label=local
 ~~~
 
-Rebuild Nizel before running the benchmark when parser or renderer code changed:
+The root benchmark scripts rebuild Nizel before running. If you run the benchmark workspace directly, rebuild Nizel first when parser or renderer code changed:
 
 ~~~bash
-cd ../nizel
 npm run build --workspace nizel
 ~~~

@@ -1,0 +1,28 @@
+{
+  "name": "nizel-benchmarks",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Performance comparison benchmarks for Nizel and other Markdown parsers.",
+  "scripts": {
+    "build": "node -e \"process.exit(0)\"",
+    "benchmark": "node src/benchmark.js",
+    "bench": "npm run benchmark",
+    "benchmark:nizel": "node src/nizel-function-benchmark.js",
+    "bench:nizel": "npm run benchmark:nizel",
+    "fixtures:commonmark": "node scripts/build-commonmark-fixture.js",
+    "test": "node -e \"process.exit(0)\"",
+    "typecheck": "node -e \"process.exit(0)\""
+  },
+  "dependencies": {
+    "commonmark-spec": "^0.31.2",
+    "markdown-it": "^14.1.0",
+    "marked": "^18.0.3",
+    "nizel": "^0.1.0",
+    "remark-gfm": "^4.0.1",
+    "remark-html": "^16.0.1",
+    "remark-parse": "^11.0.0",
+    "tinybench": "^4.1.0",
+    "unified": "^11.0.5"
+  }
+}
