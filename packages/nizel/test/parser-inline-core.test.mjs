@@ -16,6 +16,13 @@ const referenceState = {
   ]),
 };
 
+test('parseInline returns plain text directly when no inline syntax exists', () => {
+  assert.deepEqual(parseInline('Plain text without markdown syntax', options), [
+    { type: 'text', value: 'Plain text without markdown syntax' },
+  ]);
+  assert.deepEqual(parseInline('', options), []);
+});
+
 test('parseInline parses text, emphasis, code, and autolinks without reference state', () => {
   assert.deepEqual(parseInline('A **strong** `code` https://example.com.', options), [
     { type: 'text', value: 'A ' },

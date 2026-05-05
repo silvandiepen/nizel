@@ -50,13 +50,17 @@ export const parseInlineWithState = (
   state: InlineParseState,
   extractNestedLinks = true,
 ): NizelInlineNode[] => {
+  const autolinks = options.autolinks !== false && getAutolinkOptions(options.autolinks).enabled !== false;
+  if (!hasInlineSyntax(source, autolinks)) {
+    return source ? [{ type: 'text', value: source }] : [];
+  }
+
   if (extractNestedLinks) {
     const scanned = scanBalancedInlineLinks(source, options, state);
     if (scanned) return resolveRemainingEmphasis(scanned);
   }
 
   const nodes: NizelInlineNode[] = [];
-  const autolinks = options.autolinks !== false && getAutolinkOptions(options.autolinks).enabled !== false;
   const safe = options.safe !== false;
   const pattern =
     /(?<inlineHtml><!-->|<!--->|<!--[\s\S]*?-->|<\?[\s\S]*?\?>|<![A-Z][^>]*>|<!\[CDATA\[[\s\S]*?\]\]>|<\/?[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?)*\s*\/?>)|(?<hardSpaces> {2,}\n)|(?<hardBackslash>\\\n)|(?<softBreak>\n)|(?<!`)(?<codeTicks>`+)(?!`)(?<codeValue>[\s\S]*?)(?<!`)\k<codeTicks>(?!`)|\\(?<escaped>[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])|&(?<entity>[A-Za-z][A-Za-z0-9]+|#[0-9]+|#[xX][0-9A-Fa-f]+);|!\[(?<refImageAlt>[^\]]*)\]\[(?<refImageLabel>[^\]]*)\]|\[(?<refLinkText>[^\]`<\[]+)\]\[(?<refLinkLabel>[^\]]*)\]|!\[(?<inlineImageAlt>[^\]`<]*)\]\([ \t\n]*(?<inlineImageHref><[^<>\n\\]*>|(?!<)(?:\\.|[^() \t\n`\\]|\([^()\n]*(?:\([^()\n]*\)[^()\n]*)*\))*)(?:[ \t\n]+(?:"(?<inlineImageTitle>(?:\\.|[^"`])*)"|'(?<inlineImageTitleSingle>[^']*)'|\((?<inlineImageTitleParen>[^)]*)\)))?[ \t\n]*\)|\[(?<inlineLinkText>[^\]`<]*)\]\([ \t\n]*(?<inlineLinkHref><[^<>\n\\]*>|(?!<)(?:\\.|[^() \t\n`\\]|\([^()\n]*(?:\([^()\n]*\)[^()\n]*)*\))*)(?:[ \t\n]+(?:"(?<inlineLinkTitle>(?:\\.|[^"`])*)"|'(?<inlineLinkTitleSingle>[^']*)'|\((?<inlineLinkTitleParen>[^)]*)\)))?[ \t\n]*\)|<(?<angleUrl>[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*)>|<(?<angleEmail>[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)*)>|!\[(?<shortcutImageAlt>(?:\\\]|[^\]`<\[])+)\]|\[(?<shortcutLinkText>(?:\\\]|[^\]`<\[])+)\]|~~(?<deleteValue>[^~`]+)~~|(?<bareUrl>https?:\/\/[^\s<`]+)|(?<bareEmail>[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/giu;
@@ -208,6 +212,19 @@ export const parseInlineWithState = (
 
   if (lastIndex < source.length) nodes.push({ type: 'text', value: source.slice(lastIndex) });
   return resolveRemainingEmphasis(nodes);
+};
+
+/**
+ * Checks whether inline source can contain Markdown syntax.
+ */
+const hasInlineSyntax = (source: string, autolinks: boolean): boolean => {
+  if (!source) return false;
+  if (/[\\`<&\n\[\]*_~]/.test(source)) return true;
+  return autolinks && (
+    source.includes('http://') ||
+    source.includes('https://') ||
+    source.includes('@')
+  );
 };
 
 /**
