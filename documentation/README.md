@@ -1,11 +1,11 @@
 ---
-projectTitle: Nizel
+projectTitle: Niżel
 projectDescription: A Markdown content processor for modern applications.
 projectSearch: true
 hide: true
 ---
 
-# Nizel
+# Niżel
 
 A Markdown content processor for modern applications.
 
@@ -38,19 +38,19 @@ Welcome to **Nizel**.
 `);
 ```
 
-## Why Nizel
+## Why Niżel
 
 Most Markdown parsers answer one question: how do I turn Markdown into HTML?
 
-Nizel answers a more useful question: how do I turn Markdown into structured content my app can use?
+Niżel answers a more useful question: how do I turn Markdown into structured content my app can use?
 
 In real products, Markdown usually needs more than rendered HTML. It needs metadata, frontmatter, slugs, anchors, TOC generation, custom blocks, design-system classes, safe links, variables, filters, and plugin-based extension points.
 
-Nizel is not a parser with a nicer name. It is a content engine with Markdown as its input format. The parser is an implementation detail. The public value is the stable content model and the simple API.
+Niżel is not a parser with a nicer name. It is a content engine with Markdown as its input format. The parser is an implementation detail. The public value is the stable content model and the simple API.
 
 ## CommonMark Compliant
 
-Nizel passes the full CommonMark 0.31 specification test suite — all 652 tests.
+Niżel passes the full CommonMark 0.31 specification test suite — all 652 tests.
 
 CommonMark is the only standardized, cross-implementation Markdown specification. It defines exactly how Markdown should parse and render, removing the ambiguity that plagues most parsers.
 
