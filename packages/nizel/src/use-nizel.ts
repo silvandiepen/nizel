@@ -15,6 +15,18 @@ import type {
   NizelUseNizel,
 } from './types.js';
 
+type PreparedMarkdown<TRuntimeMeta extends Record<string, unknown> = Record<string, unknown>> = {
+  ast: NizelRootNode;
+  meta: TRuntimeMeta;
+  resolved: NizelOptions;
+};
+
+type PreparedMeta<TRuntimeMeta extends Record<string, unknown> = Record<string, unknown>> = {
+  markdown: string;
+  meta: TRuntimeMeta;
+  resolved: NizelOptions;
+};
+
 /**
  * Creates a configured Nizel processor.
  */
@@ -24,15 +36,134 @@ function createNizel<TMeta extends Record<string, unknown> = Record<string, unkn
   const presetOptions = options.preset ? resolvePreset(options.preset) : {};
   const effectiveOptions = { ...presetOptions, ...options, preset: undefined };
 
-    /**
-     * Processes Markdown with processor and runtime options.
-     */
+  /**
+   * Processes Markdown with processor and runtime options.
+   */
   async function process<
     TRuntimeMeta extends Record<string, unknown> = TMeta,
   >(
     markdown: string,
     runtimeOptions: NizelOptions<TRuntimeMeta> = {},
   ): Promise<NizelResult<unknown, TRuntimeMeta>> {
+    const { ast, meta, resolved } = prepareMarkdown(markdown, runtimeOptions);
+    const collected = collect(ast);
+    const finalHtml = renderPreparedHtml(ast, resolved);
+    const output = resolved.output ?? 'html';
+    const result = output === 'text' ? collected.text : output === 'ast' ? ast : finalHtml;
+
+    return {
+      result,
+      html: finalHtml,
+      text: collected.text,
+      ast,
+      meta: meta as TRuntimeMeta,
+      frontmatter: meta as TRuntimeMeta,
+      title: stringMeta(meta.title) ?? collected.headings[0]?.text,
+      description: stringMeta(meta.description),
+      excerpt: collected.excerpt,
+      toc: resolved.toc === false ? [] : collected.headings,
+      headings: collected.headings,
+      links: collected.links,
+      images: collected.images,
+      readingTime: collected.readingTime,
+    };
+  }
+
+  const nizel = process as NizelProcessor;
+  nizel.html = async (markdown, runtimeOptions) => {
+    const { ast, resolved } = prepareMarkdown(markdown, runtimeOptions);
+    return renderPreparedHtml(ast, resolved);
+  };
+  nizel.text = async (markdown, runtimeOptions) => {
+    const { ast } = prepareMarkdown(markdown, runtimeOptions);
+    return collect(ast).text;
+  };
+  nizel.ast = async (markdown, runtimeOptions): Promise<NizelRootNode> => {
+    return prepareMarkdown(markdown, runtimeOptions).ast;
+  };
+  nizel.meta = async <
+    TRuntimeMeta extends Record<string, unknown> = Record<string, unknown>,
+  >(
+    markdown: string,
+    runtimeOptions?: NizelOptions<TRuntimeMeta>,
+  ): Promise<TRuntimeMeta> => {
+    return prepareMeta(markdown, runtimeOptions).meta as TRuntimeMeta;
+  };
+  nizel.preset = (name) => createNizel(resolvePreset(name));
+  nizel.parse = async (markdown, runtimeOptions) => {
+    const resolved = resolveOptions(effectiveOptions as NizelOptions, runtimeOptions as NizelOptions);
+    const extracted = resolved.frontmatter === false ? { markdown, frontmatter: {} } : extractFrontmatter(markdown);
+    let preparedMarkdown = extracted.markdown;
+    for (const plugin of resolved.plugins ?? []) {
+      const next = plugin.hooks?.beforeParse?.(preparedMarkdown, resolved);
+      if (next !== undefined) preparedMarkdown = next;
+    }
+    return parseMarkdown(preparedMarkdown, {
+      anchors: resolved.anchors !== false,
+      autolinks: resolved.autolinks,
+      blocks: resolved.blocks ?? {},
+      safe: resolved.safe !== false,
+      slugStyle: resolved.slugStyle,
+    });
+  };
+  nizel.render = (ast, runtimeOptions) => {
+    const resolved = resolveOptions(effectiveOptions as NizelOptions, runtimeOptions as NizelOptions);
+    return renderHtml(ast, withAutolinkElements(resolved.elements ?? {}, resolved.autolinks), resolved.blocks ?? {}, {
+      unwrapStandaloneImages: resolved.unwrapStandaloneImages === true,
+    });
+  };
+
+  return nizel;
+
+  /**
+   * Resolves options, frontmatter, templates, hooks, parsing, and transforms.
+   */
+  function prepareMarkdown<TRuntimeMeta extends Record<string, unknown> = TMeta>(
+    markdown: string,
+    runtimeOptions: NizelOptions<TRuntimeMeta> = {},
+  ): PreparedMarkdown<TRuntimeMeta> {
+    const preparedMeta = prepareMeta(markdown, runtimeOptions);
+    let preparedMarkdown = preparedMeta.markdown;
+
+    for (const plugin of preparedMeta.resolved.plugins ?? []) {
+      const nextMarkdown = plugin.hooks?.beforeParse?.(preparedMarkdown, preparedMeta.resolved);
+      if (nextMarkdown !== undefined) {
+        preparedMarkdown = nextMarkdown;
+      }
+    }
+
+    let ast = parseMarkdown(preparedMarkdown, {
+      anchors: preparedMeta.resolved.anchors !== false,
+      autolinks: preparedMeta.resolved.autolinks,
+      blocks: preparedMeta.resolved.blocks ?? {},
+      safe: preparedMeta.resolved.safe !== false,
+      slugStyle: preparedMeta.resolved.slugStyle,
+    });
+
+    for (const plugin of preparedMeta.resolved.plugins ?? []) {
+      const afterResult = plugin.hooks?.afterParse?.(ast, preparedMeta.resolved);
+      if (afterResult) ast = afterResult;
+    }
+
+    for (const transform of preparedMeta.resolved.transforms ?? []) {
+      const transformResult = transform(ast);
+      if (transformResult) ast = transformResult;
+    }
+
+    return {
+      ast,
+      meta: preparedMeta.meta,
+      resolved: preparedMeta.resolved,
+    };
+  }
+
+  /**
+   * Resolves options, frontmatter, metadata templates, and body templates.
+   */
+  function prepareMeta<TRuntimeMeta extends Record<string, unknown> = TMeta>(
+    markdown: string,
+    runtimeOptions: NizelOptions<TRuntimeMeta> = {},
+  ): PreparedMeta<TRuntimeMeta> {
     const resolved = resolveOptions(effectiveOptions as NizelOptions, runtimeOptions as NizelOptions);
     resolved.data = { ...(resolved.variables ?? {}), ...(resolved.data ?? {}) };
     const extracted =
@@ -67,110 +198,34 @@ function createNizel<TMeta extends Record<string, unknown> = Record<string, unkn
             resolved.template as NizelTemplateOptions,
           );
 
-    let preparedMarkdown = templated;
-    for (const plugin of resolved.plugins ?? []) {
-      const nextMarkdown = plugin.hooks?.beforeParse?.(preparedMarkdown, resolved);
-      if (nextMarkdown !== undefined) {
-        preparedMarkdown = nextMarkdown;
-      }
-    }
-
-    let ast = parseMarkdown(preparedMarkdown, {
-      anchors: resolved.anchors !== false,
-      autolinks: resolved.autolinks,
-      blocks: resolved.blocks ?? {},
-      safe: resolved.safe !== false,
-      slugStyle: resolved.slugStyle,
-    });
-    for (const plugin of resolved.plugins ?? []) {
-      const afterResult = plugin.hooks?.afterParse?.(ast, resolved);
-      if (afterResult) ast = afterResult;
-    }
-    for (const transform of resolved.transforms ?? []) {
-      const transformResult = transform(ast);
-      if (transformResult) ast = transformResult;
-    }
-
-    const collected = collect(ast);
-    const html = renderHtml(
-      ast,
-      withAutolinkElements(resolved.elements ?? {}, resolved.autolinks),
-      resolved.blocks ?? {},
-      {
-        unwrapStandaloneImages: resolved.unwrapStandaloneImages === true,
-      },
-    );
-
-    let finalHtml = html;
-    for (const plugin of resolved.plugins ?? []) {
-      const modified = plugin.hooks?.afterRender?.(finalHtml, resolved);
-      if (modified !== undefined) finalHtml = modified;
-    }
-
-    const output = resolved.output ?? 'html';
-    const result = output === 'text' ? collected.text : output === 'ast' ? ast : finalHtml;
-
     return {
-      result,
-      html: finalHtml,
-      text: collected.text,
-      ast,
+      markdown: templated,
       meta: meta as TRuntimeMeta,
-      frontmatter: meta as TRuntimeMeta,
-      title: stringMeta(meta.title) ?? collected.headings[0]?.text,
-      description: stringMeta(meta.description),
-      excerpt: collected.excerpt,
-      toc: resolved.toc === false ? [] : collected.headings,
-      headings: collected.headings,
-      links: collected.links,
-      images: collected.images,
-      readingTime: collected.readingTime,
+      resolved,
     };
   }
+}
 
-  const nizel = process as NizelProcessor;
-  nizel.html = async (markdown, runtimeOptions) => {
-    return (await process(markdown, { ...runtimeOptions, output: 'html' })).html;
-  };
-  nizel.text = async (markdown, runtimeOptions) => {
-    return (await process(markdown, { ...runtimeOptions, output: 'text' })).text;
-  };
-  nizel.ast = async (markdown, runtimeOptions): Promise<NizelRootNode> => {
-    return (await process(markdown, { ...runtimeOptions, output: 'ast' })).ast;
-  };
-  nizel.meta = async <
-    TRuntimeMeta extends Record<string, unknown> = Record<string, unknown>,
-  >(
-    markdown: string,
-    runtimeOptions?: NizelOptions<TRuntimeMeta>,
-  ): Promise<TRuntimeMeta> => {
-    return (await process(markdown, runtimeOptions)).meta as TRuntimeMeta;
-  };
-  nizel.preset = (name) => createNizel(resolvePreset(name));
-  nizel.parse = async (markdown, runtimeOptions) => {
-    const resolved = resolveOptions(effectiveOptions as NizelOptions, runtimeOptions as NizelOptions);
-    const extracted = resolved.frontmatter === false ? { markdown, frontmatter: {} } : extractFrontmatter(markdown);
-    let preparedMarkdown = extracted.markdown;
-    for (const plugin of resolved.plugins ?? []) {
-      const next = plugin.hooks?.beforeParse?.(preparedMarkdown, resolved);
-      if (next !== undefined) preparedMarkdown = next;
-    }
-    return parseMarkdown(preparedMarkdown, {
-      anchors: resolved.anchors !== false,
-      autolinks: resolved.autolinks,
-      blocks: resolved.blocks ?? {},
-      safe: resolved.safe !== false,
-      slugStyle: resolved.slugStyle,
-    });
-  };
-  nizel.render = (ast, runtimeOptions) => {
-    const resolved = resolveOptions(effectiveOptions as NizelOptions, runtimeOptions as NizelOptions);
-    return renderHtml(ast, withAutolinkElements(resolved.elements ?? {}, resolved.autolinks), resolved.blocks ?? {}, {
+/**
+ * Renders a prepared AST and applies after-render plugin hooks.
+ */
+function renderPreparedHtml(ast: NizelRootNode, resolved: NizelOptions): string {
+  const html = renderHtml(
+    ast,
+    withAutolinkElements(resolved.elements ?? {}, resolved.autolinks),
+    resolved.blocks ?? {},
+    {
       unwrapStandaloneImages: resolved.unwrapStandaloneImages === true,
-    });
-  };
+    },
+  );
 
-  return nizel;
+  let finalHtml = html;
+  for (const plugin of resolved.plugins ?? []) {
+    const modified = plugin.hooks?.afterRender?.(finalHtml, resolved);
+    if (modified !== undefined) finalHtml = modified;
+  }
+
+  return finalHtml;
 }
 
 /**

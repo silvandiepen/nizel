@@ -45,6 +45,66 @@ test('supports helpers, filters, and element attributes', async () => {
   assert.equal(text, 'Hello code');
 });
 
+test('helper methods preserve templates, transforms, and plugin hooks', async () => {
+  const calls = [];
+  const plugin = {
+    name: 'helper-hooks',
+    hooks: {
+      beforeParse(markdown) {
+        calls.push('beforeParse');
+        return `${markdown}\n\nAdded by plugin`;
+      },
+      afterParse(ast) {
+        calls.push('afterParse');
+        return ast;
+      },
+      afterRender(html) {
+        calls.push('afterRender');
+        return `${html}\n<!-- rendered -->`;
+      },
+    },
+  };
+  const nizel = useNizel({
+    plugins: [plugin],
+    transforms: [
+      (ast) => {
+        ast.children.push({
+          type: 'paragraph',
+          children: [{ type: 'text', value: 'Added by transform' }],
+        });
+        return ast;
+      },
+    ],
+  });
+
+  const html = await nizel.html('# {{ title }}', {
+    data: { title: 'Fast Path' },
+  });
+  const ast = await nizel.ast('# Title');
+  const text = await nizel.text('Hello **world**');
+  const meta = await nizel.meta('---\ntitle: "{{ title }}"\n---\n# Body', {
+    data: { title: 'Rendered Meta' },
+  });
+
+  assert.match(html, /<h1 id="fast-path">Fast Path<\/h1>/);
+  assert.match(html, /Added by plugin/);
+  assert.match(html, /Added by transform/);
+  assert.match(html, /<!-- rendered -->/);
+  assert.equal(ast.children.at(-1).children[0].value, 'Added by transform');
+  assert.match(text, /Added by plugin/);
+  assert.match(text, /Added by transform/);
+  assert.equal(meta.title, 'Rendered Meta');
+  assert.deepEqual(calls, [
+    'beforeParse',
+    'afterParse',
+    'afterRender',
+    'beforeParse',
+    'afterParse',
+    'beforeParse',
+    'afterParse',
+  ]);
+});
+
 test('extracts code metadata, tables, delete nodes, and safe HTML', async () => {
   const nizel = useNizel();
   const result = await nizel(`\`\`\`ts filename="example.ts" {1,3-4}

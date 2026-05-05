@@ -28,6 +28,7 @@ import {
   stripInlineMarkdown,
   type InlineParseState,
 } from './parse/inline.js';
+import { stripInlineNodes } from './parse/inline-text.js';
 import {
   isParagraphInterruptingListMarker,
   isSameListMarker,
@@ -162,12 +163,13 @@ function parseBlocks(
     const heading = /^ {0,3}(#{1,6})(?:\s+(.*?))?\s*$/.exec(line);
     if (heading) {
       const source = trimClosingHeadingHashes(heading[2] ?? '');
-      const text = stripInlineMarkdown(source, options);
+      const inlineChildren = parseInlineWithState(source, options, state);
+      const text = stripInlineNodes(inlineChildren);
       const node: NizelHeadingNode = {
         type: 'heading',
         depth: heading[1].length as 1 | 2 | 3 | 4 | 5 | 6,
         text,
-        children: parseInlineWithState(source, options, state),
+        children: inlineChildren,
       };
       if (options.anchors && text) node.id = uniqueSlug(slugify(text, options.slugStyle), seenSlugs);
       children.push(node);
@@ -177,12 +179,13 @@ function parseBlocks(
     const setext = lines[index + 1] && isSetextUnderline(lines[index + 1]);
     if (setext && line.trim() && !isBlockStart(line, options, lines, index)) {
       const source = line.trim();
-      const text = stripInlineMarkdown(source, options);
+      const inlineChildren = parseInlineWithState(source, options, state);
+      const text = stripInlineNodes(inlineChildren);
       const node: NizelHeadingNode = {
         type: 'heading',
         depth: setext[1][0] === '=' ? 1 : 2,
         text,
-        children: parseInlineWithState(source, options, state),
+        children: inlineChildren,
       };
       if (options.anchors && text) node.id = uniqueSlug(slugify(text, options.slugStyle), seenSlugs);
       children.push(node);
@@ -310,12 +313,13 @@ function parseBlocks(
     const paragraphSetext = lines[index + 1] && isSetextUnderline(lines[index + 1]);
     if (paragraphSetext) {
       const source = normalizeParagraphSource(paragraph);
-      const text = stripInlineMarkdown(source, options);
+      const inlineChildren = parseInlineWithState(source, options, state);
+      const text = stripInlineNodes(inlineChildren);
       const node: NizelHeadingNode = {
         type: 'heading',
         depth: paragraphSetext[1][0] === '=' ? 1 : 2,
         text,
-        children: parseInlineWithState(source, options, state),
+        children: inlineChildren,
       };
       if (options.anchors && text) node.id = uniqueSlug(slugify(text, options.slugStyle), seenSlugs);
       children.push(node);
