@@ -35,6 +35,7 @@ function createNizel<TMeta extends Record<string, unknown> = Record<string, unkn
 ): NizelProcessor {
   const presetOptions = options.preset ? resolvePreset(options.preset) : {};
   const effectiveOptions = { ...presetOptions, ...options, preset: undefined };
+  const baseResolved = resolveOptions(effectiveOptions as NizelOptions, {});
 
   /**
    * Processes Markdown with processor and runtime options.
@@ -91,7 +92,7 @@ function createNizel<TMeta extends Record<string, unknown> = Record<string, unkn
   };
   nizel.preset = (name) => createNizel(resolvePreset(name));
   nizel.parse = async (markdown, runtimeOptions) => {
-    const resolved = resolveOptions(effectiveOptions as NizelOptions, runtimeOptions as NizelOptions);
+    const resolved = resolveRuntime(runtimeOptions as NizelOptions);
     const extracted = resolved.frontmatter === false ? { markdown, frontmatter: {} } : extractFrontmatter(markdown);
     let preparedMarkdown = extracted.markdown;
     for (const plugin of resolved.plugins ?? []) {
@@ -107,7 +108,7 @@ function createNizel<TMeta extends Record<string, unknown> = Record<string, unkn
     });
   };
   nizel.render = (ast, runtimeOptions) => {
-    const resolved = resolveOptions(effectiveOptions as NizelOptions, runtimeOptions as NizelOptions);
+    const resolved = resolveRuntime(runtimeOptions as NizelOptions);
     return renderHtml(ast, withAutolinkElements(resolved.elements ?? {}, resolved.autolinks), resolved.blocks ?? {}, {
       unwrapStandaloneImages: resolved.unwrapStandaloneImages === true,
     });
@@ -164,8 +165,7 @@ function createNizel<TMeta extends Record<string, unknown> = Record<string, unkn
     markdown: string,
     runtimeOptions: NizelOptions<TRuntimeMeta> = {},
   ): PreparedMeta<TRuntimeMeta> {
-    const resolved = resolveOptions(effectiveOptions as NizelOptions, runtimeOptions as NizelOptions);
-    resolved.data = { ...(resolved.variables ?? {}), ...(resolved.data ?? {}) };
+    const resolved = resolvePreparedRuntime(runtimeOptions as NizelOptions);
     const extracted =
       resolved.frontmatter === false
         ? { markdown, frontmatter: {} }
@@ -202,6 +202,26 @@ function createNizel<TMeta extends Record<string, unknown> = Record<string, unkn
       markdown: templated,
       meta: meta as TRuntimeMeta,
       resolved,
+    };
+  }
+
+  /**
+   * Reuses the resolved processor options when a call has no runtime overrides.
+   */
+  function resolveRuntime(runtimeOptions?: NizelOptions): NizelOptions {
+    return hasRuntimeOptions(runtimeOptions)
+      ? resolveOptions(effectiveOptions as NizelOptions, runtimeOptions)
+      : baseResolved;
+  }
+
+  /**
+   * Returns per-call resolved options with template data materialized.
+   */
+  function resolvePreparedRuntime(runtimeOptions?: NizelOptions): NizelOptions {
+    const resolved = resolveRuntime(runtimeOptions);
+    return {
+      ...resolved,
+      data: { ...(resolved.variables ?? {}), ...(resolved.data ?? {}) },
     };
   }
 }
@@ -251,6 +271,13 @@ function renderObjectTemplates(
  */
 function hasTemplateSyntax(value: string): boolean {
   return value.includes('{{');
+}
+
+/**
+ * Checks whether a call supplied runtime options that need merging.
+ */
+function hasRuntimeOptions(runtimeOptions?: NizelOptions): runtimeOptions is NizelOptions {
+  return Boolean(runtimeOptions && Object.keys(runtimeOptions).length > 0);
 }
 
 export const useNizel = createNizel as NizelUseNizel;

@@ -311,14 +311,28 @@ function wrap(
 function serializeAttrs(
   attrs: Record<string, string | number | boolean | undefined>,
 ): string {
-  return Object.entries(attrs)
-    .filter(([, value]) => value !== undefined && value !== false)
-    .filter(([key]) => !/^on[a-z]+$/i.test(key))
-    .map(([key, value]) => {
-      if (value === true) return ` ${key}`;
-      return ` ${key}="${escapeHtml(value)}"`;
-    })
-    .join('');
+  let serialized = '';
+
+  for (const key in attrs) {
+    const value = attrs[key];
+    if (value === undefined || value === false) continue;
+    if (isEventAttribute(key)) continue;
+    serialized += value === true ? ` ${key}` : ` ${key}="${escapeHtml(value)}"`;
+  }
+
+  return serialized;
+}
+
+/**
+ * Checks whether an attribute name is an unsafe event handler.
+ */
+function isEventAttribute(key: string): boolean {
+  return (
+    key.length > 2 &&
+    key[0].toLowerCase() === 'o' &&
+    key[1].toLowerCase() === 'n' &&
+    /^on[a-z]+$/i.test(key)
+  );
 }
 
 /**
