@@ -2,29 +2,38 @@
  * Expands leading tabs according to CommonMark column stops.
  */
 export const expandLeadingTabs = (markdown: string): string => {
-  return markdown
-    .split('\n')
-    .map((line) => {
-      let result = '';
-      let column = 0;
-      let cursor = 0;
-      while (cursor < line.length) {
-        const character = line[cursor];
-        if (character === '\t') {
-          const spaces = 4 - (column % 4);
-          result += ' '.repeat(spaces);
-          column += spaces;
-          cursor += 1;
-          continue;
-        }
-        result += character;
-        column += 1;
-        cursor += 1;
-        if (character !== ' ') break;
-      }
-      return result + line.slice(cursor);
-    })
-    .join('\n');
+  return expandLeadingTabsToLines(markdown).join('\n');
+};
+
+/**
+ * Splits Markdown into lines while expanding leading tabs in one pass.
+ */
+export const expandLeadingTabsToLines = (markdown: string): string[] => {
+  return markdown.split('\n').map((line) => expandLeadingTabsInLine(line));
+};
+
+/**
+ * Expands leading tabs in one line according to CommonMark column stops.
+ */
+const expandLeadingTabsInLine = (line: string): string => {
+  let result = '';
+  let column = 0;
+  let cursor = 0;
+  while (cursor < line.length) {
+    const character = line[cursor];
+    if (character === '\t') {
+      const spaces = 4 - (column % 4);
+      result += ' '.repeat(spaces);
+      column += spaces;
+      cursor += 1;
+      continue;
+    }
+    result += character;
+    column += 1;
+    cursor += 1;
+    if (character !== ' ') break;
+  }
+  return result + line.slice(cursor);
 };
 
 /**

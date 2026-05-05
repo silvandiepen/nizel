@@ -36,7 +36,7 @@ import {
 } from './parse/list.js';
 import { parseListItemBlocks } from './parse/list-items.js';
 import {
-  expandLeadingTabs,
+  expandLeadingTabsToLines,
   expandLeadingTabsFromColumn,
   trimTrailingBlankLines,
 } from './parse/lines.js';
@@ -83,10 +83,13 @@ export function parseMarkdown(markdown: string, options: ParseOptions): NizelRoo
   const normalizedMarkdown = markdown.includes('\r')
     ? markdown.replace(CARRIAGE_RETURN, '\n')
     : markdown;
-  const lines = expandLeadingTabs(normalizedMarkdown).split('\n');
-  const { contentLines, references } = REFERENCE_DEF_START.test(normalizedMarkdown)
-    ? extractReferenceDefinitions(lines)
-    : { contentLines: lines, references: new Map() };
+  const lines = normalizedMarkdown.includes('\t')
+    ? expandLeadingTabsToLines(normalizedMarkdown)
+    : normalizedMarkdown.split('\n');
+  const { contentLines, references } =
+    normalizedMarkdown.includes('[') && REFERENCE_DEF_START.test(normalizedMarkdown)
+      ? extractReferenceDefinitions(lines)
+      : { contentLines: lines, references: new Map() };
   const children = parseBlocks(contentLines, options, new Map<string, number>(), { references });
   return { type: 'root', children };
 }

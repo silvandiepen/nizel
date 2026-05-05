@@ -16,7 +16,7 @@ const ORDERED_MARKER = /^( {0,3})(\d{1,9})([.)])([ \t]*)(.*)$/;
  * Parses a CommonMark list marker and its content indentation.
  */
 export const parseListMarker = (line: string): ListMarker | null => {
-  const expanded = expandListMarkerTabs(line);
+  const expanded = line.includes('\t') ? expandListMarkerTabs(line) : line;
   const unordered = UNORDERED_MARKER.exec(expanded);
   if (unordered && (unordered[3].length > 0 || unordered[4] === '')) {
     return {
