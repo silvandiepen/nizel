@@ -143,8 +143,22 @@ function hasUnsupportedAttrs(node: HtmlNode & { type: 'element' }): boolean {
   if (node.tag === 'code' || node.tag === 'pre') {
     return names.some((name) => name !== 'class') || !/\blanguage-[A-Za-z0-9_-]+/.test(node.attrs.class ?? '');
   }
+  if (/^h[1-6]$/.test(node.tag)) {
+    return names.some((name) => {
+      if (name !== 'id') return true;
+      // id is supported only when it matches the auto-generated slug from the heading text
+      return node.attrs.id !== slugifyText(textContent(node));
+    });
+  }
 
   return true;
+}
+
+/**
+ * Converts heading text to a slug matching Nizel's default GitHub-style slug generation.
+ */
+function slugifyText(value: string): string {
+  return value.toLowerCase().replace(/[^\w\s-]/g, '').replace(/[\s_]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
 /**

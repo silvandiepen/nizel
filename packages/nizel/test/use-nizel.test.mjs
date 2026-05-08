@@ -180,3 +180,33 @@ test('supports presets and missing value modes', async () => {
   assert.match(keep.html, /\{\{ title \}\}/);
   assert.match(empty, /<h1><\/h1>/);
 });
+
+test('md→html→md→html round-trip produces stable output', async () => {
+  const nizel = useNizel();
+  const { htmlToMarkdown } = await import('../dist/index.js');
+  const markdown = [
+    '# Hello World',
+    '',
+    'Some **bold** text and [a link](https://example.com).',
+    '',
+    '## Section One',
+    '',
+    '- Item one',
+    '- Item two',
+    '',
+    '> A blockquote',
+    '',
+    '```js',
+    'const x = 1;',
+    '```',
+  ].join('\n');
+
+  // md → html (first pass)
+  const html1 = await nizel.html(markdown);
+  // html → md
+  const md2 = htmlToMarkdown(html1);
+  // md → html (second pass)
+  const html2 = await nizel.html(md2);
+
+  assert.equal(html2, html1);
+});

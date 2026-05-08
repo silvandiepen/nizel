@@ -190,7 +190,7 @@ describe('htmlToMarkdown unsupported HTML policy', () => {
   test('preserves semantic tags with unsupported attributes by default', () => {
     assert.equal(
       htmlToMarkdown('<h2 id="intro">Intro</h2><p class="lead">Keep style</p><a href="/x" target="_blank">External</a>'),
-      lines('<h2 id="intro">Intro</h2>', '', '<p class="lead">Keep style</p>', '', '<a href="/x" target="_blank">External</a>'),
+      lines('## Intro', '', '<p class="lead">Keep style</p>', '', '<a href="/x" target="_blank">External</a>'),
     );
   });
 
@@ -248,5 +248,40 @@ describe('htmlToMarkdown parser tolerance', () => {
   test('handles boolean attributes as unsupported attributes', () => {
     assert.equal(htmlToMarkdown('<p><button disabled>Save</button></p>'), '<button disabled>Save</button>');
     assert.equal(htmlToMarkdown('<p><button disabled>Save</button></p>', { unsupported: 'drop' }), 'Save');
+  });
+});
+
+describe('htmlToMarkdown round-trip stability', () => {
+  test('strips auto-generated heading id when it matches the slug', () => {
+    const html = '<h1 id="title">Title</h1>\n<h2 id="section">Section</h2>';
+    const md = htmlToMarkdown(html);
+    assert.equal(md, lines('# Title', '', '## Section'));
+  });
+
+  test('preserves heading with custom id that does not match the slug', () => {
+    assert.equal(
+      htmlToMarkdown('<h2 id="my-custom-anchor">Section Title</h2>'),
+      '<h2 id="my-custom-anchor">Section Title</h2>',
+    );
+  });
+
+  test('preserves heading with id and class (class is unsupported)', () => {
+    const html = '<h2 id="intro" class="title">Intro</h2>';
+    assert.equal(htmlToMarkdown(html), html);
+  });
+
+  test('htmlToMarkdown is idempotent', () => {
+    const html = [
+      '<h1 id="hello-world">Hello World</h1>',
+      '<p>Some <strong>bold</strong> text and <a href="https://example.com">a link</a>.</p>',
+      '<h2 id="code">Code</h2>',
+      '<ul>',
+      '<li>Item one</li>',
+      '<li>Item two</li>',
+      '</ul>',
+    ].join('\n');
+    const md1 = htmlToMarkdown(html);
+    const md2 = htmlToMarkdown(html);
+    assert.equal(md1, md2);
   });
 });
