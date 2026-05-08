@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
@@ -12,6 +12,7 @@ if (!workspaceName) {
 const workspaceRoots = ['packages', 'documentation'];
 
 const readPackage = (dir) => JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
+const writePackage = (dir, pkg) => writeFileSync(join(dir, 'package.json'), JSON.stringify(pkg, null, 2) + '\n');
 
 const findWorkspace = () => {
   for (const root of workspaceRoots) {
@@ -29,7 +30,15 @@ const findWorkspace = () => {
   throw new Error(`Workspace not found: ${workspaceName}`);
 };
 
-const { pkg } = findWorkspace();
+const bumpPatch = (version) => {
+  const parts = version.split('.');
+  parts[2] = Number(parts[2]) + 1;
+  return parts.join('.');
+};
+
+const { dir, pkg } = findWorkspace();
+
+// Check if the current version is already published
 const spec = `${pkg.name}@${pkg.version}`;
 const view = spawnSync('npm', ['view', spec, 'version', '--json'], {
   encoding: 'utf8',
@@ -37,11 +46,15 @@ const view = spawnSync('npm', ['view', spec, 'version', '--json'], {
 });
 
 if (view.status === 0) {
-  console.log(`${spec} already exists; skipping publish.`);
-  process.exit(0);
+  // Already published — bump patch version
+  const newVersion = bumpPatch(pkg.version);
+  pkg.version = newVersion;
+  writePackage(dir, pkg);
+  console.log(`${pkg.name}: bumped ${spec} → ${newVersion}`);
+} else {
+  console.log(`${spec} is not published yet; publishing as-is.`);
 }
 
-console.log(`${spec} is not published yet; publishing.`);
 const publish = spawnSync(
   'npx',
   ['-y', 'npm@11.5.1', 'publish', '--workspace', pkg.name, '--access', 'public', '--provenance'],
