@@ -8,10 +8,16 @@ on:
       - completed
     branches:
       - main
+      - development
   workflow_dispatch:
+    inputs:
+      deploy_branch:
+        description: Branch to deploy to Cloudflare Pages
+        required: false
+        default: development
 
 concurrency:
-  group: deploy-docs-${{ github.ref }}
+  group: deploy-docs-${{ github.event.workflow_run.head_branch || inputs.deploy_branch || github.ref_name }}
   cancel-in-progress: false
 
 permissions:
@@ -21,10 +27,15 @@ jobs:
   deploy:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
+    env:
+      DEPLOY_BRANCH: ${{ github.event.workflow_run.head_branch || inputs.deploy_branch || github.ref_name }}
+      DEPLOY_REF: ${{ github.event.workflow_run.head_sha || inputs.deploy_branch || github.ref }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_REF }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -40,7 +51,7 @@ jobs:
 
       - name: Deploy to Cloudflare Pages
         working-directory: documentation
-        run: npx wrangler pages deploy public --project-name=nizel-docs
+        run: npx wrangler pages deploy public --project-name=nizel-docs --branch "$DEPLOY_BRANCH"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
