@@ -1,6 +1,12 @@
 import { strict as assert } from 'node:assert';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { test } from 'vitest';
 import { formatMarkdown } from '../dist/index.js';
+
+const cliPath = new URL('../dist/cli.js', import.meta.url);
 
 test('formats pipe tables', () => {
   const markdown = `| Feature | Example | Notes |
@@ -134,4 +140,42 @@ test('does not format inside fenced code', () => {
 |---|---|
 [b]bold[/b]
 \`\`\``);
+});
+
+test('cli formats stdin to stdout', () => {
+  const child = spawnSync(process.execPath, [cliPath.pathname, '--stdin'], {
+    input: '##Title\n',
+    encoding: 'utf8',
+  });
+
+  assert.equal(child.status, 0, child.stderr);
+  assert.equal(child.stdout, '## Title\n');
+});
+
+test('cli formats a Markdown file in place by default', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'nizel-format-'));
+  const file = join(directory, 'notes.md');
+  await writeFile(file, '##Title\n');
+
+  const child = spawnSync(process.execPath, [cliPath.pathname, file], {
+    encoding: 'utf8',
+  });
+
+  assert.equal(child.status, 0, child.stderr);
+  assert.match(child.stdout, /notes\.md/);
+  assert.equal(await readFile(file, 'utf8'), '## Title\n');
+});
+
+test('cli check mode reports files that need formatting without writing', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'nizel-format-'));
+  const file = join(directory, 'notes.md');
+  await writeFile(file, '##Title\n');
+
+  const child = spawnSync(process.execPath, [cliPath.pathname, '--check', file], {
+    encoding: 'utf8',
+  });
+
+  assert.equal(child.status, 1);
+  assert.match(child.stdout, /notes\.md/);
+  assert.equal(await readFile(file, 'utf8'), '##Title\n');
 });

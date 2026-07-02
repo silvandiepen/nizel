@@ -4,15 +4,22 @@
   "description": "Markdown formatter utilities for Nizel.",
   "repository": {
     "type": "git",
-    "url": "https://github.com/silvandiepen/nizel"
+    "url": "git+https://github.com/silvandiepen/nizel.git"
   },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "nizel-format": "dist/cli.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./cli": {
+      "types": "./dist/cli.d.ts",
+      "import": "./dist/cli.js"
     },
     "./browser": {
       "types": "./dist/index.d.ts",
@@ -31,6 +38,7 @@
     "test:run": "vitest run test/*.mjs"
   },
   "devDependencies": {
+    "@types/node": "^22.19.3",
     "esbuild": "^0.27.3"
   },
   "publishConfig": {

@@ -39,10 +39,10 @@ test('creates plugins from enabled plugin ids', () => {
   assert.deepEqual(plugins.map((plugin) => plugin.name), ['alert', 'math', 'typography']);
 });
 
-test('keeps only the last enabled code renderer plugin', () => {
+test('keeps composable code plugins enabled together', () => {
   assert.deepEqual(
     normalizeEnabledPlugins(['alert', 'diagrams', 'shiki', 'code-copy']),
-    ['alert', 'code-copy'],
+    ['alert', 'diagrams', 'shiki', 'code-copy'],
   );
 });
 

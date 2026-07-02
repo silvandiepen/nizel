@@ -4,6 +4,8 @@ Nizel can be embedded in native apps through a JavaScript runtime such as `WKWeb
 
 Use `nizel-kit` when the app should let users choose supported plugins from settings. The native app only stores plugin IDs; Markdown parsing and extension handling remain inside Nizel.
 
+Use `nizel-format` when the app needs to normalize Markdown source before saving.
+
 ## Bundle
 
 Build the kit:
@@ -81,13 +83,33 @@ const html = await NizelKit.markdownToHtml(markdown, {
 
 ## Code Renderers
 
-Some plugins own code block rendering:
+The first-party code-related plugins are composable:
 
-- `diagrams`
-- `shiki`
-- `code-copy`
+- `diagrams` only converts explicit ```` ```mermaid ```` fences.
+- `shiki` renders ordinary code fences when configured with a highlighter.
+- `code-copy` wraps rendered code or diagram output with copy controls.
 
-These are marked with `exclusiveGroup: "code-renderer"`. If multiple are selected, `nizel-kit` keeps the last selected renderer to make output deterministic. A native settings UI can use that metadata to present those options as a single-choice group.
+They can be enabled together.
+
+## Source Formatting
+
+Build the formatter:
+
+```bash
+npm run build --workspace nizel-format
+```
+
+Load:
+
+```text
+packages/nizel-format/dist/nizel-format.iife.js
+```
+
+Format Markdown before saving:
+
+```js
+const formatted = NizelFormat.formatMarkdown(markdown);
+```
 
 ## Kitchen Sink
 
@@ -104,7 +126,9 @@ For the current fixture, enable:
   "footnotes",
   "math",
   "typography",
-  "diagrams"
+  "diagrams",
+  "shiki",
+  "code-copy"
 ]
 ```
 

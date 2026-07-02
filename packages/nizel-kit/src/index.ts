@@ -193,10 +193,9 @@ export const supportedPlugins: NizelKitPluginMeta[] = [
   {
     id: 'diagrams',
     label: 'Diagrams',
-    description: 'Render Mermaid code fences as diagram containers.',
+    description: 'Render explicit Mermaid code fences as diagram containers.',
     defaultEnabled: false,
     category: 'code',
-    exclusiveGroup: 'code-renderer',
   },
   {
     id: 'shiki',
@@ -204,7 +203,6 @@ export const supportedPlugins: NizelKitPluginMeta[] = [
     description: 'Use a supplied Shiki-compatible highlighter for code blocks.',
     defaultEnabled: false,
     category: 'code',
-    exclusiveGroup: 'code-renderer',
   },
   {
     id: 'code-copy',
@@ -212,7 +210,6 @@ export const supportedPlugins: NizelKitPluginMeta[] = [
     description: 'Render code blocks with copy button markup.',
     defaultEnabled: false,
     category: 'code',
-    exclusiveGroup: 'code-renderer',
   },
 ];
 

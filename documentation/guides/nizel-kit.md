@@ -10,6 +10,8 @@ order: 11
 
 Use it when a Swift iOS or macOS app should expose settings such as "Support footnotes", "Support math", or "Support diagrams" without reimplementing Markdown extension parsing in Swift. The native app stores plugin IDs. NizelKit owns Markdown parsing, plugin composition, rendering, and plugin conflict handling.
 
+Use `nizel-format` separately when the native app needs to normalize Markdown source before saving. See [Nizel Format](/guides/nizel-format/index.html).
+
 ## Build the Bundle
 
 Install and build from the Nizel workspace:
@@ -126,15 +128,9 @@ const enabledPlugins = NizelKit.defaultEnabledPlugins();
 
 The native app should persist the user's selected IDs after that first load.
 
-## Exclusive Groups
+## Plugin Normalization
 
-Some plugins own the same rendering surface. Code-rendering plugins use:
-
-```txt
-exclusiveGroup: "code-renderer"
-```
-
-NizelKit normalizes selected plugins so output remains deterministic:
+NizelKit ignores unknown IDs and removes duplicate selections:
 
 ```js
 const normalized = NizelKit.normalizeEnabledPlugins([
@@ -144,7 +140,7 @@ const normalized = NizelKit.normalizeEnabledPlugins([
 ]);
 ```
 
-If multiple plugins from the same exclusive group are selected, the last selected one wins. A native settings UI can present those as a single-choice group.
+Code-related first-party plugins are composable: `diagrams` handles explicit Mermaid fences, `shiki` handles ordinary code fences, and `code-copy` wraps rendered code or diagram output.
 
 ## Plugin Options
 
@@ -190,7 +186,9 @@ await NizelKit.markdownToHtml(kitchenSinkMarkdown, {
     'footnotes',
     'math',
     'typography',
-    'diagrams'
+    'diagrams',
+    'shiki',
+    'code-copy'
   ]
 });
 ```

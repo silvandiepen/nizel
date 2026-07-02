@@ -1,8 +1,13 @@
-import type { NizelBlockDefinition, NizelPlugin } from 'nizel';
+import type { NizelBlockDefinition, NizelBlockNode, NizelPlugin, NizelRootNode } from 'nizel';
 
 export type DiagramsPluginOptions = {
   mermaid?: boolean;
   className?: string;
+};
+
+type DiagramValue = {
+  code: string;
+  lang: 'mermaid';
 };
 
 /**
@@ -12,23 +17,69 @@ export const diagramsPlugin = (options: DiagramsPluginOptions = {}): NizelPlugin
   return {
     name: 'diagrams',
     blocks: {
-      code: codeBlock(options),
+      diagram: diagramBlock(options),
+    },
+    hooks: {
+      afterParse(ast) {
+        return transformDiagramCodes(ast, options);
+      },
     },
   };
 };
 
-const codeBlock = (options: DiagramsPluginOptions): NizelBlockDefinition => ({
-  name: 'code',
+/**
+ * Converts explicit Mermaid fences into diagram custom blocks.
+ */
+export const transformDiagramCodes = (
+  ast: NizelRootNode,
+  options: DiagramsPluginOptions = {},
+): NizelRootNode => ({
+  ...ast,
+  children: ast.children.map((node) => transformBlock(node, options)),
+});
+
+const transformBlock = (node: NizelBlockNode, options: DiagramsPluginOptions): NizelBlockNode => {
+  if (options.mermaid !== false && node.type === 'code' && node.lang === 'mermaid') {
+    return {
+      type: 'customBlock',
+      name: 'diagram',
+      value: {
+        code: node.code,
+        lang: 'mermaid',
+      } satisfies DiagramValue,
+      children: [],
+    };
+  }
+
+  if (node.type === 'blockquote') {
+    return { ...node, children: node.children.map((child) => transformBlock(child, options)) };
+  }
+
+  if (node.type === 'list') {
+    return {
+      ...node,
+      children: node.children.map((item) => ({
+        ...item,
+        children: item.children.map((child) => transformBlock(child, options)),
+      })),
+    };
+  }
+
+  if (node.type === 'customBlock' && node.children) {
+    return { ...node, children: node.children.map((child) => transformBlock(child, options)) };
+  }
+
+  return node;
+};
+
+const diagramBlock = (options: DiagramsPluginOptions): NizelBlockDefinition => ({
+  name: 'diagram',
   formats: {
     html(node, ctx) {
-      if (node.type !== 'code') return '';
-      if (options.mermaid !== false && node.lang === 'mermaid') {
-        return `<div class="${ctx.escape(options.className ?? 'mermaid')}">${ctx.escape(node.code.trimEnd())}</div>`;
-      }
-      const langClass = node.lang ? ` class="language-${ctx.escape(node.lang)}"` : '';
-      const filename = node.filename ? ` data-filename="${ctx.escape(node.filename)}"` : '';
-      const highlight = node.highlightLines?.length ? ` data-highlight-lines="${ctx.escape(node.highlightLines.join(','))}"` : '';
-      return `<pre><code${langClass}${filename}${highlight}>${ctx.escape(node.code)}</code></pre>`;
+      if (node.type !== 'customBlock') return '';
+      const value = node.value as Partial<DiagramValue> | undefined;
+      if (value?.lang !== 'mermaid' || typeof value.code !== 'string') return '';
+      return `<div class="${ctx.escape(options.className ?? 'mermaid')}">${ctx.escape(value.code.trimEnd())}</div>`;
     },
   },
 });

@@ -31,6 +31,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
+          registry-url: https://registry.npmjs.org
 
       - name: Install
         run: npm ci
@@ -106,6 +107,9 @@ jobs:
 
       - name: Publish plugin-typography
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-typography
+
+      - name: Publish nizel-format
+        run: node scripts/publish-workspace-if-new.mjs nizel-format
 
       - name: Publish nizel-kit
         run: node scripts/publish-workspace-if-new.mjs nizel-kit
