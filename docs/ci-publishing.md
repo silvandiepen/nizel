@@ -65,11 +65,11 @@ The publish workflow versions packages before building:
 3. It updates the package `package.json` files and the matching workspace entries in `package-lock.json`.
 4. Release notes are generated from the versioned tree.
 5. CI builds and tests the versioned tree.
-6. The workflow commits the version files and release notes.
-7. Packages are published to npm using Trusted Publishing.
+6. Packages are published to npm using Trusted Publishing.
+7. Only after every publish step succeeds, the workflow commits the version files and release notes.
 
 The workflow does not rely on manual version edits before merging to `main`.
-Publish runs triggered by the workflow's own version/release-note commit are skipped so the version commit does not start another release loop.
+If any publish step fails, the generated version files and release notes are not committed. Publish runs triggered by the workflow's own version/release-note commit are skipped so the version commit does not start another release loop.
 
 ## Package release model
 
