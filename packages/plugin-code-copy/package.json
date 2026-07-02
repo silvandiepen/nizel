@@ -1,6 +1,6 @@
 {
   "name": "nizel-plugin-code-copy",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "CSP-friendly code copy markup plugin for Nizel.",
   "repository": {
     "type": "git",
