@@ -1,6 +1,6 @@
 {
   "name": "nizel-plugin-sanitize",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "HTML sanitizing plugin for Nizel output.",
   "repository": {
     "type": "git",

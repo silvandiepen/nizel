@@ -1,6 +1,6 @@
 {
   "name": "nizel-plugin-heading-anchors",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Heading anchor link plugin for Nizel.",
   "repository": {
     "type": "git",
