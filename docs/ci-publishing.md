@@ -30,6 +30,8 @@ Nizel packages should use npm Trusted Publishing through GitHub Actions OIDC.
 
 Each npm package must be configured on npmjs.com with this GitHub repository and the release workflow as its trusted publisher.
 
+Do not configure `actions/setup-node` with `registry-url` for the publish job. That path writes npm token-oriented auth config for `NODE_AUTH_TOKEN`, which conflicts with Trusted Publishing and can produce `E401 token is invalid` even when provenance signing succeeds.
+
 Required GitHub Actions permissions:
 
 ```yaml
