@@ -1,8 +1,8 @@
 # nizel-plugin-heading-anchors
 
-Visible heading anchor links for [Nizel](https://npmjs.com/package/nizel).
+Subtle heading anchor links for [Nizel](https://npmjs.com/package/nizel).
 
-The plugin appends a linked marker to parsed headings that already have generated IDs. It is useful for documentation and long-form pages that need copyable section links.
+The plugin appends a copyable section link to parsed headings that already have generated IDs. By default the link has no visible text, so apps can reveal it with CSS on hover or focus without adding a literal marker to the heading content.
 
 The browser build exposes `NizelHeadingAnchors` from `dist/heading-anchors.iife.js`.
 
@@ -28,12 +28,13 @@ const nizel = useNizel({
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
 | `className` | `string` | `'heading-anchor'` | CSS class for the generated anchor. |
-| `label` | `string` | `'#'` | Visible marker text appended to the heading. |
+| `label` | `string` | `''` | Optional visible marker text appended to the heading. |
+| `ariaLabel` | `string` | `'Link to section'` | Accessible label for the generated anchor. |
 
 ## Output
 
 ```html
-<h2 id="install">Install<a class="heading-anchor" href="#install" aria-hidden="true">#</a></h2>
+<h2 id="install">Install<a class="heading-anchor" href="#install" aria-label="Link to section"></a></h2>
 ```
 
 ## License

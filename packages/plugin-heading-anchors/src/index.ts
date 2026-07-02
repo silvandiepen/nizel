@@ -3,6 +3,7 @@ import type { NizelPlugin, NizelRootNode } from 'nizel';
 export type HeadingAnchorsPluginOptions = {
   className?: string;
   label?: string;
+  ariaLabel?: string;
 };
 
 export const headingAnchorsPlugin = (options: HeadingAnchorsPluginOptions = {}): NizelPlugin => ({
@@ -27,7 +28,7 @@ export const addHeadingAnchors = (
         ...node.children,
         {
           type: 'inlineHtml',
-          value: `<a class="${escapeHtml(options.className ?? 'heading-anchor')}" href="#${escapeHtml(node.id)}" aria-hidden="true">${escapeHtml(options.label ?? '#')}</a>`,
+          value: `<a class="${escapeHtml(options.className ?? 'heading-anchor')}" href="#${escapeHtml(node.id)}" aria-label="${escapeHtml(options.ariaLabel ?? 'Link to section')}">${escapeHtml(options.label ?? '')}</a>`,
         },
       ],
     };
