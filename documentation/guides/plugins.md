@@ -41,6 +41,8 @@ const html = await NizelKit.markdownToHtml(markdown, {
 });
 ```
 
+For Swift, iOS, macOS, and WebView integration details, read [NizelKit for Native Apps](/guides/nizel-kit/index.html).
+
 ## Plugin Hooks
 
 A plugin can implement one or more hooks:

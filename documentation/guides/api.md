@@ -133,3 +133,5 @@ dist/browser/nizel.iife.js  IIFE bundle exposing globalThis.Nizel
 ```
 
 Use `dist/browser/nizel.iife.js` when loading scripts directly into a webview, then call `Nizel.markdownToHtml()`, `Nizel.htmlToMarkdown()`, or `Nizel.useBrowserNizel()` from the preview bridge.
+
+If the native app should expose plugin settings, use `nizel-kit` instead of the core browser bundle. See [NizelKit for Native Apps](/guides/nizel-kit/index.html).
