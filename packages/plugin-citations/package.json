@@ -1,0 +1,23 @@
+{
+  "name": "nizel-plugin-citations",
+  "version": "0.1.0",
+  "description": "Citation plugin for Nizel.",
+  "repository": { "type": "git", "url": "https://github.com/silvandiepen/nizel" },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./browser": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && npm run build:browser",
+    "build:browser": "esbuild src/index.ts --bundle --platform=browser --format=iife --global-name=NizelCitations --target=safari14 --outfile=dist/citations.iife.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && vitest run test/*.mjs"
+  },
+  "peerDependencies": { "nizel": "^0.1.0" },
+  "devDependencies": { "esbuild": "^0.27.3" },
+  "publishConfig": { "access": "public", "provenance": true }
+}

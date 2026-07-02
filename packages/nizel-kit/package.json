@@ -1,0 +1,62 @@
+{
+  "name": "nizel-kit",
+  "version": "0.1.0",
+  "description": "Browser and native WebView integration kit for Nizel with official plugin registry.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/silvandiepen/nizel"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && npm run build:browser",
+    "build:browser": "esbuild src/index.ts --bundle --platform=browser --format=esm --target=safari14 --outfile=dist/nizel-kit.js && esbuild src/index.ts --bundle --platform=browser --format=iife --global-name=NizelKit --target=safari14 --outfile=dist/nizel-kit.iife.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && vitest run test/*.mjs",
+    "test:watch": "npm run build && vitest test/*.mjs"
+  },
+  "dependencies": {
+    "nizel": "^0.1.0",
+    "nizel-plugin-abbr": "^0.1.0",
+    "nizel-plugin-alert": "^0.1.0",
+    "nizel-plugin-autolink": "^0.1.0",
+    "nizel-plugin-code-copy": "^0.1.0",
+    "nizel-plugin-citations": "^0.1.0",
+    "nizel-plugin-deflist": "^0.1.0",
+    "nizel-plugin-details": "^0.1.0",
+    "nizel-plugin-diagrams": "^0.1.0",
+    "nizel-plugin-emoji": "^0.1.0",
+    "nizel-plugin-footnotes": "^0.1.0",
+    "nizel-plugin-frontmatter-ui": "^0.1.0",
+    "nizel-plugin-gfm": "^0.1.0",
+    "nizel-plugin-heading-anchors": "^0.1.0",
+    "nizel-plugin-math": "^0.1.0",
+    "nizel-plugin-media": "^0.1.0",
+    "nizel-plugin-sanitize": "^0.1.0",
+    "nizel-plugin-shiki": "^0.1.1",
+    "nizel-plugin-toc": "^0.1.0",
+    "nizel-plugin-typography": "^0.1.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.3"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

@@ -55,11 +55,17 @@ jobs:
       - name: Publish nizel
         run: node scripts/publish-workspace-if-new.mjs nizel
 
+      - name: Publish plugin-abbr
+        run: node scripts/publish-workspace-if-new.mjs nizel-plugin-abbr
+
       - name: Publish plugin-autolink
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-autolink
 
       - name: Publish plugin-code-copy
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-code-copy
+
+      - name: Publish plugin-citations
+        run: node scripts/publish-workspace-if-new.mjs nizel-plugin-citations
 
       - name: Publish plugin-shiki
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-shiki
@@ -70,5 +76,41 @@ jobs:
       - name: Publish plugin-deflist
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-deflist
 
+      - name: Publish plugin-details
+        run: node scripts/publish-workspace-if-new.mjs nizel-plugin-details
+
+      - name: Publish plugin-diagrams
+        run: node scripts/publish-workspace-if-new.mjs nizel-plugin-diagrams
+
       - name: Publish plugin-emoji
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-emoji
+
+      - name: Publish plugin-footnotes
+        run: node scripts/publish-workspace-if-new.mjs nizel-plugin-footnotes
+
+      - name: Publish plugin-frontmatter-ui
+        run: node scripts/publish-workspace-if-new.mjs nizel-plugin-frontmatter-ui
+
+      - name: Publish plugin-gfm
+        run: node scripts/publish-workspace-if-new.mjs nizel-plugin-gfm
+
+      - name: Publish plugin-heading-anchors
+        run: node scripts/publish-workspace-if-new.mjs nizel-plugin-heading-anchors
+
+      - name: Publish plugin-math
+        run: node scripts/publish-workspace-if-new.mjs nizel-plugin-math
+
+      - name: Publish plugin-media
+        run: node scripts/publish-workspace-if-new.mjs nizel-plugin-media
+
+      - name: Publish plugin-sanitize
+        run: node scripts/publish-workspace-if-new.mjs nizel-plugin-sanitize
+
+      - name: Publish plugin-toc
+        run: node scripts/publish-workspace-if-new.mjs nizel-plugin-toc
+
+      - name: Publish plugin-typography
+        run: node scripts/publish-workspace-if-new.mjs nizel-plugin-typography
+
+      - name: Publish nizel-kit
+        run: node scripts/publish-workspace-if-new.mjs nizel-kit

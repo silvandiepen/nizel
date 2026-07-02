@@ -1,9 +1,4 @@
-import {
-  defineNizelPlugin,
-  type NizelBlockDefinition,
-  type NizelPlugin,
-  type NizelRenderContext,
-} from 'nizel';
+import type { NizelBlockDefinition, NizelPlugin, NizelRenderContext } from 'nizel';
 
 export type AlertType = 'note' | 'tip' | 'important' | 'warning' | 'caution';
 
@@ -26,10 +21,48 @@ export const alertPlugin = (options: AlertPluginOptions = {}): NizelPlugin => {
     ALERT_TYPES.map((alertType) => [alertType, createAlertBlock(alertType, options)]),
   ) as Record<AlertType, NizelBlockDefinition>;
 
-  return defineNizelPlugin({
+  return {
     name: 'alert',
     blocks,
-  });
+    hooks: {
+      beforeParse: transformGitHubAlerts,
+    },
+  };
+};
+
+/**
+ * Converts GitHub alert blockquotes to Nizel alert custom blocks.
+ */
+export const transformGitHubAlerts = (markdown: string): string => {
+  const lines = markdown.split('\n');
+  const result: string[] = [];
+  let index = 0;
+
+  while (index < lines.length) {
+    const opener = /^ {0,3}> ?\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*$/i.exec(lines[index]);
+    if (!opener) {
+      result.push(lines[index]);
+      index += 1;
+      continue;
+    }
+
+    const alertType = opener[1].toLowerCase() as AlertType;
+    const content: string[] = [];
+    index += 1;
+
+    while (index < lines.length) {
+      const quoteLine = /^ {0,3}> ?(.*)$/.exec(lines[index]);
+      if (!quoteLine) break;
+      content.push(quoteLine[1]);
+      index += 1;
+    }
+
+    result.push(`::${alertType} ${alertTitle(alertType)}`);
+    result.push(...trimAlertContent(content));
+    result.push('::');
+  }
+
+  return result.join('\n');
 };
 
 /**
@@ -69,6 +102,24 @@ const renderAlert = (
   const escapedType = ctx.escape(value.alertType);
 
   return `<div class="${ctx.escape(rootClass)} ${ctx.escape(rootClass)}--${escapedType}" data-alert="${escapedType}">${titleHtml}<div class="${ctx.escape(rootClass)}__content">${contentHtml}</div></div>`;
+};
+
+/**
+ * Trims structural blank lines from transformed alert content.
+ */
+const trimAlertContent = (lines: string[]): string[] => {
+  let start = 0;
+  let end = lines.length;
+  while (start < end && !lines[start].trim()) start += 1;
+  while (end > start && !lines[end - 1].trim()) end -= 1;
+  return lines.slice(start, end);
+};
+
+/**
+ * Formats an alert type as a default title.
+ */
+const alertTitle = (alertType: AlertType): string => {
+  return alertType.charAt(0).toUpperCase() + alertType.slice(1);
 };
 
 /**

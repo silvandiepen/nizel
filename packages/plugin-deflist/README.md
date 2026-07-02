@@ -2,6 +2,8 @@
 
 Definition list support for [Nizel](https://npmjs.com/package/nizel).
 
+The browser build exposes `NizelDeflist` from `dist/deflist.iife.js`.
+
 ## Install
 
 ```bash

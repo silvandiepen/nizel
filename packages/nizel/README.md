@@ -75,9 +75,27 @@ useNizel({
 
 Official plugins available:
 
-- `nizel-plugin-autolink` — configure autolink behavior
-- `nizel-plugin-code-copy` — CSP-friendly copy buttons on code blocks
+- `nizel-plugin-abbr` — abbreviation definitions with `<abbr>` output
+- `nizel-plugin-alert` — GitHub-style and custom alert blocks
+- `nizel-plugin-autolink` — configurable bare URL and email links
+- `nizel-plugin-citations` — citation references and bibliography output
+- `nizel-plugin-code-copy` — CSP-friendly copy controls for code blocks
+- `nizel-plugin-deflist` — definition-list syntax
+- `nizel-plugin-details` — disclosure/details blocks
+- `nizel-plugin-diagrams` — Mermaid code block containers
+- `nizel-plugin-emoji` — `:name:` emoji shortcuts
+- `nizel-plugin-footnotes` — footnote references and definitions
+- `nizel-plugin-frontmatter-ui` — frontmatter metadata rendering helpers
+- `nizel-plugin-gfm` — GFM-oriented plugin preset
+- `nizel-plugin-heading-anchors` — visible anchor links on headings
+- `nizel-plugin-math` — inline and display math wrappers
+- `nizel-plugin-media` — figure, caption, lazy, and responsive image helpers
+- `nizel-plugin-sanitize` — additional rendered HTML sanitizing
 - `nizel-plugin-shiki` — code syntax highlighting via Shiki
+- `nizel-plugin-toc` — rendered `[[toc]]` table of contents
+- `nizel-plugin-typography` — mark, subscript, and superscript extensions
+
+For native apps or WebViews that need a single browser bundle with a settings-friendly plugin registry, use `nizel-kit`.
 
 ## License
 

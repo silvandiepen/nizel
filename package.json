@@ -9,13 +9,14 @@
     "documentation"
   ],
   "scripts": {
-    "build": "npm run build --workspaces",
-    "benchmark": "npm run build --workspace nizel && npm run benchmark --workspace nizel-benchmarks --",
+    "build": "npm run build --workspace nizel && npm run build --workspace nizel-plugin-abbr --workspace nizel-plugin-alert --workspace nizel-plugin-autolink --workspace nizel-plugin-citations --workspace nizel-plugin-code-copy --workspace nizel-plugin-deflist --workspace nizel-plugin-details --workspace nizel-plugin-diagrams --workspace nizel-plugin-emoji --workspace nizel-plugin-footnotes --workspace nizel-plugin-frontmatter-ui --workspace nizel-plugin-gfm --workspace nizel-plugin-heading-anchors --workspace nizel-plugin-math --workspace nizel-plugin-media --workspace nizel-plugin-sanitize --workspace nizel-plugin-shiki --workspace nizel-plugin-toc --workspace nizel-plugin-typography && npm run build --workspace nizel-kit && npm run build --workspace nizel-benchmarks && npm run build --workspace @nizel/documentation",
+    "benchmark": "npm run build --workspace nizel --workspace nizel-plugin-alert --workspace nizel-plugin-deflist --workspace nizel-plugin-typography --workspace nizel-plugin-math --workspace nizel-plugin-footnotes --workspace nizel-plugin-diagrams && npm run benchmark --workspace nizel-benchmarks --",
+    "benchmark:plugins": "npm run build && npm run benchmark:plugins --workspace nizel-benchmarks --",
     "benchmark:nizel": "npm run build --workspace nizel && npm run benchmark:nizel --workspace nizel-benchmarks --",
     "fixtures:commonmark": "npm run fixtures:commonmark --workspace nizel-benchmarks",
     "prepare": "husky",
-    "typecheck": "npm run build --workspace nizel && npm run typecheck --workspaces",
-    "test": "npm run test --workspaces",
+    "typecheck": "npm run build && npm run typecheck --workspaces",
+    "test": "npm run build && npm run test --workspace nizel && npm run test --workspace nizel-plugin-abbr --workspace nizel-plugin-alert --workspace nizel-plugin-autolink --workspace nizel-plugin-citations --workspace nizel-plugin-code-copy --workspace nizel-plugin-deflist --workspace nizel-plugin-details --workspace nizel-plugin-diagrams --workspace nizel-plugin-emoji --workspace nizel-plugin-footnotes --workspace nizel-plugin-frontmatter-ui --workspace nizel-plugin-gfm --workspace nizel-plugin-heading-anchors --workspace nizel-plugin-math --workspace nizel-plugin-media --workspace nizel-plugin-sanitize --workspace nizel-plugin-shiki --workspace nizel-plugin-toc --workspace nizel-plugin-typography && npm run test --workspace nizel-kit && npm run test --workspace nizel-benchmarks && npm run test --workspace @nizel/documentation",
     "test:commonmark": "npm run build --workspace nizel && node packages/nizel/conformance/commonmark-spec-runner.mjs",
     "test:commonmark:browser": "npm run test:commonmark:browser --workspace nizel",
     "test:commonmark:smoke": "npm run build --workspace nizel && COMMONMARK_SMOKE=1 node packages/nizel/conformance/commonmark-spec-runner.mjs",

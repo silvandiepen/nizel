@@ -105,6 +105,18 @@ npx changeset publish
 
 The publish command should rely on npm Trusted Publishing and should not require an npm token.
 
+## First publish for new packages
+
+New npm package names must exist before Trusted Publishing can be configured for them on npmjs.com.
+
+For that one-time bootstrap, publish locally with normal npm authentication and without provenance:
+
+```bash
+NPM_PROVENANCE=false node scripts/publish-workspace-if-new.mjs nizel-plugin-example
+```
+
+After the package exists, configure npm Trusted Publishing for the package with this repository and `.github/workflows/publish.yml`. CI publishes should then use OIDC and provenance.
+
 ## Version command
 
 ```bash

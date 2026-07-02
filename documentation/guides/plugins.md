@@ -19,6 +19,28 @@ const nizel = useNizel({
 });
 ```
 
+Plugins are ordinary JavaScript objects. You can compose them directly:
+
+```ts
+import { alertPlugin } from 'nizel-plugin-alert';
+import { mathPlugin } from 'nizel-plugin-math';
+
+const nizel = useNizel({
+  plugins: [
+    alertPlugin(),
+    mathPlugin(),
+  ],
+});
+```
+
+Native apps can use `nizel-kit` instead of importing individual packages. `nizel-kit` exposes a serializable `supportedPlugins` registry and accepts plugin IDs:
+
+```js
+const html = await NizelKit.markdownToHtml(markdown, {
+  enabledPlugins: ['sanitize', 'autolink', 'alert', 'math']
+});
+```
+
 ## Plugin Hooks
 
 A plugin can implement one or more hooks:
@@ -32,6 +54,52 @@ interface NizelPlugin {
     afterRender?(html: string, options: NizelOptions): string;
   };
 }
+```
+
+## Writing a Plugin
+
+Use `defineNizelPlugin()` when authoring TypeScript plugins. It preserves typing while leaving the object unchanged.
+
+```ts
+import { defineNizelPlugin, type NizelPlugin } from 'nizel';
+
+export const uppercasePlugin = (): NizelPlugin => defineNizelPlugin({
+  name: 'uppercase',
+  hooks: {
+    afterRender(html) {
+      return html.replace(/\bIMPORTANT\b/g, '<strong>IMPORTANT</strong>');
+    },
+  },
+});
+```
+
+Use the lightest hook that matches the job:
+
+- `beforeParse`: syntax preprocessing, custom shorthand, or block rewrites.
+- `afterParse`: AST changes where structure matters.
+- `afterRender`: output-only decoration, sanitizing, wrappers, or post-processing.
+
+For block-like syntax, prefer custom blocks over raw string replacement:
+
+```ts
+const notePlugin = (): NizelPlugin => ({
+  name: 'note',
+  blocks: {
+    note: {
+      name: 'note',
+      parse({ content }) {
+        return { content };
+      },
+      formats: {
+        html(node, ctx) {
+          return node.type === 'customBlock'
+            ? `<aside>${ctx.render(node.children ?? [])}</aside>`
+            : '';
+        },
+      },
+    },
+  },
+});
 ```
 
 ### `beforeParse`
@@ -90,11 +158,24 @@ Nizel publishes first-party plugins from the npm workspace:
 
 | Package | Purpose |
 | --- | --- |
+| [`nizel-plugin-abbr`](/plugins/abbr/index.html) | Abbreviation definitions |
 | [`nizel-plugin-alert`](/plugins/alert/index.html) | GitHub-style alert custom blocks |
 | [`nizel-plugin-autolink`](/plugins/autolink/index.html) | Bare URL and email autolink configuration |
+| [`nizel-plugin-citations`](/plugins/citations/index.html) | Simple citation references and bibliography |
 | [`nizel-plugin-code-copy`](/plugins/code-copy/index.html) | CSP-friendly copy markup for code blocks |
 | [`nizel-plugin-deflist`](/plugins/deflist/index.html) | Definition list syntax |
+| [`nizel-plugin-details`](/plugins/details/index.html) | Disclosure blocks |
+| [`nizel-plugin-diagrams`](/plugins/diagrams/index.html) | Mermaid diagram containers |
 | [`nizel-plugin-emoji`](/plugins/emoji/index.html) | `:name:` emoji shortcuts outside code |
+| [`nizel-plugin-footnotes`](/plugins/footnotes/index.html) | Footnotes |
+| [`nizel-plugin-frontmatter-ui`](/plugins/frontmatter-ui/index.html) | Metadata UI helpers |
+| [`nizel-plugin-gfm`](/plugins/gfm/index.html) | GFM-oriented preset |
+| [`nizel-plugin-heading-anchors`](/plugins/heading-anchors/index.html) | Heading anchor links |
+| [`nizel-plugin-math`](/plugins/math/index.html) | Inline and display math wrappers |
+| [`nizel-plugin-media`](/plugins/media/index.html) | Image and figure enhancements |
+| [`nizel-plugin-sanitize`](/plugins/sanitize/index.html) | Output sanitizing |
 | [`nizel-plugin-shiki`](/plugins/shiki/index.html) | Worker-compatible syntax highlighting integration |
+| [`nizel-plugin-toc`](/plugins/toc/index.html) | Rendered table of contents |
+| [`nizel-plugin-typography`](/plugins/typography/index.html) | Mark, subscript, and superscript extensions |
 
 All official plugins are TypeScript packages that publish `dist` JavaScript and `.d.ts` files. Plugin tests include unit coverage for package helpers and integration coverage through `useNizel`.

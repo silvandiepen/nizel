@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 import { useNizel } from 'nizel';
-import { alertPlugin } from '../dist/index.js';
+import { alertPlugin, transformGitHubAlerts } from '../dist/index.js';
 
 test('unit: exposes alert custom block definitions', () => {
   const plugin = alertPlugin();
@@ -30,4 +30,20 @@ test('integration: supports custom root class names', async () => {
 
   assert.match(html, /class="callout callout--tip"/);
   assert.match(html, /class="callout__content"/);
+});
+
+test('unit: transforms GitHub alert blockquotes to custom blocks', () => {
+  assert.equal(
+    transformGitHubAlerts('> [!WARNING]\n> Be **careful**.\n\nAfter'),
+    '::warning Warning\nBe **careful**.\n::\n\nAfter',
+  );
+});
+
+test('integration: renders GitHub alert blockquote syntax', async () => {
+  const nizel = useNizel({ plugins: [alertPlugin()] });
+  const html = await nizel.html('> [!NOTE]\n> This is **useful**.');
+
+  assert.match(html, /class="alert alert--note"/);
+  assert.match(html, /<p class="alert__title">Note<\/p>/);
+  assert.match(html, /<strong>useful<\/strong>/);
 });

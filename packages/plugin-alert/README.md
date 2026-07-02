@@ -2,6 +2,8 @@
 
 GitHub-style alert blocks for [Nizel](https://npmjs.com/package/nizel).
 
+The browser build exposes `NizelAlert` from `dist/alert.iife.js`.
+
 ## Install
 
 ```bash

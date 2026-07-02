@@ -1,4 +1,4 @@
-import { defineNizelPlugin, type NizelPlugin } from 'nizel';
+import type { NizelPlugin } from 'nizel';
 
 export type DefinitionEntry = {
   term: string;
@@ -17,7 +17,7 @@ type DeflistValue = {
  * Creates a definition list plugin for `Term` followed by `: Definition` lines.
  */
 export const deflistPlugin = (options: DeflistPluginOptions = {}): NizelPlugin => {
-  return defineNizelPlugin({
+  return {
     name: 'deflist',
     blocks: {
       deflist: {
@@ -39,7 +39,7 @@ export const deflistPlugin = (options: DeflistPluginOptions = {}): NizelPlugin =
         return transformDefinitionLists(markdown, options);
       },
     },
-  });
+  };
 };
 
 /**

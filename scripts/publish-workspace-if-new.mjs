@@ -3,6 +3,7 @@ import { basename, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const workspaceName = process.argv[2];
+const provenance = process.env.NPM_PROVENANCE !== 'false';
 
 if (!workspaceName) {
   console.error('Usage: node scripts/publish-workspace-if-new.mjs <workspace-package-name>');
@@ -57,7 +58,16 @@ if (view.status === 0) {
 
 const publish = spawnSync(
   'npx',
-  ['-y', 'npm@11.5.1', 'publish', '--workspace', pkg.name, '--access', 'public', '--provenance'],
+  [
+    '-y',
+    'npm@11.5.1',
+    'publish',
+    '--workspace',
+    pkg.name,
+    '--access',
+    'public',
+    ...(provenance ? ['--provenance'] : ['--provenance=false']),
+  ],
   { stdio: 'inherit' },
 );
 

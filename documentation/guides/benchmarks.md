@@ -6,6 +6,14 @@ order: 15
 
 # Benchmarks
 
+Per-plugin overhead can be measured with:
+
+```bash
+npm run benchmark:plugins -- --time=100 --warmup=25
+```
+
+This compares core rendering with `core + one plugin` for every official plugin and writes `apps/benchmarks/results/plugin-overhead-latest.json`.
+
 Nizel keeps two benchmark reports: an engine comparison against other Markdown parsers and an internal function benchmark for finding parser, renderer, and pipeline bottlenecks.
 
 The numbers below are from the local benchmark suite using the current Nizel worktree. Higher Hz and higher scores are better. Lower mean milliseconds are better.
