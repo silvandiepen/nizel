@@ -1,6 +1,6 @@
 {
   "name": "nizel-plugin-footnotes",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Footnotes extension plugin for Nizel.",
   "repository": {
     "type": "git",
