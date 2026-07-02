@@ -18,7 +18,6 @@ The repository is planned as a monorepo, so CI and publishing must work for all 
 
 - npm workspaces
 - TypeScript
-- Changesets
 - GitHub Actions
 - npm Trusted Publishing
 - npm provenance
@@ -55,15 +54,22 @@ Checks:
 - test
 - build
 
-### Release
+### Publish
 
 Runs on pushes to `main`.
 
-Uses Changesets.
+The publish workflow versions packages before building:
 
-If there are unreleased changes, it opens or updates a release PR.
+1. `scripts/version-workspaces-for-publish.mjs` checks npm for every publishable package.
+2. If the package version already exists on npm, the script bumps patch until it finds an unpublished version.
+3. It updates the package `package.json` files and the matching workspace entries in `package-lock.json`.
+4. Release notes are generated from the versioned tree.
+5. CI builds and tests the versioned tree.
+6. The workflow commits the version files and release notes.
+7. Packages are published to npm using Trusted Publishing.
 
-When the release PR is merged, it publishes packages to npm using Trusted Publishing.
+The workflow does not rely on manual version edits before merging to `main`.
+Publish runs triggered by the workflow's own version/release-note commit are skipped so the version commit does not start another release loop.
 
 ## Package release model
 
@@ -81,7 +87,7 @@ packages/
     package.json
 ```
 
-Each package is versioned independently by Changesets.
+Each package is versioned independently by `scripts/version-workspaces-for-publish.mjs`.
 
 ## Package names
 
@@ -97,13 +103,25 @@ nizel-plugin-blog
 nizel-plugin-email
 ```
 
+## Version command
+
+```bash
+node scripts/version-workspaces-for-publish.mjs
+```
+
+Use `--dry-run` to inspect the next versions without writing files:
+
+```bash
+node scripts/version-workspaces-for-publish.mjs --dry-run
+```
+
 ## Publish command
 
 ```bash
-npx changeset publish
+node scripts/publish-workspace-if-new.mjs nizel
 ```
 
-The publish command should rely on npm Trusted Publishing and should not require an npm token.
+The publish command should rely on npm Trusted Publishing and should not require an npm token. Versioning happens before publish; the publish helper only publishes an unpublished version and skips a package if that exact version already exists.
 
 ## First publish for new packages
 
@@ -116,12 +134,6 @@ NPM_PROVENANCE=false node scripts/publish-workspace-if-new.mjs nizel-plugin-exam
 ```
 
 After the package exists, configure npm Trusted Publishing for the package with this repository and `.github/workflows/publish.yml`. CI publishes should then use OIDC and provenance.
-
-## Version command
-
-```bash
-npx changeset version
-```
 
 ## Safety
 

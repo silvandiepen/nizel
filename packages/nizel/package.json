@@ -32,7 +32,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && vitest run test/*.mjs",
     "test:commonmark:browser": "npm run build && NIZEL_COMMONMARK_ENTRY=../dist/browser/nizel.js node conformance/commonmark-spec-runner.mjs",
-    "test:watch": "npm run build && vitest test/*.mjs"
+    "test:watch": "npm run build && vitest test/*.mjs",
+    "test:run": "vitest run test/*.mjs"
   },
   "publishConfig": {
     "access": "public",

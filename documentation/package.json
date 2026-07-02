@@ -9,7 +9,8 @@
     "test": "node -e \"process.exit(0)\"",
     "typecheck": "node -e \"process.exit(0)\"",
     "serve": "npx serve public",
-    "deploy": "wrangler pages deploy public --project-name=nizel-docs"
+    "deploy": "wrangler pages deploy public --project-name=nizel-docs",
+    "test:run": "node -e \"process.exit(0)\""
   },
   "dependencies": {
     "girky": "^1.27.3",

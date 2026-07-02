@@ -13,7 +13,8 @@
     "bench:nizel": "npm run benchmark:nizel",
     "fixtures:commonmark": "node scripts/build-commonmark-fixture.js",
     "test": "node -e \"process.exit(0)\"",
-    "typecheck": "node -e \"process.exit(0)\""
+    "typecheck": "node -e \"process.exit(0)\"",
+    "test:run": "node -e \"process.exit(0)\""
   },
   "dependencies": {
     "commonmark-spec": "^0.31.2",

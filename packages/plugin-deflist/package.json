@@ -24,7 +24,8 @@
     "build:browser": "esbuild src/index.ts --bundle --platform=browser --format=iife --global-name=NizelDeflist --target=safari14 --outfile=dist/deflist.iife.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && vitest run test/*.mjs",
-    "test:watch": "npm run build && vitest test/*.mjs"
+    "test:watch": "npm run build && vitest test/*.mjs",
+    "test:run": "vitest run test/*.mjs"
   },
   "peerDependencies": {
     "nizel": "^0.1.0"

@@ -2,22 +2,42 @@
   "name": "nizel-plugin-frontmatter-ui",
   "version": "0.1.0",
   "description": "Frontmatter UI helper plugin for Nizel.",
-  "repository": { "type": "git", "url": "https://github.com/silvandiepen/nizel" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/silvandiepen/nizel"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
-    "./browser": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json && npm run build:browser",
     "build:browser": "esbuild src/index.ts --bundle --platform=browser --format=iife --global-name=NizelFrontmatterUi --target=safari14 --outfile=dist/frontmatter-ui.iife.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && vitest run test/*.mjs"
+    "test": "npm run build && vitest run test/*.mjs",
+    "test:run": "vitest run test/*.mjs"
   },
-  "peerDependencies": { "nizel": "^0.1.0" },
-  "devDependencies": { "esbuild": "^0.27.3" },
-  "publishConfig": { "access": "public", "provenance": true }
+  "peerDependencies": {
+    "nizel": "^0.1.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.3"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
 }
