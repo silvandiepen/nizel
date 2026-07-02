@@ -41,6 +41,23 @@ const { html } = await nizel(
 );
 ```
 
+## From Frontmatter
+
+Values declared in frontmatter are available as body template variables:
+
+```md
+---
+entityName: Henk
+documentName: "{{ entityName }} service agreement"
+---
+
+# {{ documentName | title }}
+
+This agreement is between {{ entityName }} and the customer.
+```
+
+Use `{{ frontmatter.entityName }}` or `{{ meta.entityName }}` when you want to be explicit about where the value came from. Runtime `variables` and `data` override same-name frontmatter values.
+
 ## Nested Access
 
 Dot notation works for nested objects:

@@ -48,6 +48,44 @@ slug: "{{ product.name | kebab }}"
   assert.match(result.html, /<p>hello-nizel<\/p>/);
 });
 
+test('frontmatter values are available as top-level body template variables', async () => {
+  const result = await useNizel()(`---
+entityName: Henk
+documentName: "{{ entityName }} service agreement"
+---
+
+# {{ documentName | title }}
+
+This agreement is between {{ entityName }} and the customer.
+
+The metadata path still works: {{ frontmatter.entityName }}.`, {
+    variables: {
+      customerName: 'Example Customer',
+    },
+  });
+
+  assert.equal(result.meta.entityName, 'Henk');
+  assert.equal(result.meta.documentName, 'Henk service agreement');
+  assert.match(result.html, /<h1 id="henk-service-agreement">Henk Service Agreement<\/h1>/);
+  assert.match(result.html, /between Henk and the customer/);
+  assert.match(result.html, /metadata path still works: Henk/);
+});
+
+test('explicit template data overrides same-name frontmatter variables', async () => {
+  const result = await useNizel()(`---
+entityName: Henk
+---
+
+{{ entityName }}`, {
+    data: {
+      entityName: 'Runtime Entity',
+    },
+  });
+
+  assert.equal(result.meta.entityName, 'Henk');
+  assert.match(result.html, /<p>Runtime Entity<\/p>/);
+});
+
 test('template escaping, raw output, missing modes, and filter args are explicit', () => {
   const data = {
     html: '<span>unsafe</span>',

@@ -64,6 +64,21 @@ slug: "{{ product.name | kebab }}"
 
 Template expressions in frontmatter values are resolved after the YAML is parsed, using the provided variables and data.
 
+Frontmatter values are also available as top-level template variables in the Markdown body. This is useful for legal or policy documents where the same entity names repeat throughout the text:
+
+```md
+---
+entityName: Henk
+documentName: "{{ entityName }} service agreement"
+---
+
+# {{ documentName | title }}
+
+This agreement is between {{ entityName }} and the customer.
+```
+
+The same values remain available through `{{ frontmatter.entityName }}` and `{{ meta.entityName }}`. Explicit `data` or `variables` passed to Nizel override same-name frontmatter variables in body templates.
+
 ## Derived Fields
 
 Nizel can derive fields from the content when they are not in frontmatter:

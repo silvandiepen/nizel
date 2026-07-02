@@ -175,6 +175,7 @@ function createNizel<TMeta extends Record<string, unknown> = Record<string, unkn
       ...(resolved.meta as Record<string, unknown> | undefined),
     };
     let data = {
+      ...meta,
       ...(resolved.data ?? {}),
       meta,
       frontmatter: extracted.frontmatter,
@@ -183,6 +184,7 @@ function createNizel<TMeta extends Record<string, unknown> = Record<string, unkn
     if (resolved.template !== false) {
       meta = renderObjectTemplates(meta, data, resolved.template as NizelTemplateOptions);
       data = {
+        ...meta,
         ...(resolved.data ?? {}),
         meta,
         frontmatter: meta,
