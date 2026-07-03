@@ -51,6 +51,7 @@ import 'nizel-style/base.css';
 import 'nizel-style/plugins/alert.css';
 import 'nizel-style/plugins/code-copy.css';
 import 'nizel-style/plugins/shiki.css';
+import 'nizel-style/plugins/task-list.css';
 ```
 
 Available plugin entrypoints:
@@ -70,6 +71,7 @@ Available plugin entrypoints:
 | Math | `nizel-style/plugins/math.css` |
 | Media | `nizel-style/plugins/media.css` |
 | Shiki | `nizel-style/plugins/shiki.css` |
+| Task Lists | `nizel-style/plugins/task-list.css` |
 | Table of Contents | `nizel-style/plugins/toc.css` |
 | Typography | `nizel-style/plugins/typography.css` |
 

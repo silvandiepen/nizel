@@ -569,6 +569,18 @@ const nizel = useNizel({
 
 By default the plugin injects an inline `onclick` handler. Use `codeCopyPlugin({ mode: 'button' })` for button-only markup under strict Content Security Policy.
 
+### `nizel-plugin-task-list`
+
+Renders parsed task-list metadata as view-only or editable checkboxes.
+
+```ts
+import { taskListPlugin } from 'nizel-plugin-task-list';
+
+const nizel = useNizel({
+  plugins: [taskListPlugin({ mode: 'view' })],
+});
+```
+
 ### `nizel-plugin-shiki`
 
 Provides a Worker-compatible highlighting integration point.

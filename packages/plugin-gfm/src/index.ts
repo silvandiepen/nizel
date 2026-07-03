@@ -1,10 +1,12 @@
 import type { NizelPlugin } from 'nizel';
 import { alertPlugin } from 'nizel-plugin-alert';
 import { autolinkPlugin } from 'nizel-plugin-autolink';
+import { taskListPlugin, type TaskListPluginOptions } from 'nizel-plugin-task-list';
 
 export type GfmPluginOptions = {
   alerts?: boolean;
   autolinks?: boolean;
+  taskLists?: boolean | TaskListPluginOptions;
 };
 
 /**
@@ -13,6 +15,7 @@ export type GfmPluginOptions = {
 export const gfmPlugins = (options: GfmPluginOptions = {}): NizelPlugin[] => [
   ...(options.autolinks === false ? [] : [autolinkPlugin()]),
   ...(options.alerts === false ? [] : [alertPlugin()]),
+  ...(options.taskLists === false ? [] : [taskListPlugin(options.taskLists === true ? undefined : options.taskLists)]),
 ];
 
 export const gfmPlugin = (options: GfmPluginOptions = {}): NizelPlugin => ({

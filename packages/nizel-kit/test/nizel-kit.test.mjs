@@ -24,6 +24,7 @@ test('exposes a native-app friendly plugin registry', () => {
     'heading-anchors',
     'media',
     'toc',
+    'task-list',
     'footnotes',
     'math',
     'typography',
@@ -58,7 +59,7 @@ test('renders selected extension plugins through NizelKit', async () => {
 });
 
 test('expands preset plugin ids', () => {
-  assert.deepEqual(createPlugins(['gfm']).map((plugin) => plugin.name), ['autolink', 'alert']);
+  assert.deepEqual(createPlugins(['gfm']).map((plugin) => plugin.name), ['autolink', 'alert', 'task-list']);
 });
 
 test('renders with every supported plugin enabled', async () => {

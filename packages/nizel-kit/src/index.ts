@@ -17,6 +17,7 @@ import { mathPlugin, type MathPluginOptions } from 'nizel-plugin-math';
 import { mediaPlugin, type MediaPluginOptions } from 'nizel-plugin-media';
 import { sanitizePlugin, type SanitizePluginOptions } from 'nizel-plugin-sanitize';
 import { shikiPlugin, type ShikiPluginOptions } from 'nizel-plugin-shiki';
+import { taskListPlugin, type TaskListPluginOptions } from 'nizel-plugin-task-list';
 import { tocPlugin, type TocPluginOptions } from 'nizel-plugin-toc';
 import { typographyPlugin, type TypographyPluginOptions } from 'nizel-plugin-typography';
 
@@ -38,6 +39,7 @@ export type NizelKitPluginId =
   | 'media'
   | 'sanitize'
   | 'shiki'
+  | 'task-list'
   | 'toc'
   | 'typography';
 
@@ -68,6 +70,7 @@ export type NizelKitPluginOptions = {
   media?: MediaPluginOptions;
   sanitize?: SanitizePluginOptions;
   shiki?: ShikiPluginOptions;
+  'task-list'?: TaskListPluginOptions;
   toc?: TocPluginOptions;
   typography?: TypographyPluginOptions;
 };
@@ -170,6 +173,13 @@ export const supportedPlugins: NizelKitPluginMeta[] = [
     category: 'block',
   },
   {
+    id: 'task-list',
+    label: 'Task Lists',
+    description: 'Render parsed task-list items as view-only or editable checkboxes.',
+    defaultEnabled: false,
+    category: 'block',
+  },
+  {
     id: 'footnotes',
     label: 'Footnotes',
     description: 'Render [^id] references and definitions.',
@@ -231,6 +241,7 @@ const factories: Record<NizelKitPluginId, (options: NizelKitPluginOptions) => Ni
   media: (options) => mediaPlugin(options.media),
   sanitize: (options) => sanitizePlugin(options.sanitize),
   shiki: (options) => shikiPlugin(options.shiki),
+  'task-list': (options) => taskListPlugin(options['task-list']),
   toc: (options) => tocPlugin(options.toc),
   typography: (options) => typographyPlugin(options.typography),
 };

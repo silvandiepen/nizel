@@ -39,6 +39,9 @@ Uppercase headings should stay quiet and readable.
 - Spacing is based on the named `em` scale.
 - Longer list items can wrap across multiple lines without the marker drifting away from the first line of content.
 
+- [x] Completed task list items should show a checked state.
+- [ ] Open task list items should show an unchecked state.
+
 1. Ordered lists keep browser numbering.
 2. Nested content stays within the scoped root.
 3. Additional items help show vertical list rhythm.

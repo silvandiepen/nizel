@@ -2,7 +2,7 @@
 
 GFM-oriented companion preset for [Nizel](https://npmjs.com/package/nizel).
 
-Nizel core already handles Markdown fundamentals such as tables, task-list markup, strikethrough, and raw/autolink syntax that belongs in the parser. This package provides a small opt-in preset for first-party plugins that commonly accompany GitHub Flavored Markdown workflows.
+Nizel core already handles Markdown fundamentals such as tables, task-list metadata, strikethrough, and raw/autolink syntax that belongs in the parser. This package provides a small opt-in preset for first-party plugins that commonly accompany GitHub Flavored Markdown workflows.
 
 The browser build exposes `NizelGfm` from `dist/gfm.iife.js`.
 
@@ -23,7 +23,7 @@ const nizel = useNizel({
 });
 
 const explicit = useNizel({
-  plugins: gfmPlugins({ alerts: true, autolinks: true }),
+  plugins: gfmPlugins({ alerts: true, autolinks: true, taskLists: { mode: 'view' } }),
 });
 ```
 
@@ -33,6 +33,7 @@ By default the preset enables:
 
 - `nizel-plugin-autolink`
 - `nizel-plugin-alert`
+- `nizel-plugin-task-list`
 
 ## Options
 
@@ -40,6 +41,7 @@ By default the preset enables:
 | --- | --- | --- | --- |
 | `alerts` | `boolean` | `true` | Include GitHub-style alert/callout support. |
 | `autolinks` | `boolean` | `true` | Include configurable bare URL and email autolinks. |
+| `taskLists` | `boolean \| TaskListPluginOptions` | `true` | Include task-list checkbox rendering. |
 
 ## License
 

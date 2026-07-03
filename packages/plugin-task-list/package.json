@@ -1,7 +1,7 @@
 {
-  "name": "nizel-plugin-gfm",
-  "version": "0.1.7",
-  "description": "GFM-oriented plugin preset for Nizel.",
+  "name": "nizel-plugin-task-list",
+  "version": "0.1.0",
+  "description": "Task-list checkbox rendering plugin for Nizel.",
   "repository": {
     "type": "git",
     "url": "https://github.com/silvandiepen/nizel"
@@ -13,10 +13,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./browser": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
     }
   },
   "files": [
@@ -24,22 +20,14 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json && npm run build:browser",
-    "build:browser": "esbuild src/index.ts --bundle --platform=browser --format=iife --global-name=NizelGfm --target=safari14 --outfile=dist/gfm.iife.js",
+    "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && vitest run test/*.mjs",
+    "test:watch": "npm run build && vitest test/*.mjs",
     "test:run": "vitest run test/*.mjs"
-  },
-  "dependencies": {
-    "nizel-plugin-alert": "^0.1.0",
-    "nizel-plugin-autolink": "^0.1.0",
-    "nizel-plugin-task-list": "^0.1.0"
   },
   "peerDependencies": {
     "nizel": "^0.1.0"
-  },
-  "devDependencies": {
-    "esbuild": "^0.27.3"
   },
   "publishConfig": {
     "access": "public",

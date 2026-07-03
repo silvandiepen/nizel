@@ -31,6 +31,7 @@ Install the packages you need, register them in `useNizel({ plugins })`, and kee
 - [Media](/plugins/media/index.html) - Figure and image enhancements.
 - [Sanitize](/plugins/sanitize/index.html) - Output sanitizing.
 - [Shiki](/plugins/shiki/index.html) - Worker-compatible syntax highlighting integration.
+- [Task Lists](/plugins/task-list/index.html) - View-only or editable task-list checkboxes.
 - [Table of Contents](/plugins/toc/index.html) - Rendered `[[toc]]`.
 - [Typography](/plugins/typography/index.html) - Mark, subscript, and superscript extensions.
 

@@ -39,6 +39,7 @@ import 'nizel-style/tokens.css';
 import 'nizel-style/base.css';
 import 'nizel-style/plugins/alert.css';
 import 'nizel-style/plugins/code-copy.css';
+import 'nizel-style/plugins/task-list.css';
 ```
 
 Available plugin styles:
@@ -56,6 +57,7 @@ Available plugin styles:
 - `nizel-style/plugins/math.css`
 - `nizel-style/plugins/media.css`
 - `nizel-style/plugins/shiki.css`
+- `nizel-style/plugins/task-list.css`
 - `nizel-style/plugins/toc.css`
 - `nizel-style/plugins/typography.css`
 

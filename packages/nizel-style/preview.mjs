@@ -17,6 +17,7 @@ import { headingAnchorsPlugin } from 'nizel-plugin-heading-anchors';
 import { mathPlugin } from 'nizel-plugin-math';
 import { mediaPlugin } from 'nizel-plugin-media';
 import { shikiPlugin } from 'nizel-plugin-shiki';
+import { taskListPlugin } from 'nizel-plugin-task-list';
 import { tocPlugin } from 'nizel-plugin-toc';
 import { typographyPlugin } from 'nizel-plugin-typography';
 
@@ -43,6 +44,7 @@ const processor = useNizel({
     footnotesPlugin(),
     mathPlugin(),
     typographyPlugin(),
+    taskListPlugin(),
     shikiPlugin({ highlighter }),
     diagramsPlugin(),
     codeCopyPlugin(),

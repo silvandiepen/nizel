@@ -1,0 +1,45 @@
+@use "../tokens";
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) li:has(.nizel-task-list__label)::before {
+  content: none;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .nizel-task-list__label {
+  display: inline-grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--nizel-space-xs);
+  align-items: baseline;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .nizel-task-list__checkbox {
+  appearance: none;
+  inline-size: var(--nizel-space);
+  block-size: var(--nizel-space);
+  margin: 0;
+  border: 1px solid var(--nizel-task-border, color-mix(in srgb, var(--nizel-foreground) 34%, transparent));
+  border-radius: var(--nizel-radius-sm);
+  background: var(--nizel-task-background, transparent);
+  color: var(--nizel-task-checked-foreground, var(--nizel-background));
+  font: inherit;
+  transform: translateY(0.14em);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .nizel-task-list__checkbox:checked {
+  border-color: var(--nizel-task-checked-background, var(--nizel-primary));
+  background: var(--nizel-task-checked-background, var(--nizel-primary));
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .nizel-task-list__checkbox:checked::before {
+  content: "";
+  display: block;
+  inline-size: 0.28em;
+  block-size: 0.52em;
+  margin: 0.12em auto 0;
+  border: solid currentColor;
+  border-width: 0 0.12em 0.12em 0;
+  transform: rotate(45deg);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .nizel-task-list__checkbox:disabled {
+  cursor: default;
+}

@@ -177,6 +177,7 @@ Nizel publishes first-party plugins from the npm workspace:
 | [`nizel-plugin-media`](/plugins/media/index.html) | Image and figure enhancements |
 | [`nizel-plugin-sanitize`](/plugins/sanitize/index.html) | Output sanitizing |
 | [`nizel-plugin-shiki`](/plugins/shiki/index.html) | Worker-compatible syntax highlighting integration |
+| [`nizel-plugin-task-list`](/plugins/task-list/index.html) | Task-list checkbox rendering |
 | [`nizel-plugin-toc`](/plugins/toc/index.html) | Rendered table of contents |
 | [`nizel-plugin-typography`](/plugins/typography/index.html) | Mark, subscript, and superscript extensions |
 

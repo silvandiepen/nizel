@@ -113,9 +113,21 @@
         <hr />
         <h3 id="lists">Lists<a class="heading-anchor" href="#lists" aria-label="Link to section"></a></h3>
         <ul>
-        <li>Unordered lists use the Nizel marker treatment.</li>
-        <li>Spacing is based on the named <code>em</code> scale.</li>
-        <li>Longer list items can wrap across multiple lines without the marker drifting away from the first line of content.</li>
+        <li>
+        <p>Unordered lists use the Nizel marker treatment.</p>
+        </li>
+        <li>
+        <p>Spacing is based on the named <code>em</code> scale.</p>
+        </li>
+        <li>
+        <p>Longer list items can wrap across multiple lines without the marker drifting away from the first line of content.</p>
+        </li>
+        <li data-checked>
+        <p><label class="nizel-task-list__label"><input class="nizel-task-list__checkbox" data-nizel-task-checkbox type="checkbox" checked disabled><span class="nizel-task-list__content">Completed task list items should show a checked state.</span></label></p>
+        </li>
+        <li>
+        <p><label class="nizel-task-list__label"><input class="nizel-task-list__checkbox" data-nizel-task-checkbox type="checkbox" disabled><span class="nizel-task-list__content">Open task list items should show an unchecked state.</span></label></p>
+        </li>
         </ul>
         <ol>
         <li>Ordered lists keep browser numbering.</li>

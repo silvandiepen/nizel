@@ -79,7 +79,7 @@ Official plugins available:
 - `nizel-plugin-alert` — GitHub-style and custom alert blocks
 - `nizel-plugin-autolink` — configurable bare URL and email links
 - `nizel-plugin-citations` — citation references and bibliography output
-- `nizel-plugin-code-copy` — CSP-friendly copy controls for code blocks
+- `nizel-plugin-code-copy` — copy controls for code blocks
 - `nizel-plugin-deflist` — definition-list syntax
 - `nizel-plugin-details` — disclosure/details blocks
 - `nizel-plugin-diagrams` — Mermaid code block containers
@@ -92,6 +92,7 @@ Official plugins available:
 - `nizel-plugin-media` — figure, caption, lazy, and responsive image helpers
 - `nizel-plugin-sanitize` — additional rendered HTML sanitizing
 - `nizel-plugin-shiki` — code syntax highlighting via Shiki
+- `nizel-plugin-task-list` — task-list checkbox rendering
 - `nizel-plugin-toc` — rendered `[[toc]]` table of contents
 - `nizel-plugin-typography` — mark, subscript, and superscript extensions
 
