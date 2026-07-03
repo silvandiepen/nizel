@@ -8,7 +8,9 @@ import {
 } from 'nizel';
 
 export type CodeCopyPluginOptions = {
+  copiedLabel?: string;
   label?: string;
+  mode?: 'inline' | 'button';
 };
 
 type CodeCopyValue = {
@@ -18,10 +20,12 @@ type CodeCopyValue = {
 };
 
 /**
- * Creates a plugin that renders CSP-friendly copy controls for fenced code blocks.
+ * Creates a plugin that renders copy controls for fenced code blocks.
  */
 export const codeCopyPlugin = (options: CodeCopyPluginOptions = {}): NizelPlugin => {
+  const copiedLabel = options.copiedLabel ?? 'Copied';
   const label = options.label ?? 'Copy';
+  const mode = options.mode ?? 'inline';
 
   return defineNizelPlugin({
     name: 'code-copy',
@@ -31,7 +35,7 @@ export const codeCopyPlugin = (options: CodeCopyPluginOptions = {}): NizelPlugin
         formats: {
           html(node, ctx) {
             if (node.type !== 'customBlock') return '';
-            return renderCodeCopyBlock(node, ctx, label);
+            return renderCodeCopyBlock(node, ctx, { copiedLabel, label, mode });
           },
         },
       },
@@ -118,16 +122,39 @@ const sourceFromCustomBlock = (node: NizelCustomBlockNode): CodeCopyValue | unde
 export const renderCodeCopyBlock = (
   node: NizelCustomBlockNode,
   ctx: NizelRenderContext,
-  label: string,
+  options: Required<CodeCopyPluginOptions>,
 ): string => {
   const value = node.value as Partial<CodeCopyValue> | undefined;
   const filename = value?.filename ? `<figcaption>${ctx.escape(value.filename)}</figcaption>` : '';
   const source = typeof value?.code === 'string'
-    ? ` data-nizel-copy-source="${ctx.escape(value.code)}"`
+    ? `<textarea class="nizel-code-copy__source" data-nizel-copy-source hidden readonly tabindex="-1" aria-hidden="true" style="display: none">${ctx.escape(value.code)}</textarea>`
     : '';
   const body = ctx.render(node.children ?? []);
+  const onclick = options.mode === 'inline'
+    ? ` onclick="${ctx.escape(createInlineCopyHandler(options.copiedLabel))}"`
+    : '';
 
-  return `<figure class="nizel-code-copy" data-nizel-code-copy${source}>${filename}<button type="button" class="nizel-code-copy__button" data-nizel-copy-button>${ctx.escape(label)}</button>${body}</figure>`;
+  return `<figure class="nizel-code-copy" data-nizel-code-copy>${filename}${source}<button type="button" class="nizel-code-copy__button" data-nizel-copy-button${onclick}>${ctx.escape(options.label)}</button>${body}</figure>`;
 };
+
+/**
+ * Creates the inline browser copy handler used by the default copy mode.
+ */
+const createInlineCopyHandler = (copiedLabel: string): string => {
+  const label = jsString(copiedLabel);
+
+  return `var b=this,f=b.closest('[data-nizel-code-copy]'),s=f?f.querySelector('[data-nizel-copy-source]'):null,v=s?s.value:'',p=b.textContent,d=function(){b.textContent='${label}';setTimeout(function(){b.textContent=p;},1200)},c=function(){var t=document.createElement('textarea');t.value=v;t.setAttribute('readonly','');t.style.position='fixed';t.style.opacity='0';document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);d()};if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(v).then(d,c)}else{c()}`;
+};
+
+/**
+ * Escapes a string for single-quoted JavaScript string literals.
+ */
+const jsString = (value: string): string => value
+  .replace(/\\/g, '\\\\')
+  .replace(/'/g, "\\'")
+  .replace(/\r/g, '\\r')
+  .replace(/\n/g, '\\n')
+  .replace(/\u2028/g, '\\u2028')
+  .replace(/\u2029/g, '\\u2029');
 
 export default codeCopyPlugin;

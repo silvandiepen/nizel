@@ -1,8 +1,8 @@
 # nizel-plugin-code-copy
 
-CSP-friendly code copy markup plugin for [Nizel](https://npmjs.com/package/nizel).
+Code copy plugin for [Nizel](https://npmjs.com/package/nizel).
 
-Renders copy buttons on fenced code blocks without requiring inline JavaScript — works under strict Content Security Policy.
+Renders copy buttons on fenced code blocks. By default, buttons include inline JavaScript that copies the original source text.
 
 The plugin wraps code-like blocks instead of replacing the active code renderer, so it can be combined with syntax highlighting or explicit diagram plugins.
 
@@ -25,7 +25,7 @@ const processor = useNizel({
 });
 
 const result = processor.process('```js\nconsole.log("hello")\n```');
-// Produces a <figure> with a <button data-nizel-copy-button> and the code block
+// Produces a <figure> with a copying <button data-nizel-copy-button> and the code block
 ```
 
 ## Output Structure
@@ -33,12 +33,21 @@ const result = processor.process('```js\nconsole.log("hello")\n```');
 ```html
 <figure class="nizel-code-copy" data-nizel-code-copy>
   <figcaption>filename.js</figcaption>  <!-- if filename provided -->
-  <button type="button" class="nizel-code-copy__button" data-nizel-copy-button>Copy</button>
+  <textarea class="nizel-code-copy__source" data-nizel-copy-source hidden readonly tabindex="-1" aria-hidden="true" style="display: none">console.log("hello")</textarea>
+  <button type="button" class="nizel-code-copy__button" data-nizel-copy-button onclick="...">Copy</button>
   <pre><code class="language-js">console.log("hello")</code></pre>
 </figure>
 ```
 
-The figure also includes `data-nizel-copy-source` with the original escaped source text. Wire up the copy behavior with your own JS by querying `[data-nizel-copy-button]`.
+The hidden textarea contains the original escaped source text. The button copies from `[data-nizel-copy-source]`, so syntax highlighting or renderer changes do not affect the copied value.
+
+For strict Content Security Policy or framework-owned behavior, switch to button-only mode:
+
+```js
+codeCopyPlugin({ mode: 'button' });
+```
+
+Then wire up copy behavior with your own JS by querying `[data-nizel-copy-button]`.
 
 Because code-copy is a wrapper, this works with another plugin that renders the child code block:
 
@@ -59,6 +68,8 @@ Only explicit Mermaid fences such as ```` ```mermaid ```` become diagrams when t
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
 | `label` | `string` | `'Copy'` | Button text |
+| `copiedLabel` | `string` | `'Copied'` | Temporary button text after copying |
+| `mode` | `'inline' \| 'button'` | `'inline'` | Inline copy handler or button-only markup |
 
 ## License
 

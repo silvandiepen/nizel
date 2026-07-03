@@ -25,22 +25,37 @@ test('unit: renders escaped copy markup for one code block', () => {
       children: [{ type: 'code', code: 'const x = "<";\n', lang: 'ts', filename: 'demo.ts' }],
     },
     ctx,
-    'Copy <code>',
+    { copiedLabel: 'Copied', label: 'Copy <code>', mode: 'inline' },
   );
 
   assert.match(html, /<figcaption>demo.ts<\/figcaption>/);
   assert.match(html, /class="language-ts"/);
-  assert.match(html, /data-nizel-copy-source="const x = &quot;&lt;&quot;;\n"/);
+  assert.match(html, /<textarea class="nizel-code-copy__source" data-nizel-copy-source hidden readonly tabindex="-1" aria-hidden="true" style="display: none">const x = &quot;&lt;&quot;;\n<\/textarea>/);
+  assert.match(html, /onclick="/);
+  assert.match(html, /navigator\.clipboard/);
+  assert.match(html, /querySelector\('\[data-nizel-copy-source\]'\)/);
   assert.match(html, /Copy &lt;code&gt;/);
   assert.match(html, /const x = &quot;&lt;&quot;/);
 });
 
-test('integration: renders CSP-friendly copy markup for code blocks', async () => {
+test('integration: renders inline copy behavior for code blocks by default', async () => {
   const nizel = useNizel({ plugins: [codeCopyPlugin()] });
   const html = await nizel.html('```ts filename="demo.ts"\nconst x = 1;\n```');
 
   assert.match(html, /data-nizel-code-copy/);
+  assert.match(html, /data-nizel-copy-source/);
   assert.match(html, /demo.ts/);
+  assert.match(html, /onclick=/);
+  assert.match(html, /navigator\.clipboard/);
+});
+
+test('integration: renders button-only markup when requested', async () => {
+  const nizel = useNizel({ plugins: [codeCopyPlugin({ mode: 'button' })] });
+  const html = await nizel.html('```ts filename="demo.ts"\nconst x = 1;\n```');
+
+  assert.match(html, /data-nizel-code-copy/);
+  assert.match(html, /data-nizel-copy-source/);
+  assert.match(html, /data-nizel-copy-button/);
   assert.doesNotMatch(html, /onclick=/);
 });
 
@@ -53,7 +68,7 @@ test('integration: wraps a custom code renderer without replacing it', async () 
         formats: {
           html(node, renderCtx) {
             return node.type === 'code'
-              ? `<pre class="custom-code">${renderCtx.escape(node.code)}</pre>`
+              ? `<pre class="custom-code"><span>${renderCtx.escape(node.code.toUpperCase())}</span></pre>`
               : '';
           },
         },
@@ -65,7 +80,8 @@ test('integration: wraps a custom code renderer without replacing it', async () 
 
   assert.match(html, /data-nizel-code-copy/);
   assert.match(html, /class="custom-code"/);
-  assert.match(html, /console\.log\(&quot;copy&quot;\);/);
+  assert.match(html, /CONSOLE\.LOG\(&quot;COPY&quot;\);/);
+  assert.match(html, /<textarea class="nizel-code-copy__source" data-nizel-copy-source hidden readonly tabindex="-1" aria-hidden="true" style="display: none">console\.log\(&quot;copy&quot;\);\n<\/textarea>/);
 });
 
 test('integration: wraps explicit diagram blocks when another plugin converts them', async () => {
@@ -103,6 +119,6 @@ test('integration: wraps explicit diagram blocks when another plugin converts th
   const html = await nizel.html('```mermaid\ngraph TD;\nA-->B;\n```');
 
   assert.match(html, /data-nizel-code-copy/);
-  assert.match(html, /data-nizel-copy-source="graph TD;\nA--&gt;B;\n"/);
+  assert.match(html, /<textarea class="nizel-code-copy__source" data-nizel-copy-source hidden readonly tabindex="-1" aria-hidden="true" style="display: none">graph TD;\nA--&gt;B;\n<\/textarea>/);
   assert.match(html, /<div class="mermaid">graph TD;\nA--&gt;B;<\/div>/);
 });

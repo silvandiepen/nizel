@@ -557,7 +557,7 @@ const nizel = useNizel({
 
 ### `nizel-plugin-code-copy`
 
-Adds CSP-friendly copy controls to code blocks.
+Adds copy controls to code blocks.
 
 ```ts
 import { codeCopyPlugin } from 'nizel-plugin-code-copy';
@@ -567,7 +567,7 @@ const nizel = useNizel({
 });
 ```
 
-The plugin does not inject inline JavaScript.
+By default the plugin injects an inline `onclick` handler. Use `codeCopyPlugin({ mode: 'button' })` for button-only markup under strict Content Security Policy.
 
 ### `nizel-plugin-shiki`
 

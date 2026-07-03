@@ -44,7 +44,7 @@ Copy buttons are plugin-owned.
 
 Core should not render copy-button HTML automatically and should never inject inline JavaScript.
 
-A plugin can add copy markup, runtime helpers, framework components, or metadata.
+A plugin can add copy markup, inline handlers, runtime helpers, framework components, or metadata.
 
 ```ts
 import { codeCopyPlugin } from 'nizel-plugin-code-copy';
