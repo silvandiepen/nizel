@@ -60,18 +60,35 @@ Checks:
 
 Runs on pushes to `main`.
 
-The publish workflow versions packages before building:
+The publish workflow only releases packages that actually changed. Each publish is recorded with a per-package git tag (`<package-name>@<version>`), which the next run uses as its change baseline.
 
-1. `scripts/version-workspaces-for-publish.mjs` checks npm for every publishable package.
-2. If the package version already exists on npm, the script bumps patch until it finds an unpublished version.
-3. It updates the package `package.json` files and the matching workspace entries in `package-lock.json`.
-4. Release notes are generated from the versioned tree.
-5. CI builds and tests the versioned tree.
-6. Packages are published to npm using Trusted Publishing.
-7. Only after every publish step succeeds, the workflow commits the version files and release notes.
+1. `scripts/version-workspaces-for-publish.mjs` builds the publish plan:
+   - For each package, it finds the most recent `<name>@<version>` git tag.
+   - It diffs the package directory against that tag. `dist/`, `*.tsbuildinfo`, and `node_modules/` are gitignored, so the diff reflects real source changes only.
+   - A package is scheduled to publish if its own files changed, or if a workspace dependency it declares in `dependencies`, `peerDependencies`, or `optionalDependencies` is publishing this run (transitive).
+   - Packages that changed are bumped to the next unpublished patch (or keep an already-unpublished repo version). Packages with no changes are left untouched.
+   - The plan is written to `.publish-plan`; packages not in the plan are skipped by the publish step.
+2. Release notes are generated from the versioned tree.
+3. CI builds and tests the versioned tree.
+4. Each package is published with `scripts/publish-workspace-if-new.mjs`, which only publishes the versions listed in the plan and skips everything else.
+5. After every publish step succeeds, the workflow commits the version files and release notes.
+6. `scripts/create-publish-tags.mjs` creates and pushes the `<name>@<version>` tags at that commit. Tagging happens after the version commit so the tag points at a tree whose `package.json` already matches the tagged version.
 
 The workflow does not rely on manual version edits before merging to `main`.
 If any publish step fails, the generated version files and release notes are not committed. Publish runs triggered by the workflow's own version/release-note commit are skipped so the version commit does not start another release loop.
+
+### Bootstrap tags
+
+Packages first published manually (for example to enable Trusted Publishing) have no baseline tag. On the first CI run after that, `publish-workspace-if-new.mjs` detects the published version without a tag and records a baseline tag without republishing. From then on the package only republishes when it changes.
+
+### Change detection
+
+A package republishes when:
+
+- files under its own package directory changed since its last publish tag, or
+- a workspace dependency is publishing in the same run.
+
+Because every plugin depends on `nizel`, a change to core cascades to all plugins and to `nizel-kit`. Editing a single plugin republishes only that plugin (plus `nizel-plugin-gfm` and `nizel-kit` if they consume it).
 
 ## Package release model
 
@@ -89,7 +106,7 @@ packages/
     package.json
 ```
 
-Each package is versioned independently by `scripts/version-workspaces-for-publish.mjs`.
+Each package is versioned independently by `scripts/version-workspaces-for-publish.mjs`, but only when it (or a workspace dependency) has changed since its last publish tag.
 
 ## Package names
 
@@ -123,7 +140,7 @@ node scripts/version-workspaces-for-publish.mjs --dry-run
 node scripts/publish-workspace-if-new.mjs nizel
 ```
 
-The publish command should rely on npm Trusted Publishing and should not require an npm token. Versioning happens before publish; the publish helper only publishes an unpublished version and skips a package if that exact version already exists.
+The publish command should rely on npm Trusted Publishing and should not require an npm token. Versioning and the publish plan happen before publish; the publish helper only publishes versions listed in `.publish-plan`, records the resulting `<name>@<version>` tag in `.tag-plan`, and skips everything else. When there is no plan (local bootstrap), it falls back to publishing any unpublished version.
 
 ## First publish for new packages
 

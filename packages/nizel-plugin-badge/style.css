@@ -1,0 +1,40 @@
+.nizel-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.125em 0.5em;
+  font-size: 0.85em;
+  line-height: 1.4;
+  font-weight: 600;
+  white-space: nowrap;
+  vertical-align: baseline;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.nizel-badge[data-tone="neutral"] {
+  color: currentColor;
+}
+
+.nizel-badge[data-tone="info"],
+.nizel-badge[data-tone="blue"] {
+  color: #175cd3;
+}
+
+.nizel-badge[data-tone="success"],
+.nizel-badge[data-tone="green"] {
+  color: #16794c;
+}
+
+.nizel-badge[data-tone="warning"],
+.nizel-badge[data-tone="yellow"] {
+  color: #946200;
+}
+
+.nizel-badge[data-tone="danger"],
+.nizel-badge[data-tone="red"] {
+  color: #b42318;
+}
+
+.nizel-badge[data-tone="purple"] {
+  color: #6941c6;
+}

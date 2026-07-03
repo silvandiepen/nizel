@@ -1,6 +1,10 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { existsSync, readFileSync, appendFileSync } from 'node:fs';
+import { basename } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { listWorkspaces, publishedVersions, tagFor, tagExists, readJson } from './workspace-utils.mjs';
+
+const PLAN_PATH = '.publish-plan';
+const TAG_PLAN_PATH = '.tag-plan';
 
 const workspaceName = process.argv[2];
 const provenance = process.env.NPM_PROVENANCE !== 'false';
@@ -10,55 +14,67 @@ if (!workspaceName) {
   process.exit(1);
 }
 
-const workspaceRoots = ['packages', 'documentation'];
-
-const readPackage = (dir) => JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
-
 const findWorkspace = () => {
-  for (const root of workspaceRoots) {
-    for (const entry of readdirSync(root, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue;
-
-      const dir = join(root, entry.name);
-      const pkg = readPackage(dir);
-      if (pkg.name === workspaceName || entry.name === workspaceName || basename(dir) === workspaceName) {
-        return { dir, pkg };
-      }
-    }
+  for (const w of listWorkspaces()) {
+    if (w.pkg.name === workspaceName || basename(w.dir) === workspaceName) return w;
   }
-
   throw new Error(`Workspace not found: ${workspaceName}`);
 };
 
+const readPublishPlan = () => {
+  if (!existsSync(PLAN_PATH)) return null;
+  const entries = readJson(PLAN_PATH);
+  const map = new Map();
+  for (const entry of entries) map.set(entry.name, entry.version);
+  return map;
+};
+
+const recordTag = (tag) => {
+  appendFileSync(TAG_PLAN_PATH, `${tag}\n`);
+};
+
 const { pkg } = findWorkspace();
+const name = pkg.name;
+const version = pkg.version;
+const tag = tagFor(name, version);
 
-// Check if the current version is already published
-const spec = `${pkg.name}@${pkg.version}`;
-const view = spawnSync('npm', ['view', spec, 'version', '--json'], {
-  encoding: 'utf8',
-  stdio: ['ignore', 'pipe', 'pipe'],
-});
+const published = publishedVersions(name);
+const isPublished = published.has(version);
+const plan = readPublishPlan();
 
-if (view.status === 0) {
-  console.log(`${spec} already exists; skipping publish.`);
-  process.exit(0);
+const inPlan = plan ? plan.has(name) && plan.get(name) === version : null;
+const shouldPublish = plan ? inPlan === true : !isPublished;
+
+if (shouldPublish && !isPublished) {
+  console.log(`${name}@${version} is not published yet; publishing.`);
+  const publish = spawnSync(
+    'npx',
+    [
+      '-y',
+      'npm@11.5.1',
+      'publish',
+      '--workspace',
+      name,
+      '--access',
+      'public',
+      ...(provenance ? ['--provenance'] : ['--provenance=false']),
+    ],
+    { stdio: 'inherit' },
+  );
+  if (publish.status !== 0) process.exit(publish.status ?? 1);
+  recordTag(tag);
+} else {
+  if (shouldPublish && isPublished) {
+    console.log(`${name}@${version} already published; skipping publish.`);
+  } else if (plan) {
+    console.log(`${name}@${version} not in publish plan; skipping.`);
+  } else {
+    console.log(`${name}@${version} already exists; skipping publish.`);
+  }
+  if (isPublished && !tagExists(tag)) {
+    recordTag(tag);
+    console.log(`${name}: recorded baseline tag ${tag}.`);
+  }
 }
 
-console.log(`${spec} is not published yet; publishing.`);
-
-const publish = spawnSync(
-  'npx',
-  [
-    '-y',
-    'npm@11.5.1',
-    'publish',
-    '--workspace',
-    pkg.name,
-    '--access',
-    'public',
-    ...(provenance ? ['--provenance'] : ['--provenance=false']),
-  ],
-  { stdio: 'inherit' },
-);
-
-process.exit(publish.status ?? 1);
+process.exit(0);

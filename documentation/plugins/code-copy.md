@@ -30,6 +30,12 @@ const nizel = useNizel({
 const html = await nizel.html('```js\nconsole.log("hello")\n```');
 ```
 
+## Preview
+
+```js filename="copy-example.js"
+console.log('hello from the rendered block');
+```
+
 ## Options
 
 | Option | Type | Default | Description |

@@ -50,6 +50,13 @@ const nizel = useNizel({
 });
 ```
 
+## Preview
+
+```ts filename="highlighted.ts"
+const message: string = 'Rendered by the docs pipeline';
+console.log(message);
+```
+
 ## Worker and no-WASM usage
 
 Use the `nizel-plugin-shiki/javascript` entrypoint when Shiki must run with its JavaScript regex engine instead of the default Oniguruma WASM engine.

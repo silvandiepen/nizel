@@ -13,6 +13,12 @@ icon: ui/file-lines
 HTML is text.
 ```
 
+## Preview
+
+*[HTML]: HyperText Markup Language
+
+HTML is text.
+
 ## Usage
 
 ```ts

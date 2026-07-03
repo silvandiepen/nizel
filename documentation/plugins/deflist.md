@@ -29,6 +29,15 @@ const html = await nizel.html(`Term
 : Definition`);
 ```
 
+## Preview
+
+Term
+: Definition
+
+Other term
+: First definition
+: Second definition
+
 ## Syntax
 
 ```md

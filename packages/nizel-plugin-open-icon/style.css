@@ -1,0 +1,18 @@
+.nizel-open-icon {
+  display: inline-flex;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.125em;
+  line-height: 1;
+}
+
+.nizel-open-icon svg {
+  width: 1em;
+  height: 1em;
+  display: block;
+}
+
+.nizel-open-icon--missing {
+  outline: 1px dashed currentColor;
+  opacity: 0.5;
+}

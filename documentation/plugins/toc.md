@@ -13,6 +13,10 @@ icon: ui/list
 ## Section
 ```
 
+## Preview
+
+[[toc]]
+
 ## Usage
 
 ```ts

@@ -31,6 +31,12 @@ const html = await nizel.html(`- [x] Done
 - [ ] Todo`);
 ```
 
+## Preview
+
+- [x] Done
+- [ ] Todo
+  - [x] Nested items work too
+
 ## Syntax
 
 Task-list items use the standard GFM checkbox markers. Markers are parsed by core Nizel; the plugin only adds checkbox markup.

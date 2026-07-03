@@ -30,6 +30,12 @@ Pay **attention**.
 ::`);
 ```
 
+## Preview
+
+::warning Careful
+Pay **attention**.
+::
+
 ## Syntax
 
 Use one of the supported block names:

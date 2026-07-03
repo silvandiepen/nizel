@@ -16,6 +16,15 @@ import { gfmPlugins } from 'nizel-plugin-gfm';
 const nizel = useNizel({ plugins: gfmPlugins() });
 ```
 
+## Preview
+
+- [x] Render task-list checkboxes
+- [ ] Keep bare links active: https://example.com
+
+::note GFM callout
+The preset also includes alert blocks.
+::
+
 ## Included Plugins
 
 - `nizel-plugin-autolink`

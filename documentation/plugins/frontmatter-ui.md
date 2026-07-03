@@ -24,6 +24,14 @@ author: Lezin Renderer Test
 ::
 ```
 
+## Preview
+
+::frontmatter
+title: Markdown Kitchen Sink
+author: Lezin Renderer Test
+status: Draft
+::
+
 ## Options
 
 | Option | Type | Default | Description |

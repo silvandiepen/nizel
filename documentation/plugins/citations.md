@@ -13,6 +13,12 @@ See [@doe].
 [@doe]: Doe, Example.
 ```
 
+## Preview
+
+See the citation reference [@plugin-citation-preview].
+
+[@plugin-citation-preview]: Doe, Example.
+
 ## Usage
 
 ```ts

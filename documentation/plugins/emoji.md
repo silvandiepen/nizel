@@ -30,6 +30,10 @@ const nizel = useNizel({
 const text = await nizel.text('Ship it :rocket:');
 ```
 
+## Preview
+
+Ship it :rocket: with :check: status.
+
 ## Built-In Shortcuts
 
 Common shortcuts include:

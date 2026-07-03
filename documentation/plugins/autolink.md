@@ -33,6 +33,10 @@ const nizel = useNizel({
 const html = await nizel.html('Visit https://example.com');
 ```
 
+## Preview
+
+Visit https://example.com or mail docs@example.com.
+
 ## Options
 
 | Option | Type | Default | Description |

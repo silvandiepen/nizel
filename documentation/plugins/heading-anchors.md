@@ -16,6 +16,12 @@ import { headingAnchorsPlugin } from 'nizel-plugin-heading-anchors';
 const nizel = useNizel({ plugins: [headingAnchorsPlugin()] });
 ```
 
+## Preview
+
+### Anchored Preview Heading
+
+The heading above receives a visible anchor link.
+
 ## Options
 
 | Option | Type | Default | Description |

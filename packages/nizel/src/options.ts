@@ -51,6 +51,10 @@ function mergeOptions(
       ...(left.variables ?? {}),
       ...(right.variables ?? {}),
     },
+    meta: {
+      ...(left.meta ?? {}),
+      ...(right.meta ?? {}),
+    },
     elements: {
       ...(left.elements ?? {}),
       ...(right.elements ?? {}),

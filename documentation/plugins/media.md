@@ -16,6 +16,10 @@ import { mediaPlugin } from 'nizel-plugin-media';
 const nizel = useNizel({ plugins: [mediaPlugin()] });
 ```
 
+## Preview
+
+![Nizel icon](/media/icon.svg)
+
 ## Options
 
 | Option | Type | Default | Description |

@@ -13,6 +13,12 @@ Hidden **content**.
 :::
 ```
 
+## Preview
+
+:::details More
+Hidden **content**.
+:::
+
 ## Usage
 
 ```ts

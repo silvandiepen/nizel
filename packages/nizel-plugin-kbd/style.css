@@ -1,0 +1,26 @@
+.nizel-kbd-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2em;
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+
+.nizel-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6em;
+  padding: 0.12em 0.38em;
+  border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
+  border-radius: 0.35em;
+  font: inherit;
+  font-size: 0.85em;
+  line-height: 1.35;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+}
+
+.nizel-kbd-separator {
+  opacity: 0.65;
+  font-size: 0.85em;
+}

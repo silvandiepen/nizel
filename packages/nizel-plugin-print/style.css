@@ -1,0 +1,42 @@
+@media print {
+  .nizel-pagebreak {
+    display: block;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .nizel-pagebreak-before {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .nizel-pagebreak-after {
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .nizel-keep {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .nizel-print-only {
+    display: block;
+  }
+
+  .nizel-screen-only,
+  .nizel-no-print {
+    display: none !important;
+  }
+
+  .nizel-print-wide {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+@media screen {
+  .nizel-print-only {
+    display: none !important;
+  }
+}

@@ -57,6 +57,9 @@ jobs:
       - name: Publish plugin-autolink
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-autolink
 
+      - name: Publish plugin-badge
+        run: node scripts/publish-workspace-if-new.mjs nizel-plugin-badge
+
       - name: Publish plugin-code-copy
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-code-copy
 
@@ -93,11 +96,20 @@ jobs:
       - name: Publish plugin-heading-anchors
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-heading-anchors
 
+      - name: Publish plugin-kbd
+        run: node scripts/publish-workspace-if-new.mjs nizel-plugin-kbd
+
       - name: Publish plugin-math
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-math
 
       - name: Publish plugin-media
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-media
+
+      - name: Publish plugin-open-icon
+        run: node scripts/publish-workspace-if-new.mjs nizel-plugin-open-icon
+
+      - name: Publish plugin-print
+        run: node scripts/publish-workspace-if-new.mjs nizel-plugin-print
 
       - name: Publish plugin-sanitize
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-sanitize
@@ -114,6 +126,9 @@ jobs:
       - name: Publish nizel-format
         run: node scripts/publish-workspace-if-new.mjs nizel-format
 
+      - name: Publish nizel-style
+        run: node scripts/publish-workspace-if-new.mjs nizel-style
+
       - name: Publish nizel-kit
         run: node scripts/publish-workspace-if-new.mjs nizel-kit
 
@@ -124,3 +139,6 @@ jobs:
           git add package-lock.json packages/*/package.json documentation/release-notes/
           git diff --cached --quiet || git commit -m "chore: version packages and generate release notes"
           git push
+
+      - name: Create publish tags
+        run: node scripts/create-publish-tags.mjs

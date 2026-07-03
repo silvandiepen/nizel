@@ -13,6 +13,12 @@ Text.[^a]
 [^a]: Footnote text.
 ```
 
+## Preview
+
+Text with a footnote.[^plugin-footnote-preview]
+
+[^plugin-footnote-preview]: Footnote text.
+
 ## Usage
 
 ```ts

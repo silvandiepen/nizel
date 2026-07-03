@@ -37,17 +37,20 @@ test('resolveOptions applies defaults, plugin options, processor options, and ru
     {
       plugins: [
         {
+          options: { meta: { pluginMeta: { count: 1 } } },
           elements: { p: { class: 'plugin' } },
           blocks: { alert: { name: 'alert' } },
           template: { filters: { plugin: () => 'plugin' } },
         },
       ],
       elements: { p: { class: 'processor' } },
+      meta: { processorMeta: true },
       template: { missing: 'empty' },
     },
     {
       elements: { h1: { class: 'runtime' } },
       data: { title: 'Runtime' },
+      meta: { runtimeMeta: 'yes' },
     },
   );
 
@@ -58,6 +61,11 @@ test('resolveOptions applies defaults, plugin options, processor options, and ru
   assert.equal(resolved.template.missing, 'empty');
   assert.equal(resolved.template.filters.plugin(), 'plugin');
   assert.equal(resolved.data.title, 'Runtime');
+  assert.deepEqual(resolved.meta, {
+    pluginMeta: { count: 1 },
+    processorMeta: true,
+    runtimeMeta: 'yes',
+  });
 });
 
 test('parseInline and stripInlineMarkdown expose direct parser units', () => {

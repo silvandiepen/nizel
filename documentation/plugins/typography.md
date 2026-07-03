@@ -11,6 +11,10 @@ icon: ui/edit
 - `H~2~O`
 - `x^2^`
 
+## Preview
+
+Use ==highlighted text==, H~2~O, and x^2^ inline.
+
 ## Usage
 
 ```ts

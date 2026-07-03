@@ -14,6 +14,14 @@ flowchart TD
 ```
 ````
 
+## Preview
+
+```mermaid
+flowchart TD
+  A[Markdown] --> B[Nizel]
+  B --> C[Rendered docs]
+```
+
 ## Usage
 
 ```ts

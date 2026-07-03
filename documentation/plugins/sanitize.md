@@ -16,6 +16,12 @@ import { sanitizePlugin } from 'nizel-plugin-sanitize';
 const nizel = useNizel({ plugins: [sanitizePlugin()] });
 ```
 
+## Preview
+
+After sanitizing, risky attributes and scripts are gone while safe content remains:
+
+<a>Unsafe link becomes inert</a>
+
 ## Options
 
 | Option | Type | Default | Description |
