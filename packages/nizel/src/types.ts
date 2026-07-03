@@ -295,6 +295,11 @@ export type NizelPlugin = {
   filters?: Record<string, NizelTemplateFilter>;
   transforms?: NizelTransform[];
   hooks?: Partial<NizelHooks>;
+  /**
+   * Reverse converter(s) that turn this plugin's rendered HTML back into Markdown.
+   * Passed to `htmlToMarkdown` via `options.plugins`.
+   */
+  htmlToMarkdown?: NizelHtmlToMarkdownHandler | NizelHtmlToMarkdownHandler[];
 };
 
 export type NizelBlockDefinition<TOptions = Record<string, unknown>> = {
@@ -327,3 +332,46 @@ export type NizelHooks = {
 };
 
 export type NizelPresetName = 'minimal' | 'blog' | 'docs' | 'email';
+
+export type NizelHtmlToMarkdownUnsupportedMode = 'preserve' | 'drop';
+
+export type NizelHtmlToMarkdownOptions = {
+  unsupported?: NizelHtmlToMarkdownUnsupportedMode;
+  /**
+   * Plugins whose rendered HTML should be converted back to its Markdown source.
+   * Each plugin may ship an `htmlToMarkdown` handler that claims the nodes it emits.
+   */
+  plugins?: NizelPlugin[];
+};
+
+export type NizelHtmlDocNode =
+  | { type: 'root'; children: NizelHtmlDocNode[] }
+  | { type: 'text'; value: string }
+  | { type: 'element'; tag: string; attrs: Record<string, string>; children: NizelHtmlDocNode[]; raw: string }
+  | { type: 'comment'; value: string };
+
+export type NizelHtmlElementNode = Extract<NizelHtmlDocNode, { type: 'element' }>;
+
+export type NizelHtmlToMarkdownContext = {
+  /** Render a node's children as inline Markdown. */
+  inline(node: NizelHtmlDocNode): string;
+  /** Render a node's children as a normalized block. */
+  block(node: NizelHtmlDocNode): string;
+  /** Decode and return the text content of a node subtree. */
+  text(node: NizelHtmlDocNode): string;
+  /** Indent continuation lines so they align under a marker of the given length. */
+  indent(value: string, size: number): string;
+  /** Append Markdown (such as definitions) to the end of the converted document. */
+  epilogue(value: string): void;
+  /** Active converter options. */
+  options: Required<NizelHtmlToMarkdownOptions>;
+};
+
+/**
+ * Claims an element node and returns its Markdown rendering, or `undefined` to defer
+ * to the next handler / the built-in converter.
+ */
+export type NizelHtmlToMarkdownHandler = (
+  node: NizelHtmlDocNode,
+  context: NizelHtmlToMarkdownContext,
+) => string | undefined;

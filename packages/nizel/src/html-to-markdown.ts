@@ -1,14 +1,22 @@
-export type NizelHtmlToMarkdownUnsupportedMode = 'preserve' | 'drop';
+import type {
+  NizelHtmlDocNode,
+  NizelHtmlElementNode,
+  NizelHtmlToMarkdownContext,
+  NizelHtmlToMarkdownHandler,
+  NizelHtmlToMarkdownOptions,
+  NizelHtmlToMarkdownUnsupportedMode,
+  NizelPlugin,
+} from './types.js';
 
-export type NizelHtmlToMarkdownOptions = {
-  unsupported?: NizelHtmlToMarkdownUnsupportedMode;
+export type { NizelHtmlToMarkdownOptions, NizelHtmlToMarkdownUnsupportedMode } from './types.js';
+
+type HtmlNode = NizelHtmlDocNode;
+
+type ConvertContext = {
+  options: Required<NizelHtmlToMarkdownOptions>;
+  handlers: NizelHtmlToMarkdownHandler[];
+  epilogue: string[];
 };
-
-type HtmlNode =
-  | { type: 'root'; children: HtmlNode[] }
-  | { type: 'text'; value: string }
-  | { type: 'element'; tag: string; attrs: Record<string, string>; children: HtmlNode[]; raw: string }
-  | { type: 'comment'; value: string };
 
 const blockTags = new Set([
   'address', 'article', 'aside', 'blockquote', 'details', 'dialog', 'div', 'dl',
@@ -23,8 +31,42 @@ const passthroughInlineTags = new Set(['abbr', 'bdi', 'bdo', 'cite', 'data', 'df
  * Converts semantic HTML into Markdown, preserving unsupported HTML by default.
  */
 export function htmlToMarkdown(html: string, options: NizelHtmlToMarkdownOptions = {}): string {
+  const resolved: Required<NizelHtmlToMarkdownOptions> = {
+    unsupported: options.unsupported ?? 'preserve',
+    plugins: options.plugins ?? [],
+  };
+  const handlers = resolved.plugins.flatMap((plugin) => {
+    const handler = plugin?.htmlToMarkdown;
+    return handler ? (Array.isArray(handler) ? handler : [handler]) : [];
+  });
+  const ctx: ConvertContext = { options: resolved, handlers, epilogue: [] };
+
   const root = parseHtml(html);
-  return normalizeDocument(renderChildren(root.children, { unsupported: options.unsupported ?? 'preserve' }, 0));
+  const body = normalizeDocument(renderChildren(root.children, ctx, 0));
+  return ctx.epilogue.length ? normalizeDocument(`${body}\n\n${ctx.epilogue.join('\n\n')}`) : body;
+}
+
+/**
+ * Builds the public context handed to plugin handlers.
+ */
+function buildHandlerContext(node: HtmlNode, ctx: ConvertContext, depth: number): NizelHtmlToMarkdownContext {
+  return {
+    options: ctx.options,
+    inline: (target) => normalizeInline(renderChildren(childrenOf(target), ctx, depth)),
+    block: (target) => normalizeDocument(renderChildren(childrenOf(target), ctx, depth)),
+    text: (target) => textContent(target),
+    indent: (value, size) => indentContinuation(value, size),
+    epilogue: (value) => {
+      if (value) ctx.epilogue.push(value);
+    },
+  };
+}
+
+/**
+ * Returns the children of a container node, or an empty array for leaves.
+ */
+function childrenOf(node: HtmlNode): HtmlNode[] {
+  return node.type === 'element' || node.type === 'root' ? node.children : [];
 }
 
 /**
@@ -164,32 +206,39 @@ function slugifyText(value: string): string {
 /**
  * Renders a sequence of parsed HTML children.
  */
-function renderChildren(nodes: HtmlNode[], options: Required<NizelHtmlToMarkdownOptions>, depth: number): string {
-  return nodes.map((node) => renderNode(node, options, depth)).join('');
+function renderChildren(nodes: HtmlNode[], ctx: ConvertContext, depth: number): string {
+  return nodes.map((node) => renderNode(node, ctx, depth)).join('');
 }
 
 /**
  * Renders one parsed HTML node to Markdown.
  */
-function renderNode(node: HtmlNode, options: Required<NizelHtmlToMarkdownOptions>, depth: number): string {
+function renderNode(node: HtmlNode, ctx: ConvertContext, depth: number): string {
   if (node.type === 'text') return collapseText(decodeEntities(node.value));
-  if (node.type === 'comment') return options.unsupported === 'preserve' ? node.value : ' ';
-  if (node.type === 'root') return renderChildren(node.children, options, depth);
+  if (node.type === 'comment') return ctx.options.unsupported === 'preserve' ? node.value : ' ';
+  if (node.type === 'root') return renderChildren(node.children, ctx, depth);
 
   /**
    * Renders this element's children as inline Markdown.
    */
-  const inline = () => normalizeInline(renderChildren(node.children, options, depth));
+  const inline = () => normalizeInline(renderChildren(node.children, ctx, depth));
   /**
    * Renders this element's children as block Markdown.
    */
-  const block = () => normalizeDocument(renderChildren(node.children, options, depth));
+  const block = () => normalizeDocument(renderChildren(node.children, ctx, depth));
 
-  if (options.unsupported === 'preserve' && hasUnsupportedAttrs(node)) {
+  for (const handler of ctx.handlers) {
+    const result = handler(node, buildHandlerContext(node, ctx, depth));
+    if (result !== undefined) {
+      return blockTags.has(node.tag) ? blockWrap(result) : result;
+    }
+  }
+
+  if (ctx.options.unsupported === 'preserve' && hasUnsupportedAttrs(node)) {
     return blockTags.has(node.tag) ? blockWrap(node.raw) : node.raw;
   }
   if (/^h[1-6]$/.test(node.tag)) return blockWrap(`${'#'.repeat(Number(node.tag[1]))} ${inline()}`);
-  if (node.tag === 'p') return blockWrap(normalizeParagraph(renderChildren(node.children, options, depth)));
+  if (node.tag === 'p') return blockWrap(normalizeParagraph(renderChildren(node.children, ctx, depth)));
   if (node.tag === 'br') return '  \n';
   if (node.tag === 'hr') return blockWrap('---');
   if (node.tag === 'strong' || node.tag === 'b') return inlineWrap('**', inline());
@@ -200,21 +249,21 @@ function renderNode(node: HtmlNode, options: Required<NizelHtmlToMarkdownOptions
   if (node.tag === 'a') return renderLink(node, inline());
   if (node.tag === 'img') return renderImage(node);
   if (node.tag === 'blockquote') return blockWrap(prefixLines(block(), '> '));
-  if (node.tag === 'ul' || node.tag === 'ol') return blockWrap(renderList(node, options, depth));
+  if (node.tag === 'ul' || node.tag === 'ol') return blockWrap(renderList(node, ctx, depth));
   if (node.tag === 'li') return inline();
   if (node.tag === 'table') {
-    if (options.unsupported === 'preserve' && tableHasUnsupportedStructure(node)) return blockWrap(node.raw);
-    return blockWrap(renderTable(node, options));
+    if (ctx.options.unsupported === 'preserve' && tableHasUnsupportedStructure(node)) return blockWrap(node.raw);
+    return blockWrap(renderTable(node, ctx));
   }
   if (node.tag === 'thead' || node.tag === 'tbody' || node.tag === 'tr' || node.tag === 'th' || node.tag === 'td') return inline();
   if (node.tag === 'div' || node.tag === 'section' || node.tag === 'article' || node.tag === 'main' || node.tag === 'header' || node.tag === 'footer' || node.tag === 'nav') return blockWrap(block());
   if (node.tag === 'span') return inline();
 
   if (passthroughInlineTags.has(node.tag) || blockTags.has(node.tag)) {
-    return options.unsupported === 'preserve' ? node.raw : block();
+    return ctx.options.unsupported === 'preserve' ? node.raw : block();
   }
 
-  return options.unsupported === 'preserve' ? node.raw : inline();
+  return ctx.options.unsupported === 'preserve' ? node.raw : inline();
 }
 
 /**
@@ -263,12 +312,12 @@ function renderCodeBlock(node: HtmlNode & { type: 'element' }): string {
 /**
  * Renders ordered and unordered lists.
  */
-function renderList(node: HtmlNode & { type: 'element' }, options: Required<NizelHtmlToMarkdownOptions>, depth: number): string {
+function renderList(node: HtmlNode & { type: 'element' }, ctx: ConvertContext, depth: number): string {
   return node.children
     .filter((child): child is HtmlNode & { type: 'element' } => child.type === 'element' && child.tag === 'li')
     .map((item, index) => {
       const marker = node.tag === 'ol' ? `${Number(node.attrs.start ?? 1) + index}. ` : '- ';
-      const body = normalizeListItemBody(renderChildren(item.children, options, depth + 1));
+      const body = normalizeListItemBody(renderChildren(item.children, ctx, depth + 1));
       return indentContinuation(`${marker}${body}`, marker.length);
     })
     .join('\n');
@@ -277,14 +326,14 @@ function renderList(node: HtmlNode & { type: 'element' }, options: Required<Nize
 /**
  * Renders simple HTML tables as GFM table syntax.
  */
-function renderTable(node: HtmlNode & { type: 'element' }, options: Required<NizelHtmlToMarkdownOptions>): string {
+function renderTable(node: HtmlNode & { type: 'element' }, ctx: ConvertContext): string {
   const rows = collectRows(node)
     .map((row) => row.children.filter((cell): cell is HtmlNode & { type: 'element' } => cell.type === 'element' && (cell.tag === 'th' || cell.tag === 'td')))
     .filter((row) => row.length > 0);
   if (rows.length === 0) return '';
 
   const width = Math.max(...rows.map((row) => row.length));
-  const values = rows.map((row) => Array.from({ length: width }, (_, index) => normalizeInline(renderChildren(row[index]?.children ?? [], options, 0))));
+  const values = rows.map((row) => Array.from({ length: width }, (_, index) => normalizeInline(renderChildren(row[index]?.children ?? [], ctx, 0))));
   const header = values[0];
   const separator = Array.from({ length: width }, () => '---');
   const body = values.slice(1);
@@ -462,3 +511,45 @@ function longestRun(value: string, char: string): number {
   }
   return longest;
 }
+
+/**
+ * Returns the element children of a container node.
+ */
+export const htmlChildElements = (node: NizelHtmlDocNode): NizelHtmlElementNode[] =>
+  node.type === 'element' || node.type === 'root'
+    ? node.children.filter((child): child is NizelHtmlElementNode => child.type === 'element')
+    : [];
+
+/**
+ * Returns the first element child matching a predicate.
+ */
+export const findHtmlElement = (
+  node: NizelHtmlDocNode,
+  predicate: (element: NizelHtmlElementNode) => boolean,
+): NizelHtmlElementNode | undefined => htmlChildElements(node).find(predicate);
+
+/**
+ * Returns true when an element carries the given class token.
+ */
+export const hasHtmlClass = (node: NizelHtmlDocNode, className: string): boolean =>
+  node.type === 'element' && (node.attrs.class ?? '').split(/\s+/).includes(className);
+
+/**
+ * Returns the first descendant element matching a predicate (depth-first).
+ */
+export const findHtmlDescendant = (
+  node: NizelHtmlDocNode,
+  predicate: (element: NizelHtmlElementNode) => boolean,
+): NizelHtmlElementNode | undefined => {
+  for (const child of htmlChildElements(node)) {
+    if (predicate(child)) return child;
+    const nested = findHtmlDescendant(child, predicate);
+    if (nested) return nested;
+  }
+  return undefined;
+};
+
+/**
+ * Builds a synthetic root node whose children can be rendered through the converter context.
+ */
+export const htmlRoot = (children: NizelHtmlDocNode[]): NizelHtmlDocNode => ({ type: 'root', children });
