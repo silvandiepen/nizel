@@ -1,6 +1,6 @@
 {
   "name": "nizel-plugin-citations",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Citation plugin for Nizel.",
   "repository": {
     "type": "git",

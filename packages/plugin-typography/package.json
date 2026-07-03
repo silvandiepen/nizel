@@ -1,6 +1,6 @@
 {
   "name": "nizel-plugin-typography",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Typography extension plugin for Nizel.",
   "repository": {
     "type": "git",
