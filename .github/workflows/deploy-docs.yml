@@ -35,7 +35,6 @@ jobs:
         run: npm ci
 
       - name: Build documentation
-        working-directory: documentation
         run: npm run build
 
       - name: Deploy to Cloudflare Pages
