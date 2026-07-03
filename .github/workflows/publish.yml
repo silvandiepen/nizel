@@ -102,6 +102,9 @@ jobs:
       - name: Publish plugin-sanitize
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-sanitize
 
+      - name: Publish plugin-task-list
+        run: node scripts/publish-workspace-if-new.mjs nizel-plugin-task-list
+
       - name: Publish plugin-toc
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-toc
 
