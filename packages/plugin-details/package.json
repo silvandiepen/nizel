@@ -1,6 +1,6 @@
 {
   "name": "nizel-plugin-details",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Details disclosure block plugin for Nizel.",
   "repository": {
     "type": "git",

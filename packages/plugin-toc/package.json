@@ -1,6 +1,6 @@
 {
   "name": "nizel-plugin-toc",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Rendered table of contents plugin for Nizel.",
   "repository": {
     "type": "git",

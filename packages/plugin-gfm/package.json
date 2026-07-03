@@ -1,6 +1,6 @@
 {
   "name": "nizel-plugin-gfm",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "GFM-oriented plugin preset for Nizel.",
   "repository": {
     "type": "git",
