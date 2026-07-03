@@ -1,5 +1,6 @@
 ---
 title: Diagrams
+icon: ui/flow
 ---
 
 # Diagrams

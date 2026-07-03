@@ -1,5 +1,6 @@
 ---
 title: Abbreviations
+icon: ui/file-lines
 ---
 
 # Abbreviations

@@ -1,0 +1,13 @@
+@use "../tokens";
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) mark {
+  padding: calc(var(--nizel-space-xxs) / 2) var(--nizel-space-xxs);
+  border-radius: var(--nizel-radius-sm);
+  background: color-mix(in srgb, var(--nizel-warning) 22%, transparent);
+  color: var(--nizel-foreground);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) :where(sub, sup) {
+  font-size: 0.72em;
+  line-height: 0;
+}

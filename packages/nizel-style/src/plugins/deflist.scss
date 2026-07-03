@@ -1,0 +1,12 @@
+@use "../tokens";
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) dl:not(.frontmatter) {
+  padding: var(--nizel-space);
+  border: 1px solid var(--nizel-border);
+  border-radius: var(--nizel-radius-lg);
+  background: var(--nizel-surface);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) dl:not(.frontmatter) dt + dd {
+  margin-top: calc(var(--nizel-space-xxs) * -1);
+}

@@ -1,0 +1,28 @@
+@use "../tokens";
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) details.details {
+  padding: 0;
+  border: 1px solid var(--nizel-border);
+  border-radius: var(--nizel-radius-lg);
+  background: var(--nizel-surface);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) details.details > summary {
+  cursor: pointer;
+  padding: var(--nizel-space-s) var(--nizel-space);
+  color: var(--nizel-foreground);
+  font-family: var(--nizel-font-heading);
+  font-weight: 680;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) details.details > summary:hover {
+  color: var(--nizel-primary);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) details.details[open] > summary {
+  border-bottom: 1px solid var(--nizel-border);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) details.details > :not(summary) {
+  margin: var(--nizel-space);
+}

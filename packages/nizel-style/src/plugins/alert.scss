@@ -1,0 +1,49 @@
+@use "../tokens";
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .alert {
+  --nizel-alert-color: var(--nizel-info);
+  display: grid;
+  gap: var(--nizel-space-xs);
+  padding: var(--nizel-space);
+  border: 1px solid color-mix(in srgb, var(--nizel-alert-color) 32%, transparent);
+  border-left-width: 4px;
+  border-radius: var(--nizel-alert-radius);
+  background: color-mix(in srgb, var(--nizel-alert-color) 9%, transparent);
+  color: var(--nizel-foreground);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .alert--note {
+  --nizel-alert-color: var(--nizel-info);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .alert--tip {
+  --nizel-alert-color: var(--nizel-success);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .alert--important {
+  --nizel-alert-color: var(--nizel-secondary);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .alert--warning {
+  --nizel-alert-color: var(--nizel-warning);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .alert--caution {
+  --nizel-alert-color: var(--nizel-error);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .alert__title {
+  margin: 0;
+  color: var(--nizel-alert-color);
+  font-family: var(--nizel-font-heading);
+  font-weight: 720;
+  line-height: 1.3;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .alert__content > :first-child {
+  margin-top: 0;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .alert__content > :last-child {
+  margin-bottom: 0;
+}

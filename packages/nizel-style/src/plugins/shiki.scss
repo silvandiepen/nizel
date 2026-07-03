@@ -1,0 +1,48 @@
+@use "../tokens";
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .shiki,
+:where(.nizel-content, [data-nizel-content], .nizel-prose) pre.shiki {
+  overflow: auto;
+  padding: var(--nizel-space);
+  border: 1px solid var(--nizel-border);
+  border-radius: var(--nizel-radius-lg);
+  background: var(--nizel-code-block-background, var(--nizel-code-background));
+  color: var(--nizel-code-foreground);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .shiki code {
+  display: block;
+  min-width: max-content;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) :where(.hl-keyword, .hl-operator) {
+  color: var(--nizel-shiki-keyword, var(--nizel-error));
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) :where(.hl-string, .hl-value) {
+  color: var(--nizel-shiki-string, var(--nizel-info));
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .hl-comment {
+  color: var(--nizel-shiki-comment, var(--nizel-muted));
+  font-style: italic;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) :where(.hl-number, .hl-property, .hl-type) {
+  color: var(--nizel-shiki-number, var(--nizel-primary));
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) :where(.hl-function, .hl-builtin, .hl-attr) {
+  color: var(--nizel-shiki-function, var(--nizel-secondary));
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .hl-tag {
+  color: var(--nizel-shiki-tag, var(--nizel-success));
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .hl-punctuation {
+  color: var(--nizel-shiki-punctuation, var(--nizel-foreground));
+}

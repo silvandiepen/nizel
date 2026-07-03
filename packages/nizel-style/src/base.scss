@@ -1,0 +1,251 @@
+@use "./tokens";
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) {
+  color: var(--nizel-foreground);
+  font-family: var(--nizel-font-body);
+  font-size: var(--nizel-font-size);
+  line-height: var(--nizel-line-height);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) *,
+:where(.nizel-content, [data-nizel-content], .nizel-prose) *::before,
+:where(.nizel-content, [data-nizel-content], .nizel-prose) *::after {
+  box-sizing: border-box;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose)::selection {
+  color: var(--nizel-selection-foreground);
+  background: var(--nizel-selection-background);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose)
+  :where(h1, h2, h3, h4, h5, h6, p, blockquote, figure, pre, ul, ol, dl, table, details, form, hr, img) {
+  margin: 0;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) > * {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) > * + * {
+  margin-top: var(--nizel-flow-space, var(--nizel-space-l));
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose)
+  :where(h1, h2, h3, h4, h5, h6, p, blockquote, figure, pre, ul, ol, dl, table, details, form, hr, img)
+  + :where(h1, h2, h3, h4, h5, h6, p, blockquote, figure, pre, ul, ol, dl, table, details, form, hr, img) {
+  margin-top: var(--nizel-space-l);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose)
+  :where(p, blockquote, figure, pre, ul, ol, dl, table, details, form, hr, img)
+  + :where(h2, h3, h4) {
+  margin-top: var(--nizel-space-xxl);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) > * + :where(h2, h3, h4) {
+  margin-top: var(--nizel-section-space, var(--nizel-space-xxl));
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) :where(h1, h2, h3, h4, h5, h6) {
+  color: var(--nizel-heading, var(--nizel-foreground));
+  font-family: var(--nizel-font-heading);
+  font-weight: 680;
+  line-height: 1.14;
+  overflow-wrap: anywhere;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) h1 {
+  font-size: 2.15em;
+  line-height: 1.04;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) h2 {
+  font-size: 1.58em;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) h3 {
+  font-size: 1.28em;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) h4 {
+  font-size: 1.125em;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) h5 {
+  font-size: 1em;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) h6 {
+  color: var(--nizel-muted);
+  font-size: 0.78em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) p {
+  max-width: var(--nizel-copy-width, var(--nizel-content-width));
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) :where(h1, h2) + p {
+  font-size: var(--nizel-lead-font-size, 1.1em);
+  line-height: var(--nizel-lead-line-height, 1.5);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) a {
+  color: var(--nizel-link, var(--nizel-primary));
+  text-decoration-line: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 36%, transparent);
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.18em;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) a:hover {
+  color: var(--nizel-link-hover, var(--nizel-secondary));
+  text-decoration-thickness: 0.12em;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) :where(strong, b) {
+  font-weight: 700;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) :where(em, i) {
+  font-style: italic;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) :where(ul, ol) {
+  padding-left: calc(var(--nizel-space-l) + var(--nizel-space-xxs));
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) ul {
+  list-style: none;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) ul > li {
+  position: relative;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) ul > li::before {
+  content: "";
+  position: absolute;
+  top: var(--nizel-space-s);
+  left: calc(var(--nizel-space) * -1);
+  width: var(--nizel-space-xs);
+  height: var(--nizel-space-xs);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--nizel-foreground) 44%, transparent);
+  transform: translateY(-50%);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) li + li {
+  margin-top: var(--nizel-space-xxs);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) dl {
+  display: grid;
+  gap: var(--nizel-space-xs) var(--nizel-space);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) dt {
+  font-weight: 700;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) dd {
+  margin: 0;
+  color: var(--nizel-muted);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) blockquote {
+  color: var(--nizel-muted);
+  padding-left: var(--nizel-space);
+  border-left: 3px solid color-mix(in srgb, var(--nizel-foreground) 26%, transparent);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) hr {
+  height: 1px;
+  margin: var(--nizel-space-xxl) 0;
+  border: 0;
+  background: var(--nizel-border);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) :where(code, kbd, samp, pre) {
+  font-family: var(--nizel-font-code);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) :not(pre) > code {
+  color: var(--nizel-code-foreground);
+  padding: calc(var(--nizel-space-xxs) / 2) var(--nizel-space-xxs);
+  border-radius: var(--nizel-radius-sm);
+  background: var(--nizel-code-background);
+  font-size: 0.9em;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) pre {
+  overflow: auto;
+  padding: var(--nizel-space);
+  border: 1px solid var(--nizel-border);
+  border-radius: var(--nizel-radius-lg);
+  background: var(--nizel-code-block-background, var(--nizel-code-background));
+  color: var(--nizel-code-foreground);
+  font-size: 0.92em;
+  line-height: 1.62;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) pre code {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) img,
+:where(.nizel-content, [data-nizel-content], .nizel-prose) video,
+:where(.nizel-content, [data-nizel-content], .nizel-prose) canvas,
+:where(.nizel-content, [data-nizel-content], .nizel-prose) svg {
+  max-width: 100%;
+  height: auto;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) img {
+  display: block;
+  border-radius: var(--nizel-image-radius);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) figure {
+  max-width: var(--nizel-wide-width);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) figcaption {
+  margin-top: var(--nizel-space-xs);
+  color: var(--nizel-muted);
+  font-size: 0.9em;
+  line-height: 1.45;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.94em;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) :where(th, td) {
+  padding: var(--nizel-space-s) var(--nizel-space);
+  border: 1px solid var(--nizel-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) th {
+  background: var(--nizel-surface);
+  font-weight: 700;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) :focus-visible {
+  outline: 2px solid var(--nizel-focus, var(--nizel-primary));
+  outline-offset: var(--nizel-space-xxs);
+}

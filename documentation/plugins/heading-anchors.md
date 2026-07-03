@@ -1,5 +1,6 @@
 ---
 title: Heading Anchors
+icon: ui/link
 ---
 
 # Heading Anchors

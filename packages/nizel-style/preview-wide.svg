@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" role="img" aria-labelledby="title desc">
+  <title id="title">Wide preview image</title>
+  <desc id="desc">A simple abstract image for the Nizel style preview.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#dbeafe"/>
+      <stop offset="0.54" stop-color="#f8fafc"/>
+      <stop offset="1" stop-color="#ede9fe"/>
+    </linearGradient>
+    <linearGradient id="line" x1="0" x2="1">
+      <stop offset="0" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#7c3aed"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="675" rx="36" fill="url(#bg)"/>
+  <path d="M180 448C292 292 397 490 522 333C648 176 760 347 895 214C952 158 1002 139 1056 132" fill="none" stroke="url(#line)" stroke-width="30" stroke-linecap="round"/>
+  <circle cx="180" cy="448" r="24" fill="#2563eb"/>
+  <circle cx="522" cy="333" r="24" fill="#7c3aed"/>
+  <circle cx="895" cy="214" r="24" fill="#2563eb"/>
+  <text x="96" y="116" fill="#1f2328" font-family="system-ui, sans-serif" font-size="56" font-weight="700">Rendered media</text>
+  <text x="98" y="178" fill="#475569" font-family="system-ui, sans-serif" font-size="28">A markdown image wrapped by the media plugin.</text>
+</svg>

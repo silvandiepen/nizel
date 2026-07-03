@@ -1,0 +1,18 @@
+@use "../tokens";
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .media-figure {
+  max-width: var(--nizel-wide-width);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .media-figure img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  margin: 0;
+  border-radius: var(--nizel-image-radius);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .media-figure figcaption {
+  max-width: var(--nizel-copy-width, var(--nizel-content-width));
+  color: var(--nizel-muted);
+}

@@ -1,0 +1,52 @@
+@use "../tokens";
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .toc {
+  padding: var(--nizel-space);
+  border: 1px solid var(--nizel-border);
+  border-radius: var(--nizel-radius-lg);
+  background: var(--nizel-surface);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .toc ol {
+  display: grid;
+  gap: var(--nizel-space-xs);
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .toc li {
+  margin: 0;
+  padding-left: 0;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .toc li[data-depth="3"] {
+  padding-left: var(--nizel-space);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .toc li[data-depth="4"] {
+  padding-left: var(--nizel-space-xl);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .toc li[data-depth="5"] {
+  padding-left: var(--nizel-space-xxl);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .toc li[data-depth="6"] {
+  padding-left: calc(var(--nizel-space-xl) + var(--nizel-space-xl));
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .toc li::before {
+  content: none;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .toc a {
+  color: var(--nizel-foreground);
+  text-decoration: none;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .toc a:hover {
+  color: var(--nizel-primary);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}

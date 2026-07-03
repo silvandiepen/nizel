@@ -1,5 +1,6 @@
 ---
 title: Media
+icon: ui/paint-brush
 ---
 
 # Media

@@ -1,0 +1,76 @@
+:where(.nizel-content, [data-nizel-content], .nizel-prose) {
+  --nizel-foreground: var(--foreground, #1f2328);
+  --nizel-background: var(--background, transparent);
+  --nizel-primary: var(--primary, #2563eb);
+  --nizel-secondary: var(--secondary, #7c3aed);
+  --nizel-accent: var(--accent, var(--nizel-primary));
+  --nizel-success: var(--success, #1a7f37);
+  --nizel-warning: var(--warning, #9a6700);
+  --nizel-error: var(--error, #b42318);
+  --nizel-info: var(--info, #0969da);
+  --nizel-muted: var(--muted, color-mix(in srgb, var(--nizel-foreground) 68%, transparent));
+  --nizel-border: var(--border, color-mix(in srgb, var(--nizel-foreground) 14%, transparent));
+  --nizel-surface: var(--surface, color-mix(in srgb, var(--nizel-foreground) 4%, transparent));
+  --nizel-surface-raised: var(--surface-raised, color-mix(in srgb, var(--nizel-foreground) 7%, transparent));
+  --nizel-code-foreground: var(--code-foreground, var(--nizel-foreground));
+  --nizel-code-background: var(--code-background, color-mix(in srgb, var(--nizel-foreground) 7%, transparent));
+  --nizel-selection-background: var(--selection-background, color-mix(in srgb, var(--nizel-primary) 22%, transparent));
+  --nizel-selection-foreground: var(--selection-foreground, var(--nizel-foreground));
+  --nizel-font-body: var(--font-body, -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, system-ui, sans-serif);
+  --nizel-font-heading: var(--font-heading, var(--nizel-font-body));
+  --nizel-font-code: var(--font-code, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace);
+  --nizel-font-size: var(--font-size, 1em);
+  --nizel-line-height: var(--line-height, 1.66);
+  --nizel-content-width: var(--content-width, 72ch);
+  --nizel-wide-width: var(--wide-width, 100%);
+  --nizel-space-xxs: 0.25em;
+  --nizel-space-xs: 0.5em;
+  --nizel-space-s: 0.75em;
+  --nizel-space: 1em;
+  --nizel-space-l: 1.35em;
+  --nizel-space-xl: 2em;
+  --nizel-space-xxl: 3em;
+  --nizel-radius-sm: 0.3125em;
+  --nizel-radius-md: 0.5em;
+  --nizel-radius-lg: 0.75em;
+  --nizel-image-radius: var(--nizel-radius-sm);
+  --nizel-alert-radius: var(--nizel-radius-md);
+  color: var(--nizel-foreground);
+}
+
+@media (prefers-color-scheme: dark) {
+  :where(.nizel-content, [data-nizel-content], .nizel-prose) {
+    --nizel-foreground: var(--foreground, #f0f3f6);
+    --nizel-background: var(--background, transparent);
+    --nizel-primary: var(--primary, #79c0ff);
+    --nizel-secondary: var(--secondary, #d2a8ff);
+    --nizel-success: var(--success, #7ee787);
+    --nizel-warning: var(--warning, #d29922);
+    --nizel-error: var(--error, #ff7b72);
+    --nizel-info: var(--info, #79c0ff);
+  }
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose):where([data-nizel-theme="light"], .nizel-theme-light),
+:where([data-nizel-theme="light"], .nizel-theme-light) :where(.nizel-content, [data-nizel-content], .nizel-prose) {
+  --nizel-foreground: var(--foreground, #1f2328);
+  --nizel-background: var(--background, #ffffff);
+  --nizel-primary: var(--primary, #2563eb);
+  --nizel-secondary: var(--secondary, #7c3aed);
+  --nizel-success: var(--success, #1a7f37);
+  --nizel-warning: var(--warning, #9a6700);
+  --nizel-error: var(--error, #b42318);
+  --nizel-info: var(--info, #0969da);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose):where([data-nizel-theme="dark"], .nizel-theme-dark),
+:where([data-nizel-theme="dark"], .nizel-theme-dark) :where(.nizel-content, [data-nizel-content], .nizel-prose) {
+  --nizel-foreground: var(--foreground, #f0f3f6);
+  --nizel-background: var(--background, #0d1117);
+  --nizel-primary: var(--primary, #79c0ff);
+  --nizel-secondary: var(--secondary, #d2a8ff);
+  --nizel-success: var(--success, #7ee787);
+  --nizel-warning: var(--warning, #d29922);
+  --nizel-error: var(--error, #ff7b72);
+  --nizel-info: var(--info, #79c0ff);
+}

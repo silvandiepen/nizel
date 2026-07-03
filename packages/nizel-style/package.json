@@ -1,0 +1,52 @@
+{
+  "name": "nizel-style",
+  "version": "0.1.0",
+  "description": "Scoped CSS for rendered Nizel content and official plugins.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/silvandiepen/nizel"
+  },
+  "type": "module",
+  "style": "./dist/nizel-style.css",
+  "exports": {
+    ".": "./dist/nizel-style.css",
+    "./style.css": "./dist/nizel-style.css",
+    "./tokens.css": "./dist/tokens.css",
+    "./base.css": "./dist/base.css",
+    "./plugins/abbr.css": "./dist/plugins/abbr.css",
+    "./plugins/alert.css": "./dist/plugins/alert.css",
+    "./plugins/citations.css": "./dist/plugins/citations.css",
+    "./plugins/code-copy.css": "./dist/plugins/code-copy.css",
+    "./plugins/deflist.css": "./dist/plugins/deflist.css",
+    "./plugins/details.css": "./dist/plugins/details.css",
+    "./plugins/diagrams.css": "./dist/plugins/diagrams.css",
+    "./plugins/footnotes.css": "./dist/plugins/footnotes.css",
+    "./plugins/frontmatter-ui.css": "./dist/plugins/frontmatter-ui.css",
+    "./plugins/heading-anchors.css": "./dist/plugins/heading-anchors.css",
+    "./plugins/math.css": "./dist/plugins/math.css",
+    "./plugins/media.css": "./dist/plugins/media.css",
+    "./plugins/shiki.css": "./dist/plugins/shiki.css",
+    "./plugins/toc.css": "./dist/plugins/toc.css",
+    "./plugins/typography.css": "./dist/plugins/typography.css"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && sass src:dist --no-source-map",
+    "preview:build": "node preview.mjs",
+    "typecheck": "npm run build",
+    "test:run": "npm run build"
+  },
+  "devDependencies": {
+    "sass": "^1.98.0"
+  },
+  "sideEffects": [
+    "*.css"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

@@ -1,0 +1,45 @@
+@use "../tokens";
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .mermaid {
+  overflow: auto;
+  padding: var(--nizel-space);
+  border: 1px solid var(--nizel-border);
+  border-radius: var(--nizel-radius-lg);
+  background: var(--nizel-surface);
+  color: var(--nizel-foreground);
+  text-align: center;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .mermaid svg {
+  display: inline-block;
+  max-width: 100%;
+  height: auto;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .mermaid :where(.edgePaths path, .flowchart-link, .messageLine0, .messageLine1, .relationshipLine) {
+  stroke: var(--nizel-diagram-line, var(--nizel-primary)) !important;
+  stroke-width: 2px !important;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .mermaid :where(marker path, marker polygon) {
+  fill: var(--nizel-diagram-line, var(--nizel-primary)) !important;
+  stroke: var(--nizel-diagram-line, var(--nizel-primary)) !important;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .mermaid :where(.edgeLabel, .labelBkg) {
+  background-color: var(--nizel-surface) !important;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .mermaid :where(.edgeLabel rect, .labelBkg) {
+  fill: var(--nizel-surface) !important;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .mermaid :where(.node rect, .node circle, .node ellipse, .node polygon, .node path) {
+  fill: var(--nizel-diagram-node-background, color-mix(in srgb, var(--nizel-primary) 10%, var(--nizel-background))) !important;
+  stroke: var(--nizel-diagram-node-border, color-mix(in srgb, var(--nizel-primary) 46%, var(--nizel-border))) !important;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .mermaid :where(.nodeLabel, .label, text, tspan) {
+  fill: var(--nizel-diagram-text, var(--nizel-foreground)) !important;
+  color: var(--nizel-diagram-text, var(--nizel-foreground)) !important;
+}

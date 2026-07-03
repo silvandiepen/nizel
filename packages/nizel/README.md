@@ -97,6 +97,8 @@ Official plugins available:
 
 For native apps or WebViews that need a single browser bundle with a settings-friendly plugin registry, use `nizel-kit`.
 
+For ready-to-link content styling, use `nizel-style`. It ships scoped CSS for core rendered content plus optional plugin CSS entrypoints such as `nizel-style/plugins/alert.css` and `nizel-style/plugins/code-copy.css`.
+
 ## License
 
 MIT

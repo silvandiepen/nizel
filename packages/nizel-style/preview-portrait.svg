@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 960" role="img" aria-labelledby="title desc">
+  <title id="title">Portrait preview image</title>
+  <desc id="desc">A portrait-format image for media spacing tests.</desc>
+  <rect width="720" height="960" rx="32" fill="#111827"/>
+  <rect x="72" y="72" width="576" height="816" rx="24" fill="#f9fafb"/>
+  <circle cx="236" cy="250" r="78" fill="#79c0ff"/>
+  <circle cx="418" cy="306" r="112" fill="#d2a8ff"/>
+  <rect x="144" y="520" width="432" height="28" rx="14" fill="#111827"/>
+  <rect x="144" y="586" width="344" height="22" rx="11" fill="#64748b"/>
+  <rect x="144" y="638" width="390" height="22" rx="11" fill="#94a3b8"/>
+  <rect x="144" y="690" width="292" height="22" rx="11" fill="#cbd5e1"/>
+  <text x="144" y="804" fill="#111827" font-family="system-ui, sans-serif" font-size="34" font-weight="700">Portrait asset</text>
+</svg>

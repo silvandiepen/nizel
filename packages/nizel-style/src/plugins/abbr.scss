@@ -1,0 +1,10 @@
+@use "../tokens";
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) abbr[title] {
+  cursor: help;
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: color-mix(in srgb, currentColor 48%, transparent);
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.18em;
+}

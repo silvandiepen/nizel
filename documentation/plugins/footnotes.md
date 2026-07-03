@@ -1,5 +1,6 @@
 ---
 title: Footnotes
+icon: ui/tag
 ---
 
 # Footnotes

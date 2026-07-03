@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Nizel Style Preview</title>
+    <link rel="stylesheet" href="./dist/nizel-style.css">
+    <style>
+      body {
+        margin: 0;
+        padding: 3em 1.5em;
+        background: #f6f7f9;
+        color: #1f2328;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, system-ui, sans-serif;
+      }
+
+      .preview-shell {
+        max-width: 56em;
+        margin: 0 auto;
+      }
+
+      .preview-controls {
+        display: flex;
+        gap: 0.75em;
+        margin-bottom: 1.5em;
+        align-items: center;
+        color: #57606a;
+        font-size: 0.9em;
+      }
+
+      .preview-controls button {
+        border: 1px solid #d0d7de;
+        border-radius: 0.5em;
+        background: #fff;
+        color: #1f2328;
+        font: inherit;
+        padding: 0.5em 0.75em;
+        cursor: pointer;
+      }
+
+      .theme-light {
+        background: #f6f7f9;
+      }
+
+      .theme-light {
+        --background: #ffffff;
+        --foreground: #1f2328;
+        --primary: #2563eb;
+        --secondary: #7c3aed;
+        --surface: #f6f8fa;
+        --surface-raised: #ffffff;
+        --border: #d0d7de;
+        --code-background: #f6f8fa;
+      }
+
+      .theme-dark {
+        background: #0d1117;
+      }
+
+      .theme-dark .preview-controls {
+        color: #8b949e;
+      }
+
+      .theme-dark .preview-controls button {
+        border-color: #30363d;
+        background: #161b22;
+        color: #f0f3f6;
+      }
+
+      .theme-dark {
+        --background: #0d1117;
+        --foreground: #f0f3f6;
+        --primary: #79c0ff;
+        --secondary: #d2a8ff;
+        --surface: #161b22;
+        --surface-raised: #21262d;
+        --border: #30363d;
+        --code-background: #161b22;
+      }
+
+      .preview-document {
+        max-width: 72ch;
+        margin: 0 auto;
+        padding: 2em;
+        border: 1px solid var(--border);
+        border-radius: 0.75em;
+        background: var(--background);
+      }
+    </style>
+  </head>
+  <body class="theme-light">
+    <main class="preview-shell">
+      <div class="preview-controls">
+        <button type="button" id="theme-toggle">Toggle theme</button>
+        <span>Previewing rendered <code>preview.md</code> with <code>dist/nizel-style.css</code></span>
+      </div>
+
+      <div class="preview-document">
+      <article class="nizel-content">
+        <h1 id="nizel-style-preview">Nizel Style Preview<a class="heading-anchor" href="#nizel-style-preview" aria-label="Link to section"></a></h1>
+        <p>This page previews the scoped Nizel content styles, core markdown elements, and the first-party plugin classes that can be loaded as one stylesheet or as separate plugin <abbr title="Cascading Style Sheets">CSS</abbr> files.</p>
+        <p>The preview is written as Markdown and rendered through Nizel with official plugins enabled. It intentionally mixes short notes, long paragraphs, adjacent plugin blocks, nested structures, and dense metadata so spacing rules can be judged against realistic output.</p>
+        <h2 id="core-content">Core Content<a class="heading-anchor" href="#core-content" aria-label="Link to section"></a></h2>
+        <p>Text supports <strong>strong emphasis</strong>, <em>inline emphasis</em>, <a href="https://example.com">links</a>, <code>inlineCode()</code>, <abbr title="Cascading Style Sheets">CSS</abbr> abbreviations, 🚀 emoji, <mark>highlighted text</mark>, H<sub>2</sub>O, x<sup>2</sup>, inline math <span class="math math-inline">E = mc^2</span>, and citation links <a class="citation" href="#cite-style">[style]</a>. It also needs enough line length to show rhythm, wrapping, and inline controls without collapsing the hierarchy.</p>
+        <h3 id="heading-rhythm">Heading Rhythm<a class="heading-anchor" href="#heading-rhythm" aria-label="Link to section"></a></h3>
+        <p>Subsections should have more space above them than ordinary paragraphs, while still feeling like they belong to the same document. This is especially important once plugin blocks appear between headings.</p>
+        <h4 id="small-heading">Small Heading<a class="heading-anchor" href="#small-heading" aria-label="Link to section"></a></h4>
+        <p>Small headings should not look like oversized cards or detached labels.</p>
+        <h5 id="compact-heading">Compact Heading<a class="heading-anchor" href="#compact-heading" aria-label="Link to section"></a></h5>
+        <p>Compact headings often appear in reference pages and changelogs.</p>
+        <h6 id="eyebrow-heading">Eyebrow Heading<a class="heading-anchor" href="#eyebrow-heading" aria-label="Link to section"></a></h6>
+        <p>Uppercase headings should stay quiet and readable.</p>
+        <hr />
+        <h3 id="lists">Lists<a class="heading-anchor" href="#lists" aria-label="Link to section"></a></h3>
+        <ul>
+        <li>Unordered lists use the Nizel marker treatment.</li>
+        <li>Spacing is based on the named <code>em</code> scale.</li>
+        <li>Longer list items can wrap across multiple lines without the marker drifting away from the first line of content.</li>
+        </ul>
+        <ol>
+        <li>Ordered lists keep browser numbering.</li>
+        <li>Nested content stays within the scoped root.</li>
+        <li>Additional items help show vertical list rhythm.</li>
+        </ol>
+        <blockquote>
+        <p>Content previews should feel close to application output instead of a marketing page.</p>
+        </blockquote>
+        <figure class="nizel-code-copy" data-nizel-code-copy data-nizel-copy-source="import 'nizel-style/base.css';
+        import 'nizel-style/plugins/alert.css';
+        "><button type="button" class="nizel-code-copy__button" data-nizel-copy-button>Copy</button><pre class="shiki language-ts"><code><span class="hl-keyword">import</span> <span class="hl-string">&#39;nizel-style/base.css&#39;</span>;
+        <span class="hl-keyword">import</span> <span class="hl-string">&#39;nizel-style/plugins/alert.css&#39;</span>;
+        </code></pre></figure>
+        <table><thead><tr><th>Token</th><th>Purpose</th><th>Default</th></tr></thead><tbody><tr><td><code>--nizel-foreground</code></td><td>Readable content text.</td><td>Theme-aware foreground.</td></tr><tr><td><code>--nizel-space-l</code></td><td>Default block flow spacing.</td><td><code>1.35em</code></td></tr><tr><td><code>--nizel-font-code</code></td><td>Inline and block code font.</td><td>System monospace stack.</td></tr></tbody></table>
+        <figure class="media-figure"><img src="./preview-wide.svg" alt="Wide rendered media"  loading="lazy"  decoding="async" /><figcaption>Wide rendered media</figcaption></figure>
+        <figure class="media-figure"><img src="./preview-portrait.svg" alt="Portrait rendered media"  loading="lazy"  decoding="async" /><figcaption>Portrait rendered media</figcaption></figure>
+        <figure class="media-figure"><img src="../nizel-style/preview-wide.svg" alt="Nizel logo media"  loading="lazy"  decoding="async" /><figcaption>Nizel logo media</figcaption></figure>
+        <h2 id="plugin-blocks">Plugin Blocks<a class="heading-anchor" href="#plugin-blocks" aria-label="Link to section"></a></h2>
+        <div class="alert alert--note" data-alert="note"><p class="alert__title">Note</p><div class="alert__content"><p>Alerts use semantic color variables such as <code>--nizel-info</code> and <code>--nizel-error</code>.</p></div></div>
+        <div class="alert alert--tip" data-alert="tip"><p class="alert__title">Tip</p><div class="alert__content"><p>Tip blocks should be visually distinct without becoming heavier than the surrounding content.</p></div></div>
+        <div class="alert alert--important" data-alert="important"><p class="alert__title">Important</p><div class="alert__content"><p>Important blocks use the secondary color family.</p></div></div>
+        <div class="alert alert--warning" data-alert="warning"><p class="alert__title">Warning</p><div class="alert__content"><p>Warning blocks need enough contrast in both themes.</p></div></div>
+        <div class="alert alert--caution" data-alert="caution"><p class="alert__title">Caution</p><div class="alert__content"><p>This is the error-toned alert variant.</p></div></div>
+        <h3 id="disclosure-and-navigation">Disclosure And Navigation<a class="heading-anchor" href="#disclosure-and-navigation" aria-label="Link to section"></a></h3>
+        <details class="details"><summary>Details block</summary><p>Disclosure content uses the same spacing and surface tokens as the rest of the style package.</p></details>
+        <details class="details"><summary>Collapsed-looking details content</summary><p>The details plugin renders native disclosure markup. This second block verifies consecutive details spacing.</p></details>
+        <nav class="toc"><ol><li data-depth="2"><a href="#core-content">Core Content</a></li><li data-depth="3"><a href="#heading-rhythm">Heading Rhythm</a></li><li data-depth="4"><a href="#small-heading">Small Heading</a></li><li data-depth="5"><a href="#compact-heading">Compact Heading</a></li><li data-depth="6"><a href="#eyebrow-heading">Eyebrow Heading</a></li><li data-depth="3"><a href="#lists">Lists</a></li><li data-depth="2"><a href="#plugin-blocks">Plugin Blocks</a></li><li data-depth="3"><a href="#disclosure-and-navigation">Disclosure And Navigation</a></li><li data-depth="3"><a href="#code-and-computed-blocks">Code And Computed Blocks</a></li><li data-depth="3"><a href="#metadata">Metadata</a></li><li data-depth="2"><a href="#references">References</a></li></ol></nav>
+        <h3 id="code-and-computed-blocks">Code And Computed Blocks<a class="heading-anchor" href="#code-and-computed-blocks" aria-label="Link to section"></a></h3>
+        <figure class="nizel-code-copy" data-nizel-code-copy data-nizel-copy-source="const html = await useNizel({ plugins })(markdown);
+        "><figcaption>example.ts</figcaption><button type="button" class="nizel-code-copy__button" data-nizel-copy-button>Copy</button><pre class="shiki language-ts"><code><span class="hl-keyword">const</span> html = <span class="hl-keyword">await</span> useNizel({ plugins })(markdown);
+        </code></pre></figure>
+        <figure class="nizel-code-copy" data-nizel-code-copy data-nizel-copy-source="export const render = async () =&gt; {
+          return await nizel(markdown);
+        };
+        "><button type="button" class="nizel-code-copy__button" data-nizel-copy-button>Copy</button><pre class="shiki language-js"><code><span class="hl-keyword">export</span> <span class="hl-keyword">const</span> render = <span class="hl-keyword">async</span> () =&gt; {
+          <span class="hl-keyword">return</span> <span class="hl-keyword">await</span> nizel(markdown);
+        };
+        </code></pre></figure>
+        <div class="math math-display">E = mc^2</div>
+        <figure class="nizel-code-copy" data-nizel-code-copy data-nizel-copy-source="graph TD
+          A[Markdown] --&gt; B[Nizel]
+          B --&gt; C[HTML]
+        "><button type="button" class="nizel-code-copy__button" data-nizel-copy-button>Copy</button><div class="mermaid">graph TD
+          A[Markdown] --&gt; B[Nizel]
+          B --&gt; C[HTML]</div></figure>
+        <h3 id="metadata">Metadata<a class="heading-anchor" href="#metadata" aria-label="Link to section"></a></h3>
+        <dl class="frontmatter"><dt>title</dt><dd>Nizel Style Preview</dd><dt>status</dt><dd>Draft</dd><dt>plugins</dt><dd>alert, details, toc, code-copy, math, media</dd></dl>
+        <dl>
+          <dt>Definition Term</dt>
+          <dd>Definition lists should retain a compact relationship between terms and descriptions.</dd>
+          <dt>Another Term</dt>
+          <dd>Multiple entries should not collapse into a dense block.</dd>
+        </dl>
+        <h2 id="references">References<a class="heading-anchor" href="#references" aria-label="Link to section"></a></h2>
+        <p>Reference sections often close a document. They should be quieter than body content but still legible in both themes.<sup id="fnref-spacing"><a href="#fn-spacing" class="footnote-ref">2</a></sup></p>
+        <section class="footnotes"><ol><li id="fn-style">Footnote content with a back reference. <a href="#fnref-style" class="footnotes__backref">↩</a></li><li id="fn-spacing">A second footnote verifies spacing inside ordered reference lists. <a href="#fnref-spacing" class="footnotes__backref">↩</a></li></ol></section>
+        <section class="citations"><ol><li id="cite-style">Nizel Style package preview citation.</li><li id="cite-runtime">Runtime integration reference for plugin-bound CSS.</li></ol></section>
+      </article>
+      </div>
+    </main>
+
+    <script>
+      const requestedTheme = new URLSearchParams(window.location.search).get("theme");
+      if (requestedTheme === "dark") {
+        document.body.classList.remove("theme-light");
+        document.body.classList.add("theme-dark");
+      }
+
+      document.getElementById("theme-toggle").addEventListener("click", () => {
+        document.body.classList.toggle("theme-light");
+        document.body.classList.toggle("theme-dark");
+      });
+
+      if (document.querySelector(".mermaid")) {
+        import("https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs")
+          .then(({ default: mermaid }) => {
+            mermaid.initialize({ startOnLoad: false, theme: document.body.classList.contains("theme-dark") ? "dark" : "default" });
+            return mermaid.run({ querySelector: ".mermaid" });
+          })
+          .catch(() => {
+            for (const block of document.querySelectorAll(".mermaid")) {
+              block.dataset.mermaidUnavailable = "true";
+            }
+          });
+      }
+    </script>
+  </body>
+</html>

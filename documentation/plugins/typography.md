@@ -1,5 +1,6 @@
 ---
 title: Typography
+icon: ui/edit
 ---
 
 # Typography

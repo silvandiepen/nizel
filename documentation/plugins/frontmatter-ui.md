@@ -1,5 +1,6 @@
 ---
 title: Frontmatter UI
+icon: ui/file-lines
 ---
 
 # Frontmatter UI

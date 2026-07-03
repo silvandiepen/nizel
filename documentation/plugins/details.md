@@ -1,5 +1,6 @@
 ---
 title: Details
+icon: ui/list
 ---
 
 # Details

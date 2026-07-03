@@ -1,5 +1,6 @@
 ---
 title: GFM Preset
+icon: ui/puzzle
 ---
 
 # GFM Preset

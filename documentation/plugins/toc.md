@@ -1,5 +1,6 @@
 ---
 title: Table of Contents
+icon: ui/list
 ---
 
 # Table of Contents

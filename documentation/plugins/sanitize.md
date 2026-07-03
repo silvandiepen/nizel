@@ -1,5 +1,6 @@
 ---
 title: Sanitize
+icon: ui/shield
 ---
 
 # Sanitize

@@ -1,0 +1,45 @@
+@use "../tokens";
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .nizel-code-copy {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--nizel-border);
+  border-radius: var(--nizel-radius-lg);
+  background: var(--nizel-code-block-background, var(--nizel-code-background));
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .nizel-code-copy > figcaption {
+  margin: 0;
+  padding: var(--nizel-space-s) calc(var(--nizel-space-xxl) + var(--nizel-space-xl)) var(--nizel-space-s) var(--nizel-space);
+  border-bottom: 1px solid var(--nizel-border);
+  color: var(--nizel-muted);
+  font-family: var(--nizel-font-code);
+  font-size: 0.78em;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .nizel-code-copy pre {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .nizel-code-copy__button {
+  appearance: none;
+  position: absolute;
+  top: var(--nizel-space-xs);
+  right: var(--nizel-space-xs);
+  min-height: calc(var(--nizel-space) + var(--nizel-space-s));
+  padding: 0 var(--nizel-space-s);
+  border: 1px solid var(--nizel-border);
+  border-radius: var(--nizel-radius-sm);
+  background: var(--nizel-surface-raised);
+  color: var(--nizel-foreground);
+  font: 600 0.78em/1 var(--nizel-font-body);
+  cursor: pointer;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .nizel-code-copy__button:hover {
+  border-color: color-mix(in srgb, var(--nizel-primary) 44%, var(--nizel-border));
+  color: var(--nizel-primary);
+}

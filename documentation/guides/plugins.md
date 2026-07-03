@@ -181,3 +181,5 @@ Nizel publishes first-party plugins from the npm workspace:
 | [`nizel-plugin-typography`](/plugins/typography/index.html) | Mark, subscript, and superscript extensions |
 
 All official plugins are TypeScript packages that publish `dist` JavaScript and `.d.ts` files. Plugin tests include unit coverage for package helpers and integration coverage through `useNizel`.
+
+Use `nizel-style` when rendered plugin markup should use the standard Nizel content styles. It publishes a full stylesheet plus per-plugin CSS entrypoints, so apps can load only the styles for the plugins they enable.

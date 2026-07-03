@@ -1,5 +1,6 @@
 ---
 title: Citations
+icon: ui/book
 ---
 
 # Citations

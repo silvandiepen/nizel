@@ -1,5 +1,6 @@
 ---
 title: Math
+icon: ui/curly-braces
 ---
 
 # Math

@@ -1,0 +1,16 @@
+@use "./base";
+@use "./plugins/abbr";
+@use "./plugins/alert";
+@use "./plugins/citations";
+@use "./plugins/code-copy";
+@use "./plugins/deflist";
+@use "./plugins/details";
+@use "./plugins/diagrams";
+@use "./plugins/footnotes";
+@use "./plugins/frontmatter-ui";
+@use "./plugins/heading-anchors";
+@use "./plugins/math";
+@use "./plugins/media";
+@use "./plugins/shiki";
+@use "./plugins/toc";
+@use "./plugins/typography";
