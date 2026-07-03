@@ -1,6 +1,6 @@
 {
   "name": "nizel-plugin-shiki",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "description": "Optional code highlighting integration point for Nizel.",
   "repository": {
     "type": "git",

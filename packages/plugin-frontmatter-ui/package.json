@@ -1,6 +1,6 @@
 {
   "name": "nizel-plugin-frontmatter-ui",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Frontmatter UI helper plugin for Nizel.",
   "repository": {
     "type": "git",
