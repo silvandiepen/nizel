@@ -18,7 +18,7 @@ Install the packages you need, register them in `useNizel({ plugins })`, and kee
 - [Alerts](/plugins/alert/index.html) - GitHub-style callout blocks.
 - [Autolinks](/plugins/autolink/index.html) - Bare URL and email link behavior.
 - [Citations](/plugins/citations/index.html) - Simple citation references and bibliography.
-- [Code Copy](/plugins/code-copy/index.html) - CSP-friendly copy controls for code blocks.
+- [Code Copy](/plugins/code-copy/index.html) - Copy controls for code blocks.
 - [Definition Lists](/plugins/deflist/index.html) - Definition-list Markdown syntax.
 - [Details](/plugins/details/index.html) - Disclosure blocks.
 - [Diagrams](/plugins/diagrams/index.html) - Mermaid diagram containers.
