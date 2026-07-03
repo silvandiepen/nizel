@@ -1,6 +1,6 @@
 {
   "name": "nizel-plugin-diagrams",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Diagram code block plugin for Nizel.",
   "repository": {
     "type": "git",

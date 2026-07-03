@@ -1,6 +1,6 @@
 {
   "name": "nizel-plugin-alert",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "GitHub-style alert blocks plugin for Nizel.",
   "repository": {
     "type": "git",

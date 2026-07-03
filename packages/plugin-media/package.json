@@ -1,6 +1,6 @@
 {
   "name": "nizel-plugin-media",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Media and figure rendering plugin for Nizel.",
   "repository": {
     "type": "git",

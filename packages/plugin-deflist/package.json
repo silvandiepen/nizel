@@ -1,6 +1,6 @@
 {
   "name": "nizel-plugin-deflist",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Definition list support plugin for Nizel.",
   "repository": {
     "type": "git",
