@@ -1,4 +1,5 @@
-import type { NizelBlockDefinition, NizelBlockNode, NizelInlineNode, NizelPlugin, NizelRootNode } from 'nizel';
+import type { NizelBlockDefinition, NizelBlockNode, NizelHtmlToMarkdownHandler, NizelInlineNode, NizelPlugin, NizelRootNode } from 'nizel';
+import { findHtmlElement, hasHtmlClass, htmlChildElements, htmlRoot } from 'nizel';
 
 export type CitationsPluginOptions = {
   className?: string;
@@ -25,6 +26,35 @@ export const citationsPlugin = (options: CitationsPluginOptions = {}): NizelPlug
         return appendBibliography(replaceCitationRefs(ast, citations), citations);
       },
     },
+    htmlToMarkdown: citationsToMarkdown(options),
+  };
+};
+
+/**
+ * Converts rendered citation references and bibliographies back into `[@id]` Markdown.
+ */
+export const citationsToMarkdown = (options: CitationsPluginOptions = {}): NizelHtmlToMarkdownHandler => {
+  const className = options.className ?? 'citations';
+  return (node, ctx) => {
+    if (node.type !== 'element') return undefined;
+
+    if (node.tag === 'a' && hasHtmlClass(node, 'citation')) {
+      const match = /^#cite-(.+)$/.exec(node.attrs.href ?? '');
+      return match ? `[@${match[1]}]` : undefined;
+    }
+
+    if (node.tag === 'section' && hasHtmlClass(node, className)) {
+      const list = findHtmlElement(node, (el) => el.tag === 'ol');
+      const items = list ? htmlChildElements(list).filter((el) => el.tag === 'li') : [];
+      return items
+        .map((li) => {
+          const id = /^cite-(.+)$/.exec(li.attrs.id ?? '')?.[1] ?? '';
+          return `[@${id}]: ${ctx.block(htmlRoot(li.children)).trim()}`;
+        })
+        .join('\n');
+    }
+
+    return undefined;
   };
 };
 

@@ -1,4 +1,5 @@
-import type { NizelPlugin } from 'nizel';
+import type { NizelHtmlToMarkdownHandler, NizelPlugin } from 'nizel';
+import { findHtmlElement } from 'nizel';
 
 export type MediaPluginOptions = {
   lazy?: boolean;
@@ -13,7 +14,25 @@ export const mediaPlugin = (options: MediaPluginOptions = {}): NizelPlugin => ({
       return enhanceImages(html, options);
     },
   },
+  htmlToMarkdown: mediaToMarkdown(options),
 });
+
+/**
+ * Converts rendered media figures back into standalone image Markdown.
+ */
+export const mediaToMarkdown = (options: MediaPluginOptions = {}): NizelHtmlToMarkdownHandler => {
+  const className = options.figureClassName ?? 'media-figure';
+  return (node, ctx) => {
+    if (node.type !== 'element' || node.tag !== 'figure' || node.attrs.class !== className) return undefined;
+    const img = findHtmlElement(node, (el) => el.tag === 'img');
+    if (!img) return undefined;
+    const attrs: Record<string, string> = { src: img.attrs.src ?? '' };
+    if (img.attrs.alt !== undefined) attrs.alt = img.attrs.alt;
+    if (img.attrs.title !== undefined) attrs.title = img.attrs.title;
+    const cleanImg = { type: 'element' as const, tag: 'img', attrs, children: [], raw: '' };
+    return ctx.inline({ type: 'root', children: [cleanImg] });
+  };
+};
 
 export const enhanceImages = (html: string, options: MediaPluginOptions = {}): string => {
   const lazy = options.lazy !== false;

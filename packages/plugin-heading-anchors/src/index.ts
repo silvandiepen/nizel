@@ -1,4 +1,5 @@
-import type { NizelPlugin, NizelRootNode } from 'nizel';
+import type { NizelHtmlToMarkdownHandler, NizelPlugin, NizelRootNode } from 'nizel';
+import { hasHtmlClass } from 'nizel';
 
 export type HeadingAnchorsPluginOptions = {
   className?: string;
@@ -13,7 +14,19 @@ export const headingAnchorsPlugin = (options: HeadingAnchorsPluginOptions = {}):
       return addHeadingAnchors(ast, options);
     },
   },
+  htmlToMarkdown: headingAnchorsToMarkdown(options),
 });
+
+/**
+ * Drops rendered heading-anchor links so headings convert back to clean Markdown.
+ */
+export const headingAnchorsToMarkdown = (options: HeadingAnchorsPluginOptions = {}): NizelHtmlToMarkdownHandler => {
+  const className = options.className ?? 'heading-anchor';
+  return (node) => {
+    if (node.type !== 'element' || node.tag !== 'a' || !hasHtmlClass(node, className)) return undefined;
+    return '';
+  };
+};
 
 export const addHeadingAnchors = (
   ast: NizelRootNode,

@@ -1,4 +1,4 @@
-import type { NizelBlockNode, NizelInlineNode, NizelPlugin, NizelRootNode } from 'nizel';
+import type { NizelBlockNode, NizelHtmlToMarkdownHandler, NizelInlineNode, NizelPlugin, NizelRootNode } from 'nizel';
 
 export type TypographyPluginOptions = {
   mark?: boolean;
@@ -17,6 +17,24 @@ export const typographyPlugin = (options: TypographyPluginOptions = {}): NizelPl
         return transformTypography(ast, options);
       },
     },
+    htmlToMarkdown: typographyToMarkdown(options),
+  };
+};
+
+/**
+ * Converts rendered typography tags back into `==mark==`, `~sub~`, and `^sup^` Markdown.
+ * Only claims bare tags without attributes, so footnote/citation `<sup>` is left untouched.
+ */
+export const typographyToMarkdown = (options: TypographyPluginOptions = {}): NizelHtmlToMarkdownHandler => {
+  const mark = options.mark !== false;
+  const subscript = options.subscript !== false;
+  const superscript = options.superscript !== false;
+  return (node, ctx) => {
+    if (node.type !== 'element' || Object.keys(node.attrs).length > 0) return undefined;
+    if (node.tag === 'mark' && mark) return `==${ctx.inline(node)}==`;
+    if (node.tag === 'sub' && subscript) return `~${ctx.inline(node)}~`;
+    if (node.tag === 'sup' && superscript) return `^${ctx.inline(node)}^`;
+    return undefined;
   };
 };
 

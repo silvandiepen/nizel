@@ -1,4 +1,5 @@
-import type { NizelBlockDefinition, NizelPlugin, NizelRenderContext } from 'nizel';
+import type { NizelBlockDefinition, NizelHtmlToMarkdownHandler, NizelPlugin, NizelRenderContext } from 'nizel';
+import { findHtmlElement, hasHtmlClass } from 'nizel';
 
 export type AlertType = 'note' | 'tip' | 'important' | 'warning' | 'caution';
 
@@ -27,6 +28,26 @@ export const alertPlugin = (options: AlertPluginOptions = {}): NizelPlugin => {
     hooks: {
       beforeParse: transformGitHubAlerts,
     },
+    htmlToMarkdown: alertToMarkdown(options),
+  };
+};
+
+/**
+ * Converts rendered alert HTML back into `::type title` custom blocks.
+ */
+export const alertToMarkdown = (options: AlertPluginOptions = {}): NizelHtmlToMarkdownHandler => {
+  const rootClass = options.className ?? 'alert';
+  return (node, ctx) => {
+    if (node.type !== 'element' || node.tag !== 'div') return undefined;
+    const type = node.attrs['data-alert'];
+    if (!type) return undefined;
+
+    const titleEl = findHtmlElement(node, (el) => el.tag === 'p' && hasHtmlClass(el, `${rootClass}__title`));
+    const contentEl = findHtmlElement(node, (el) => hasHtmlClass(el, `${rootClass}__content`));
+    const title = titleEl ? ctx.text(titleEl).trim() : '';
+    const body = contentEl ? ctx.block(contentEl) : '';
+
+    return `${title ? `::${type} ${title}` : `::${type}`}\n${body}\n::`;
   };
 };
 

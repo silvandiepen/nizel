@@ -1,9 +1,11 @@
 import {
   defineNizelPlugin,
   type NizelCodeNode,
+  type NizelHtmlToMarkdownHandler,
   type NizelPlugin,
   type NizelRenderContext,
 } from 'nizel';
+import { findHtmlElement, hasHtmlClass } from 'nizel';
 
 export type ShikiHighlighterInput = {
   lang?: string;
@@ -49,7 +51,33 @@ export const shikiPlugin = (options: ShikiPluginOptions = {}): NizelPlugin => {
         },
       },
     },
+    htmlToMarkdown: shikiToMarkdown(),
   });
+};
+
+/**
+ * Strips Shiki highlighting markup from a rendered `<pre>` and recovers a fenced code block.
+ */
+export const shikiToMarkdown = (): NizelHtmlToMarkdownHandler => (node, ctx) => {
+  if (node.type !== 'element' || node.tag !== 'pre') return undefined;
+  const isShiki = hasHtmlClass(node, 'shiki') || node.attrs.style !== undefined || node.attrs['data-language'] !== undefined;
+  if (!isShiki) return undefined;
+
+  const codeEl = findHtmlElement(node, (el) => el.tag === 'code');
+  const codeClass = codeEl?.attrs.class ?? '';
+  const langClass = codeClass.match(/\blanguage-([A-Za-z0-9_-]+)/)?.[1];
+  const lang = node.attrs['data-language'] ?? langClass ?? '';
+  const code = ctx.text(node).replace(/\n$/, '');
+  const fence = fenceFor(code);
+  return `${fence}${lang}\n${code}\n${fence}`;
+};
+
+/**
+ * Builds a Markdown code fence long enough to safely enclose the given source.
+ */
+const fenceFor = (code: string): string => {
+  const longest = Math.max(0, ...(code.match(/`+/g) ?? []).map((run) => run.length));
+  return '`'.repeat(Math.max(3, longest + 1));
 };
 
 /**

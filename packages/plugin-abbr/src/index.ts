@@ -1,4 +1,4 @@
-import type { NizelBlockNode, NizelInlineNode, NizelPlugin, NizelRootNode } from 'nizel';
+import type { NizelBlockNode, NizelHtmlToMarkdownHandler, NizelInlineNode, NizelPlugin, NizelRootNode } from 'nizel';
 
 export type AbbrPluginOptions = {
   definitions?: Record<string, string>;
@@ -19,6 +19,25 @@ export const abbrPlugin = (options: AbbrPluginOptions = {}): NizelPlugin => {
         return replaceAbbreviations(ast, definitions);
       },
     },
+    htmlToMarkdown: abbrToMarkdown(),
+  };
+};
+
+/**
+ * Converts rendered `<abbr>` tags back to bare text, re-emitting each definition once
+ * at the end of the document.
+ */
+export const abbrToMarkdown = (): NizelHtmlToMarkdownHandler => {
+  const seen = new Set<string>();
+  return (node, ctx) => {
+    if (node.type !== 'element' || node.tag !== 'abbr') return undefined;
+    const term = ctx.text(node).trim();
+    const title = node.attrs.title;
+    if (title !== undefined && term && !seen.has(term)) {
+      seen.add(term);
+      ctx.epilogue(`*[${term}]: ${title}`);
+    }
+    return term;
   };
 };
 

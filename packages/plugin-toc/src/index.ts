@@ -1,4 +1,5 @@
-import type { NizelBlockDefinition, NizelHeadingNode, NizelPlugin, NizelRootNode } from 'nizel';
+import type { NizelBlockDefinition, NizelHeadingNode, NizelHtmlToMarkdownHandler, NizelPlugin, NizelRootNode } from 'nizel';
+import { hasHtmlClass } from 'nizel';
 
 export type TocPluginOptions = {
   className?: string;
@@ -23,7 +24,19 @@ export const tocPlugin = (options: TocPluginOptions = {}): NizelPlugin => ({
       return fillTocBlocks(ast, options);
     },
   },
+  htmlToMarkdown: tocToMarkdown(options),
 });
+
+/**
+ * Converts a rendered table-of-contents nav back into the `[[toc]]` marker.
+ */
+export const tocToMarkdown = (options: TocPluginOptions = {}): NizelHtmlToMarkdownHandler => {
+  const className = options.className ?? 'toc';
+  return (node) => {
+    if (node.type !== 'element' || node.tag !== 'nav' || !hasHtmlClass(node, className)) return undefined;
+    return '[[toc]]';
+  };
+};
 
 export const fillTocBlocks = (ast: NizelRootNode, options: TocPluginOptions = {}): NizelRootNode => {
   const minDepth = options.minDepth ?? 2;

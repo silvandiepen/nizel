@@ -1,6 +1,7 @@
 import type {
   NizelBlockDefinition,
   NizelBlockNode,
+  NizelHtmlToMarkdownHandler,
   NizelInlineNode,
   NizelPlugin,
   NizelRootNode,
@@ -26,6 +27,26 @@ export const mathPlugin = (options: MathPluginOptions = {}): NizelPlugin => {
         return transformInlineMath(ast, options);
       },
     },
+    htmlToMarkdown: mathToMarkdown(options),
+  };
+};
+
+/**
+ * Converts rendered math HTML back into `$inline$` and `$$block$$` Markdown.
+ */
+export const mathToMarkdown = (options: MathPluginOptions = {}): NizelHtmlToMarkdownHandler => {
+  const inlineTokens = (options.inlineClassName ?? 'math math-inline').split(/\s+/);
+  const blockTokens = (options.blockClassName ?? 'math math-display').split(/\s+/);
+  return (node, ctx) => {
+    if (node.type !== 'element') return undefined;
+    const tokens = node.attrs.class ? node.attrs.class.split(/\s+/) : [];
+    if (node.tag === 'span' && inlineTokens.every((token) => tokens.includes(token))) {
+      return `$${ctx.text(node)}$`;
+    }
+    if (node.tag === 'div' && blockTokens.every((token) => tokens.includes(token))) {
+      return `$$\n${ctx.text(node).trim()}\n$$`;
+    }
+    return undefined;
   };
 };
 

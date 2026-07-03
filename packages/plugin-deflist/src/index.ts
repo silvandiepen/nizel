@@ -1,4 +1,5 @@
-import type { NizelPlugin } from 'nizel';
+import type { NizelHtmlToMarkdownHandler, NizelPlugin } from 'nizel';
+import { htmlChildElements } from 'nizel';
 
 export type DefinitionEntry = {
   term: string;
@@ -39,7 +40,28 @@ export const deflistPlugin = (options: DeflistPluginOptions = {}): NizelPlugin =
         return transformDefinitionLists(markdown, options);
       },
     },
+    htmlToMarkdown: deflistToMarkdown(options),
   };
+};
+
+/**
+ * Converts rendered definition lists back into `Term` / `: Definition` Markdown.
+ * Only claims `<dl>` matching the plugin's configured class (so other `<dl>` output is left alone).
+ */
+export const deflistToMarkdown = (options: DeflistPluginOptions = {}): NizelHtmlToMarkdownHandler => (node, ctx) => {
+  if (node.type !== 'element' || node.tag !== 'dl') return undefined;
+  if (options.className) {
+    if (node.attrs.class !== options.className) return undefined;
+  } else if (node.attrs.class !== undefined) {
+    return undefined;
+  }
+
+  const lines: string[] = [];
+  for (const el of htmlChildElements(node)) {
+    if (el.tag === 'dt') lines.push(ctx.inline(el));
+    else if (el.tag === 'dd') lines.push(`: ${ctx.inline(el)}`);
+  }
+  return lines.join('\n');
 };
 
 /**

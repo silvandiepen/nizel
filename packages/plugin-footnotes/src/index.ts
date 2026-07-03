@@ -1,10 +1,13 @@
 import type {
   NizelBlockDefinition,
   NizelBlockNode,
+  NizelHtmlDocNode,
+  NizelHtmlToMarkdownHandler,
   NizelInlineNode,
   NizelPlugin,
   NizelRootNode,
 } from 'nizel';
+import { findHtmlElement, hasHtmlClass, htmlChildElements, htmlRoot } from 'nizel';
 
 export type FootnotesPluginOptions = {
   className?: string;
@@ -27,7 +30,54 @@ export const footnotesPlugin = (options: FootnotesPluginOptions = {}): NizelPlug
       beforeParse: transformFootnotes,
       afterParse: transformFootnoteRefs,
     },
+    htmlToMarkdown: footnotesToMarkdown(options),
   };
+};
+
+/**
+ * Converts rendered footnote references and definition sections back into `[^id]` Markdown.
+ */
+export const footnotesToMarkdown = (options: FootnotesPluginOptions = {}): NizelHtmlToMarkdownHandler => {
+  const className = options.className ?? 'footnotes';
+  return (node, ctx) => {
+    if (node.type !== 'element') return undefined;
+
+    if (node.tag === 'sup') {
+      const anchor = findHtmlElement(node, (el) => el.tag === 'a' && hasHtmlClass(el, 'footnote-ref'));
+      const match = anchor ? /^#fn-(.+)$/.exec(anchor.attrs.href ?? '') : undefined;
+      return match ? `[^${match[1]}]` : undefined;
+    }
+
+    if (node.tag === 'section' && hasHtmlClass(node, className)) {
+      const list = findHtmlElement(node, (el) => el.tag === 'ol');
+      const items = list ? htmlChildElements(list).filter((el) => el.tag === 'li') : [];
+      return items
+        .map((li) => {
+          const id = /^fn-(.+)$/.exec(li.attrs.id ?? '')?.[1] ?? '';
+          const body = ctx.block(htmlRoot(stripBackrefs(li.children, className))).trim();
+          return `[^${id}]: ${body}`;
+        })
+        .join('\n');
+    }
+
+    return undefined;
+  };
+};
+
+/**
+ * Recursively removes footnote back-reference anchors from a subtree.
+ */
+const stripBackrefs = (nodes: NizelHtmlDocNode[], className: string): NizelHtmlDocNode[] => {
+  const result: NizelHtmlDocNode[] = [];
+  for (const node of nodes) {
+    if (node.type === 'element') {
+      if (hasHtmlClass(node, `${className}__backref`)) continue;
+      result.push({ ...node, children: stripBackrefs(node.children, className) });
+    } else {
+      result.push(node);
+    }
+  }
+  return result;
 };
 
 export const transformFootnotes = (markdown: string): string => {

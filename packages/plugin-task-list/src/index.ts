@@ -1,4 +1,5 @@
-import type { NizelBlockNode, NizelInlineNode, NizelPlugin, NizelRootNode } from 'nizel';
+import type { NizelBlockNode, NizelHtmlDocNode, NizelHtmlToMarkdownHandler, NizelInlineNode, NizelPlugin, NizelRootNode } from 'nizel';
+import { findHtmlDescendant, hasHtmlClass, htmlChildElements, htmlRoot } from 'nizel';
 
 export type TaskListPluginMode = 'view' | 'edit';
 
@@ -19,7 +20,56 @@ export const taskListPlugin = (options: TaskListPluginOptions = {}): NizelPlugin
         return transformTaskLists(ast, mode);
       },
     },
+    htmlToMarkdown: taskListToMarkdown(),
   };
+};
+
+const CHECKBOX_ATTR = 'data-nizel-task-checkbox';
+const isCheckbox = (node: { type: string; tag?: string; attrs?: Record<string, string> }): boolean =>
+  node.type === 'element' && node.tag === 'input' && node.attrs?.[CHECKBOX_ATTR] !== undefined;
+
+/**
+ * Converts rendered task-list checkboxes back into `- [ ]` / `- [x]` Markdown.
+ * Claims the whole `<ul>`/`<ol>` when any item carries a task checkbox.
+ */
+export const taskListToMarkdown = (): NizelHtmlToMarkdownHandler => (node, ctx) => {
+  if (node.type !== 'element' || (node.tag !== 'ul' && node.tag !== 'ol')) return undefined;
+  const items = htmlChildElements(node).filter((el) => el.tag === 'li');
+  if (!items.some((item) => findHtmlDescendant(item, isCheckbox))) return undefined;
+
+  const ordered = node.tag === 'ol';
+  const start = Number(node.attrs.start ?? 1);
+
+  return items
+    .map((item, index) => {
+      const checkbox = findHtmlDescendant(item, isCheckbox);
+      const body = ctx.block(htmlRoot(cleanTaskChildren(item.children))).trim();
+      const baseMarker = ordered ? `${start + index}. ` : '- ';
+      const marker = checkbox ? `${baseMarker}${checkbox.attrs.checked !== undefined ? '[x] ' : '[ ] '}` : baseMarker;
+      return ctx.indent(`${marker}${body}`, marker.length);
+    })
+    .join('\n');
+};
+
+/**
+ * Recursively strips task checkbox scaffolding, unwrapping label/content wrappers.
+ */
+const cleanTaskChildren = (nodes: NizelHtmlDocNode[]): NizelHtmlDocNode[] => {
+  const result: NizelHtmlDocNode[] = [];
+  for (const node of nodes) {
+    if (node.type === 'element') {
+      if (isCheckbox(node)) continue;
+      const cleaned = { ...node, children: cleanTaskChildren(node.children) };
+      if (hasHtmlClass(cleaned, 'nizel-task-list__label') || hasHtmlClass(cleaned, 'nizel-task-list__content')) {
+        result.push(...cleaned.children);
+      } else {
+        result.push(cleaned);
+      }
+    } else {
+      result.push(node);
+    }
+  }
+  return result;
 };
 
 /**

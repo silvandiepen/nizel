@@ -2,10 +2,12 @@ import {
   defineNizelPlugin,
   type NizelBlockNode,
   type NizelCustomBlockNode,
+  type NizelHtmlToMarkdownHandler,
   type NizelPlugin,
   type NizelRenderContext,
   type NizelRootNode,
 } from 'nizel';
+import { findHtmlDescendant, findHtmlElement, htmlChildElements, htmlRoot } from 'nizel';
 
 export type CodeCopyPluginOptions = {
   copiedLabel?: string;
@@ -43,7 +45,39 @@ export const codeCopyPlugin = (options: CodeCopyPluginOptions = {}): NizelPlugin
     hooks: {
       afterParse: wrapCodeBlocks,
     },
+    htmlToMarkdown: codeCopyToMarkdown(),
   });
+};
+
+/**
+ * Converts rendered code-copy figures back into fenced code, preferring the verbatim source textarea.
+ */
+export const codeCopyToMarkdown = (): NizelHtmlToMarkdownHandler => (node, ctx) => {
+  if (node.type !== 'element' || node.tag !== 'figure' || node.attrs['data-nizel-code-copy'] === undefined) return undefined;
+
+  const source = findHtmlDescendant(node, (el) => el.tag === 'textarea' && el.attrs['data-nizel-copy-source'] !== undefined);
+  if (!source) {
+    const body = htmlChildElements(node).filter((el) => !['figcaption', 'textarea', 'button'].includes(el.tag));
+    return ctx.block(htmlRoot(body));
+  }
+
+  const code = ctx.text(source).replace(/\n$/, '');
+  const pre = findHtmlDescendant(node, (el) => el.tag === 'pre');
+  const codeEl = pre ? findHtmlElement(pre, (el) => el.tag === 'code') : undefined;
+  const codeClass = codeEl?.attrs.class ?? '';
+  const langClass = codeClass.match(/\blanguage-([A-Za-z0-9_-]+)/)?.[1];
+  const isMermaid = findHtmlDescendant(node, (el) => el.tag === 'div' && el.attrs.class === 'mermaid') !== undefined;
+  const lang = langClass ?? pre?.attrs['data-language'] ?? (isMermaid ? 'mermaid' : '');
+  const fence = fenceFor(code);
+  return `${fence}${lang}\n${code}\n${fence}`;
+};
+
+/**
+ * Builds a Markdown code fence long enough to safely enclose the given source.
+ */
+const fenceFor = (code: string): string => {
+  const longest = Math.max(0, ...(code.match(/`+/g) ?? []).map((run) => run.length));
+  return '`'.repeat(Math.max(3, longest + 1));
 };
 
 /**

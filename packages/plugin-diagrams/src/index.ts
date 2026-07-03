@@ -1,4 +1,4 @@
-import type { NizelBlockDefinition, NizelBlockNode, NizelPlugin, NizelRootNode } from 'nizel';
+import type { NizelBlockDefinition, NizelBlockNode, NizelHtmlToMarkdownHandler, NizelPlugin, NizelRootNode } from 'nizel';
 
 export type DiagramsPluginOptions = {
   mermaid?: boolean;
@@ -24,6 +24,19 @@ export const diagramsPlugin = (options: DiagramsPluginOptions = {}): NizelPlugin
         return transformDiagramCodes(ast, options);
       },
     },
+    htmlToMarkdown: diagramsToMarkdown(options),
+  };
+};
+
+/**
+ * Converts rendered diagram HTML back into a fenced code block.
+ */
+export const diagramsToMarkdown = (options: DiagramsPluginOptions = {}): NizelHtmlToMarkdownHandler => {
+  const className = options.className ?? 'mermaid';
+  return (node, ctx) => {
+    if (node.type !== 'element' || node.tag !== 'div' || node.attrs.class !== className) return undefined;
+    const code = ctx.text(node).trim();
+    return `\`\`\`mermaid\n${code}\n\`\`\``;
   };
 };
 
