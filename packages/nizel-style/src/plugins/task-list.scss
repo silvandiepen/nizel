@@ -7,39 +7,79 @@
 :where(.nizel-content, [data-nizel-content], .nizel-prose) .nizel-task-list__label {
   display: inline-grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--nizel-space-xs);
-  align-items: baseline;
+  gap: var(--nizel-task-gap, var(--nizel-space-s));
+  align-items: start;
+  max-inline-size: var(--nizel-copy-width, var(--nizel-content-width));
+  cursor: pointer;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .nizel-task-list__content {
+  min-inline-size: 0;
 }
 
 :where(.nizel-content, [data-nizel-content], .nizel-prose) .nizel-task-list__checkbox {
   appearance: none;
-  inline-size: var(--nizel-space);
-  block-size: var(--nizel-space);
-  margin: 0;
-  border: 1px solid var(--nizel-task-border, color-mix(in srgb, var(--nizel-foreground) 34%, transparent));
-  border-radius: var(--nizel-radius-sm);
-  background: var(--nizel-task-background, transparent);
-  color: var(--nizel-task-checked-foreground, var(--nizel-background));
+  -webkit-appearance: none;
+  display: grid;
+  place-content: center;
+  flex: 0 0 auto;
+  inline-size: var(--nizel-task-size, 1.15em);
+  block-size: var(--nizel-task-size, 1.15em);
+  margin: var(--nizel-task-offset-y, 0.16em) 0 0;
+  border: 1px solid var(--nizel-task-border, color-mix(in srgb, var(--nizel-foreground) 22%, transparent));
+  border-radius: var(--nizel-task-radius, var(--nizel-radius-sm));
+  background: var(--nizel-task-background, var(--nizel-background));
+  color: var(--nizel-task-checkmark, var(--nizel-primary));
   font: inherit;
-  transform: translateY(0.14em);
+  cursor: pointer;
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--nizel-primary) 0%, transparent);
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .nizel-task-list__checkbox::before {
+  content: "";
+  inline-size: var(--nizel-task-checkmark-width, 0.6em);
+  block-size: var(--nizel-task-checkmark-height, 0.35em);
+  border-left: var(--nizel-task-checkmark-stroke, 0.14em) solid currentColor;
+  border-bottom: var(--nizel-task-checkmark-stroke, 0.14em) solid currentColor;
+  transform: translateY(var(--nizel-task-checkmark-offset-y, -0.03em)) rotate(-45deg) scale(0);
+  transform-origin: center;
+  transition: transform 160ms ease;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .nizel-task-list__checkbox:where(:hover, :focus-visible) {
+  border-color: var(--nizel-task-hover-border, var(--nizel-primary));
+  box-shadow: 0 0 0 0.22em var(--nizel-task-ring, color-mix(in srgb, var(--nizel-primary) 18%, transparent));
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .nizel-task-list__checkbox:active {
+  transform: scale(0.94);
 }
 
 :where(.nizel-content, [data-nizel-content], .nizel-prose) .nizel-task-list__checkbox:checked {
-  border-color: var(--nizel-task-checked-background, var(--nizel-primary));
-  background: var(--nizel-task-checked-background, var(--nizel-primary));
+  border-color: var(--nizel-task-checked-border, var(--nizel-primary));
+  background: var(--nizel-task-checked-background, color-mix(in srgb, var(--nizel-primary) 12%, var(--nizel-background)));
 }
 
 :where(.nizel-content, [data-nizel-content], .nizel-prose) .nizel-task-list__checkbox:checked::before {
-  content: "";
-  display: block;
-  inline-size: 0.28em;
-  block-size: 0.52em;
-  margin: 0.12em auto 0;
-  border: solid currentColor;
-  border-width: 0 0.12em 0.12em 0;
-  transform: rotate(45deg);
+  transform: translateY(var(--nizel-task-checkmark-offset-y, -0.03em)) rotate(-45deg) scale(1);
 }
 
 :where(.nizel-content, [data-nizel-content], .nizel-prose) .nizel-task-list__checkbox:disabled {
   cursor: default;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .nizel-task-list__checkbox:disabled:where(:hover, :focus-visible) {
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(.nizel-content, [data-nizel-content], .nizel-prose) .nizel-task-list__checkbox,
+  :where(.nizel-content, [data-nizel-content], .nizel-prose) .nizel-task-list__checkbox::before {
+    transition: none;
+  }
 }
