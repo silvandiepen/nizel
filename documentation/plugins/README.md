@@ -28,6 +28,7 @@ Install the packages you need, register them in `useNizel({ plugins })`, and kee
 - [Frontmatter UI](/plugins/frontmatter-ui/index.html) - Metadata rendering helpers.
 - [GFM Preset](/plugins/gfm/index.html) - GFM-oriented companion plugin preset.
 - [Heading Anchors](/plugins/heading-anchors/index.html) - Visible heading anchor links.
+- [Hidden Comments](/plugins/hidden-comments/index.html) - Controlled Markdown HTML comment rendering.
 - [Keyboard Shortcuts](/plugins/kbd/index.html) - Semantic keyboard shortcut markup.
 - [Math](/plugins/math/index.html) - Inline and display math wrappers.
 - [Media](/plugins/media/index.html) - Figure and image enhancements.

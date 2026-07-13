@@ -173,6 +173,7 @@ Nizel publishes first-party plugins from the npm workspace:
 | [`nizel-plugin-frontmatter-ui`](/plugins/frontmatter-ui/index.html) | Metadata UI helpers |
 | [`nizel-plugin-gfm`](/plugins/gfm/index.html) | GFM-oriented preset |
 | [`nizel-plugin-heading-anchors`](/plugins/heading-anchors/index.html) | Heading anchor links |
+| [`nizel-plugin-hidden-comments`](/plugins/hidden-comments/index.html) | Controlled Markdown HTML comment rendering |
 | [`nizel-plugin-math`](/plugins/math/index.html) | Inline and display math wrappers |
 | [`nizel-plugin-media`](/plugins/media/index.html) | Image and figure enhancements |
 | [`nizel-plugin-sanitize`](/plugins/sanitize/index.html) | Output sanitizing |

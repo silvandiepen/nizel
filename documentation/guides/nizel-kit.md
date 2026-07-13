@@ -109,6 +109,7 @@ Then pass those IDs into JavaScript when rendering.
 | `deflist` | `nizel-plugin-deflist` |
 | `frontmatter-ui` | `nizel-plugin-frontmatter-ui` |
 | `heading-anchors` | `nizel-plugin-heading-anchors` |
+| `hidden-comments` | `nizel-plugin-hidden-comments` |
 | `media` | `nizel-plugin-media` |
 | `toc` | `nizel-plugin-toc` |
 | `footnotes` | `nizel-plugin-footnotes` |
