@@ -1,6 +1,6 @@
 {
   "name": "nizel-kit",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "Browser and native WebView integration kit for Nizel with official plugin registry.",
   "repository": {
     "type": "git",
