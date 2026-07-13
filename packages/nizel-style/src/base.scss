@@ -186,13 +186,13 @@
 
 :where(.nizel-content, [data-nizel-content], .nizel-prose) pre {
   overflow: auto;
-  padding: var(--nizel-space);
-  border: 1px solid var(--nizel-border);
-  border-radius: var(--nizel-radius-lg);
+  padding: var(--nizel-space) var(--nizel-space-l);
+  border: 0;
+  border-radius: var(--nizel-code-block-radius, var(--nizel-radius-md));
   background: var(--nizel-code-block-background, var(--nizel-code-background));
   color: var(--nizel-code-foreground);
-  font-size: 0.92em;
-  line-height: 1.62;
+  font-size: 0.9em;
+  line-height: 1.7;
 }
 
 :where(.nizel-content, [data-nizel-content], .nizel-prose) pre code {
@@ -230,18 +230,19 @@
 :where(.nizel-content, [data-nizel-content], .nizel-prose) table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.94em;
+  font-size: 0.92em;
 }
 
 :where(.nizel-content, [data-nizel-content], .nizel-prose) :where(th, td) {
-  padding: var(--nizel-space-s) var(--nizel-space);
-  border: 1px solid var(--nizel-border);
+  padding: var(--nizel-space-s) var(--nizel-space-s);
+  border: 0;
+  border-bottom: 1px solid var(--nizel-border);
   text-align: left;
   vertical-align: top;
 }
 
 :where(.nizel-content, [data-nizel-content], .nizel-prose) th {
-  background: var(--nizel-surface);
+  color: var(--nizel-muted);
   font-weight: 700;
 }
 

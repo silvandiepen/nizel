@@ -23,6 +23,7 @@
     "./plugins/footnotes.css": "./dist/plugins/footnotes.css",
     "./plugins/frontmatter-ui.css": "./dist/plugins/frontmatter-ui.css",
     "./plugins/heading-anchors.css": "./dist/plugins/heading-anchors.css",
+    "./plugins/hidden-comments.css": "./dist/plugins/hidden-comments.css",
     "./plugins/math.css": "./dist/plugins/math.css",
     "./plugins/media.css": "./dist/plugins/media.css",
     "./plugins/shiki.css": "./dist/plugins/shiki.css",

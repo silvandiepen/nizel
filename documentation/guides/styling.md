@@ -7,9 +7,11 @@ order: 11
 
 # Styling
 
-`nizel-style` ships scoped CSS for rendered Nizel content and official plugin output.
+`nizel-style` ships scoped CSS for rendered Markdown content and official Nizel plugin output.
 
 Use it when you want Nizel HTML to be styled directly without writing application-specific selectors for every Markdown and plugin element.
+
+The base stylesheet is renderer-agnostic. It targets ordinary HTML elements such as headings, paragraphs, lists, blockquotes, code, images, and tables inside a supported scope, so it can also style Markdown rendered by another library. The plugin styles are the Nizel-specific layer.
 
 ## Install
 
@@ -68,6 +70,7 @@ Available plugin entrypoints:
 | Footnotes | `nizel-style/plugins/footnotes.css` |
 | Frontmatter UI | `nizel-style/plugins/frontmatter-ui.css` |
 | Heading Anchors | `nizel-style/plugins/heading-anchors.css` |
+| Hidden Comments | `nizel-style/plugins/hidden-comments.css` |
 | Math | `nizel-style/plugins/math.css` |
 | Media | `nizel-style/plugins/media.css` |
 | Shiki | `nizel-style/plugins/shiki.css` |
@@ -116,6 +119,39 @@ Spacing is based on named `em` tokens so rendered content scales with its font s
 ```
 
 Plugin styles use those variables instead of hard-coded spacing values.
+
+## Rhythm
+
+For common prose tuning, use the three high-level rhythm variables:
+
+```css
+.nizel-content {
+  --nizel-size: 1em;
+  --nizel-leading: 1.66;
+  --nizel-flow: 1.35em;
+}
+```
+
+- `--nizel-size` controls the base content font size.
+- `--nizel-leading` controls the base line height.
+- `--nizel-flow` controls block spacing.
+
+Preset classes are available for common contexts:
+
+```html
+<div class="nizel-content nizel-compact">Chat output</div>
+<article class="nizel-content nizel-docs">Documentation</article>
+<article class="nizel-content nizel-reading">Long-form article</article>
+<article class="nizel-content nizel-large">Large text mode</article>
+```
+
+The same presets can be selected with `data-nizel-preset="compact"`, `docs`, `reading`, or `large`.
+
+## Element Defaults
+
+Code blocks use a flat surface with no border by default. Use `--nizel-code-block-background` and `--nizel-code-block-radius` to tune that treatment.
+
+Tables use horizontal row separators instead of boxed cells, which keeps Markdown documentation tables readable without making every cell feel like a form grid.
 
 ## Preview
 

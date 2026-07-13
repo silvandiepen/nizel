@@ -19,8 +19,13 @@
   --nizel-font-body: var(--font-body, -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, system-ui, sans-serif);
   --nizel-font-heading: var(--font-heading, var(--nizel-font-body));
   --nizel-font-code: var(--font-code, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace);
-  --nizel-font-size: var(--font-size, 1em);
-  --nizel-line-height: var(--line-height, 1.66);
+  --nizel-size: var(--font-size, 1em);
+  --nizel-leading: var(--line-height, 1.66);
+  --nizel-flow: 1.35em;
+  --nizel-font-size: var(--nizel-size);
+  --nizel-line-height: var(--nizel-leading);
+  --nizel-flow-space: var(--nizel-flow);
+  --nizel-section-space: calc(var(--nizel-flow) * 2.2);
   --nizel-content-width: var(--content-width, 72ch);
   --nizel-wide-width: var(--wide-width, 100%);
   --nizel-space-xxs: 0.25em;
@@ -36,6 +41,33 @@
   --nizel-image-radius: var(--nizel-radius-sm);
   --nizel-alert-radius: var(--nizel-radius-md);
   color: var(--nizel-foreground);
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose):where(.nizel-compact, [data-nizel-preset="compact"]) {
+  --nizel-size: 0.875em;
+  --nizel-leading: 1.58;
+  --nizel-flow: 1em;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose):where(.nizel-docs, [data-nizel-preset="docs"]) {
+  --nizel-size: 0.9375em;
+  --nizel-leading: 1.72;
+  --nizel-flow: 1.45em;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose):where(.nizel-reading, [data-nizel-preset="reading"]) {
+  --nizel-size: 1.125em;
+  --nizel-leading: 1.86;
+  --nizel-flow: 1.8em;
+  --nizel-font-heading: var(--font-reading-heading, var(--font-serif, Georgia, "Times New Roman", serif));
+  --nizel-font-body: var(--font-reading-body, var(--font-serif, Georgia, "Times New Roman", serif));
+  --nizel-content-width: 68ch;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose):where(.nizel-large, [data-nizel-preset="large"]) {
+  --nizel-size: 1.0625em;
+  --nizel-leading: 1.9;
+  --nizel-flow: 1.75em;
 }
 
 @media (prefers-color-scheme: dark) {

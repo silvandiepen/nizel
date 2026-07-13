@@ -1,6 +1,6 @@
 # nizel-style
 
-Scoped CSS for rendered Nizel content and official plugins.
+Scoped CSS for rendered Markdown content and official Nizel plugins.
 
 ## Install
 
@@ -30,6 +30,8 @@ Wrap rendered content with one of the supported roots:
 
 The root selector also supports `[data-nizel-content]` and `.nizel-prose`.
 
+The base layer targets ordinary rendered Markdown HTML such as headings, paragraphs, lists, blockquotes, code, images, and tables. It can style HTML from Nizel, `marked`, `markdown-it`, CMS content, or another Markdown renderer as long as the content is wrapped in a supported root. Plugin styles are the Nizel-specific layer.
+
 ## Partial styles
 
 Load only the pieces you use:
@@ -54,6 +56,7 @@ Available plugin styles:
 - `nizel-style/plugins/footnotes.css`
 - `nizel-style/plugins/frontmatter-ui.css`
 - `nizel-style/plugins/heading-anchors.css`
+- `nizel-style/plugins/hidden-comments.css`
 - `nizel-style/plugins/math.css`
 - `nizel-style/plugins/media.css`
 - `nizel-style/plugins/shiki.css`
@@ -82,3 +85,42 @@ Set variables on `:root`, a theme container, or directly on `.nizel-content`.
 The token layer falls back to common app tokens such as `--foreground`, `--background`, `--primary`, `--secondary`, `--error`, and `--info`.
 
 The package source is Sass and the published `dist` files are compiled CSS. Spacing tokens use `--nizel-space-xxs`, `--nizel-space-xs`, `--nizel-space-s`, `--nizel-space`, `--nizel-space-l`, `--nizel-space-xl`, and `--nizel-space-xxl`, all expressed in `em` so the layout scales with the content font size.
+
+## Rhythm presets
+
+For rendered Markdown, the main reading rhythm is controlled by three variables:
+
+```css
+.nizel-content {
+  --nizel-size: 1em;
+  --nizel-leading: 1.66;
+  --nizel-flow: 1.35em;
+}
+```
+
+- `--nizel-size` controls the base content font size.
+- `--nizel-leading` controls the base line height.
+- `--nizel-flow` controls the space between adjacent blocks. Section spacing derives from this value.
+
+The older aliases still work through the same system: `--nizel-font-size`, `--nizel-line-height`, and `--nizel-flow-space`.
+
+Use a preset class or data attribute when the same renderer appears in different contexts:
+
+```html
+<div class="nizel-content nizel-compact">Chat output</div>
+<article class="nizel-content nizel-docs">Documentation</article>
+<article class="nizel-content nizel-reading">Long-form article</article>
+<article class="nizel-content nizel-large">Large text mode</article>
+```
+
+```html
+<article class="nizel-content" data-nizel-preset="docs">
+  <!-- rendered Markdown HTML -->
+</article>
+```
+
+## Defaults
+
+Code blocks use a flat surface without a border by default. Override `--nizel-code-block-background` or `--nizel-code-block-radius` on the root to tune the treatment.
+
+Tables use minimal horizontal separators instead of boxed cells, which keeps dense documentation and generated Markdown readable without making every cell feel like an input grid.
