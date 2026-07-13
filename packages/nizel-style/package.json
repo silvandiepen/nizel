@@ -10,6 +10,8 @@
   "style": "./dist/nizel-style.css",
   "exports": {
     ".": "./dist/nizel-style.css",
+    "./style": "./style.scss",
+    "./style.scss": "./style.scss",
     "./style.css": "./dist/nizel-style.css",
     "./tokens.css": "./dist/tokens.css",
     "./base.css": "./dist/base.css",
@@ -33,6 +35,8 @@
   },
   "files": [
     "dist",
+    "src",
+    "style.scss",
     "README.md"
   ],
   "scripts": {

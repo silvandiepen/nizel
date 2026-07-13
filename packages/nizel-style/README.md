@@ -20,6 +20,12 @@ import 'nizel-style';
 <link rel="stylesheet" href="/node_modules/nizel-style/dist/nizel-style.css">
 ```
 
+When compiling Sass, use the public Sass entrypoint:
+
+```scss
+@use "nizel-style/style";
+```
+
 Wrap rendered content with one of the supported roots:
 
 ```html

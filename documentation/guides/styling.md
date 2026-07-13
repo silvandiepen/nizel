@@ -33,6 +33,12 @@ Or link the compiled CSS:
 <link rel="stylesheet" href="/node_modules/nizel-style/dist/nizel-style.css">
 ```
 
+For Sass pipelines, use the public Sass entrypoint:
+
+```scss
+@use "nizel-style/style";
+```
+
 Wrap rendered output with a supported scope:
 
 ```html
