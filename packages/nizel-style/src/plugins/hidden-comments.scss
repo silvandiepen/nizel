@@ -1,0 +1,30 @@
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .nizel-hidden-comment {
+  user-select: text;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .nizel-hidden-comment--hide {
+  border: 0;
+  color: rgba(255, 255, 255, 0);
+  display: inline-block;
+  font-size: 1px;
+  height: 0;
+  line-height: 0;
+  margin: 0;
+  max-height: 0;
+  max-width: 0;
+  overflow: hidden;
+  padding: 0;
+  vertical-align: baseline;
+  width: 0;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .nizel-hidden-comment--small {
+  color: color-mix(in srgb, currentColor 60%, transparent);
+  display: inline;
+  font-size: 0.75em;
+  line-height: 1;
+}
+
+:where(.nizel-content, [data-nizel-content], .nizel-prose) .nizel-hidden-comment--render {
+  display: inline;
+}

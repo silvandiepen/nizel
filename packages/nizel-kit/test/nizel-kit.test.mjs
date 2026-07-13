@@ -6,6 +6,7 @@ import {
   markdownToHtml,
   normalizeEnabledPlugins,
   supportedPlugins,
+  useNizelKit,
 } from '../dist/index.js';
 
 test('exposes a native-app friendly plugin registry', () => {
@@ -22,6 +23,7 @@ test('exposes a native-app friendly plugin registry', () => {
     'deflist',
     'frontmatter-ui',
     'heading-anchors',
+    'hidden-comments',
     'media',
     'toc',
     'task-list',
@@ -36,8 +38,10 @@ test('exposes a native-app friendly plugin registry', () => {
 });
 
 test('creates plugins from enabled plugin ids', () => {
-  const plugins = createPlugins(['alert', 'math', 'typography']);
-  assert.deepEqual(plugins.map((plugin) => plugin.name), ['alert', 'math', 'typography']);
+  const plugins = createPlugins(['alert', 'hidden-comments', 'math', 'typography'], {
+    'hidden-comments': { mode: 'small' },
+  });
+  assert.deepEqual(plugins.map((plugin) => plugin.name), ['alert', 'hidden-comments', 'math', 'typography']);
 });
 
 test('keeps composable code plugins enabled together', () => {
@@ -56,6 +60,14 @@ test('renders selected extension plugins through NizelKit', async () => {
   assert.match(html, /<mark>mark<\/mark>/);
   assert.match(html, /class="math math-inline"/);
   assert.match(html, /<nav class="toc"/);
+});
+
+test('converts selected plugin HTML back through NizelKit', async () => {
+  const html = await markdownToHtml('Visible <!-- note --> text', {
+    enabledPlugins: ['hidden-comments'],
+  });
+  const processor = useNizelKit({ enabledPlugins: ['hidden-comments'] });
+  assert.equal(processor.htmlToMarkdown(html), 'Visible <!-- note --> text');
 });
 
 test('expands preset plugin ids', () => {

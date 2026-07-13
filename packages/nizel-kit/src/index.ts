@@ -1,4 +1,10 @@
-import { useBrowserNizel, type NizelBrowserProcessor, type NizelBrowserMountTarget } from 'nizel/browser';
+import {
+  useBrowserNizel,
+  type NizelBrowserHtmlSource,
+  type NizelBrowserMountTarget,
+  type NizelBrowserProcessor,
+  type NizelHtmlToMarkdownOptions,
+} from 'nizel/browser';
 import type { NizelOptions, NizelPlugin } from 'nizel';
 import { abbrPlugin, type AbbrPluginOptions } from 'nizel-plugin-abbr';
 import { alertPlugin, type AlertPluginOptions } from 'nizel-plugin-alert';
@@ -13,6 +19,7 @@ import { footnotesPlugin, type FootnotesPluginOptions } from 'nizel-plugin-footn
 import { frontmatterUiPlugin, type FrontmatterUiPluginOptions } from 'nizel-plugin-frontmatter-ui';
 import { gfmPlugins, type GfmPluginOptions } from 'nizel-plugin-gfm';
 import { headingAnchorsPlugin, type HeadingAnchorsPluginOptions } from 'nizel-plugin-heading-anchors';
+import { hiddenCommentsPlugin, type HiddenCommentsPluginOptions } from 'nizel-plugin-hidden-comments';
 import { mathPlugin, type MathPluginOptions } from 'nizel-plugin-math';
 import { mediaPlugin, type MediaPluginOptions } from 'nizel-plugin-media';
 import { sanitizePlugin, type SanitizePluginOptions } from 'nizel-plugin-sanitize';
@@ -35,6 +42,7 @@ export type NizelKitPluginId =
   | 'frontmatter-ui'
   | 'gfm'
   | 'heading-anchors'
+  | 'hidden-comments'
   | 'math'
   | 'media'
   | 'sanitize'
@@ -66,6 +74,7 @@ export type NizelKitPluginOptions = {
   'frontmatter-ui'?: FrontmatterUiPluginOptions;
   gfm?: GfmPluginOptions;
   'heading-anchors'?: HeadingAnchorsPluginOptions;
+  'hidden-comments'?: HiddenCommentsPluginOptions;
   math?: MathPluginOptions;
   media?: MediaPluginOptions;
   sanitize?: SanitizePluginOptions;
@@ -159,6 +168,13 @@ export const supportedPlugins: NizelKitPluginMeta[] = [
     category: 'block',
   },
   {
+    id: 'hidden-comments',
+    label: 'Hidden Comments',
+    description: 'Control how Markdown HTML comments render in documents.',
+    defaultEnabled: false,
+    category: 'core-behavior',
+  },
+  {
     id: 'media',
     label: 'Media',
     description: 'Enhance standalone images as native-friendly figures.',
@@ -237,6 +253,7 @@ const factories: Record<NizelKitPluginId, (options: NizelKitPluginOptions) => Ni
   'frontmatter-ui': (options) => frontmatterUiPlugin(options['frontmatter-ui']),
   gfm: (options) => gfmPlugins(options.gfm),
   'heading-anchors': (options) => headingAnchorsPlugin(options['heading-anchors']),
+  'hidden-comments': (options) => hiddenCommentsPlugin(options['hidden-comments']),
   math: (options) => mathPlugin(options.math),
   media: (options) => mediaPlugin(options.media),
   sanitize: (options) => sanitizePlugin(options.sanitize),
@@ -268,11 +285,37 @@ export const createPlugins = (
  */
 export function useNizelKit(options: NizelKitOptions = {}): NizelBrowserProcessor {
   const { enabledPlugins, pluginOptions, plugins = [], ...nizelOptions } = options;
-  return useBrowserNizel({
+  const resolvedPlugins = [...createPlugins(enabledPlugins, pluginOptions), ...plugins];
+  const processor = useBrowserNizel({
     ...nizelOptions,
-    plugins: [...createPlugins(enabledPlugins, pluginOptions), ...plugins],
+    plugins: resolvedPlugins,
   });
+
+  const htmlToMarkdown = processor.htmlToMarkdown.bind(processor);
+  processor.htmlToMarkdown = (source: NizelBrowserHtmlSource, reverseOptions?: NizelHtmlToMarkdownOptions) => {
+    return htmlToMarkdown(source, withKitHtmlToMarkdownPlugins(reverseOptions, resolvedPlugins));
+  };
+  const nodeToMarkdown = processor.nodeToMarkdown.bind(processor);
+  processor.nodeToMarkdown = (source: NizelBrowserHtmlSource, reverseOptions?: NizelHtmlToMarkdownOptions) => {
+    return nodeToMarkdown(source, withKitHtmlToMarkdownPlugins(reverseOptions, resolvedPlugins));
+  };
+  const selectionToMarkdown = processor.selectionToMarkdown.bind(processor);
+  processor.selectionToMarkdown = (selection?: Selection | null, reverseOptions?: NizelHtmlToMarkdownOptions) => {
+    return selectionToMarkdown(selection, withKitHtmlToMarkdownPlugins(reverseOptions, resolvedPlugins));
+  };
+
+  return processor;
 }
+
+const withKitHtmlToMarkdownPlugins = (
+  options: NizelHtmlToMarkdownOptions | undefined,
+  plugins: NizelPlugin[],
+): NizelHtmlToMarkdownOptions => {
+  return {
+    ...options,
+    plugins: [...plugins, ...(options?.plugins ?? [])],
+  };
+};
 
 /**
  * Renders Markdown to HTML using selected official plugins.
