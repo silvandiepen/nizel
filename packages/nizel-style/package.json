@@ -1,6 +1,6 @@
 {
   "name": "nizel-style",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Scoped CSS for rendered Nizel content and official plugins.",
   "repository": {
     "type": "git",
