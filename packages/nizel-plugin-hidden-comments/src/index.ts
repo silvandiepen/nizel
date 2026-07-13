@@ -87,48 +87,46 @@ const replaceMarkdownCommentsOutsideFences = (
   markdown: string,
   replacer: (comment: string) => string,
 ): string => {
-  const lines = markdown.split(/(\n)/);
+  const lines = markdown.match(/.*(?:\r?\n|$)/g) ?? [];
   let result = '';
-  let line = '';
+  let outsideFence = '';
   let fence: { marker: string; length: number } | undefined;
 
-  for (const part of lines) {
-    line += part;
-    if (part !== '\n') continue;
+  const flushOutsideFence = () => {
+    if (!outsideFence) return;
+    result += replaceMarkdownComments(outsideFence, replacer);
+    outsideFence = '';
+  };
 
-    const next = processLine(line, fence, replacer);
-    result += next.line;
-    fence = next.fence;
-    line = '';
+  for (const line of lines) {
+    if (line === '') continue;
+
+    if (fence) {
+      result += line;
+      if (isClosingFenceLine(line, fence)) fence = undefined;
+      continue;
+    }
+
+    const openingFence = getOpeningFenceLine(line);
+    if (openingFence) {
+      flushOutsideFence();
+      result += line;
+      fence = openingFence;
+      continue;
+    }
+
+    outsideFence += line;
   }
 
-  if (line) {
-    const next = processLine(line, fence, replacer);
-    result += next.line;
-  }
-
+  flushOutsideFence();
   return result;
 };
 
-const processLine = (
-  line: string,
-  fence: { marker: string; length: number } | undefined,
+const replaceMarkdownComments = (
+  markdown: string,
   replacer: (comment: string) => string,
-): { line: string; fence: { marker: string; length: number } | undefined } => {
-  if (fence) {
-    return {
-      line,
-      fence: isClosingFenceLine(line, fence) ? undefined : fence,
-    };
-  }
-
-  const openingFence = getOpeningFenceLine(line);
-  if (openingFence) return { line, fence: openingFence };
-
-  return {
-    line: line.replace(/<!--[\s\S]*?-->/g, replacer),
-    fence,
-  };
+): string => {
+  return markdown.replace(/<!--[\s\S]*?-->/g, replacer);
 };
 
 const getOpeningFenceLine = (line: string): { marker: string; length: number } | undefined => {

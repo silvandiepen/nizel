@@ -37,6 +37,7 @@ test('removes comments in remove mode', async () => {
 
 test('preserves multiline comments outside fenced code', async () => {
   const html = await render('A\n\n<!-- one\ntwo -->\n\nB');
+  assert.match(html, /data-nizel-hidden-comment/);
   assert.match(html, /&lt;!-- one\ntwo --&gt;/);
 });
 
