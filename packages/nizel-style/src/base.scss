@@ -178,10 +178,10 @@
 
 :where(.nizel-content, [data-nizel-content], .nizel-prose) :not(pre) > code {
   color: var(--nizel-code-foreground);
-  padding: calc(var(--nizel-space-xxs) / 2) var(--nizel-space-xxs);
+  padding: calc(var(--nizel-space-xs) / 2) var(--nizel-space-xs);
   border-radius: var(--nizel-radius-sm);
   background: var(--nizel-code-background);
-  font-size: 0.9em;
+  font-size: 0.8em;
 }
 
 :where(.nizel-content, [data-nizel-content], .nizel-prose) pre {
