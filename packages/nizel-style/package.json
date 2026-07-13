@@ -28,6 +28,7 @@
     "./plugins/hidden-comments.css": "./dist/plugins/hidden-comments.css",
     "./plugins/math.css": "./dist/plugins/math.css",
     "./plugins/media.css": "./dist/plugins/media.css",
+    "./plugins/print.css": "./dist/plugins/print.css",
     "./plugins/shiki.css": "./dist/plugins/shiki.css",
     "./plugins/task-list.css": "./dist/plugins/task-list.css",
     "./plugins/toc.css": "./dist/plugins/toc.css",
