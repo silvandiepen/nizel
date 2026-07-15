@@ -9,6 +9,9 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "nizel": "./cli/nizel.mjs"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -20,7 +23,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "cli"
   ],
   "dependencies": {
     "@sil/case": "^1.0.0",
