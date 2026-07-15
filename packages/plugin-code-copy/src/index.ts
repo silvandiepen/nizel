@@ -168,7 +168,9 @@ export const renderCodeCopyBlock = (
     ? ` onclick="${ctx.escape(createInlineCopyHandler(options.copiedLabel))}"`
     : '';
 
-  return `<figure class="nizel-code-copy" data-nizel-code-copy>${filename}${source}<button type="button" class="nizel-code-copy__button" data-nizel-copy-button${onclick}>${ctx.escape(options.label)}</button>${body}</figure>`;
+  const label = `<span class="nizel-code-copy__label" data-nizel-copy-label>${ctx.escape(options.label)}</span>`;
+
+  return `<figure class="nizel-code-copy" data-nizel-code-copy>${filename}${source}<button type="button" class="nizel-code-copy__button" data-nizel-copy-button${onclick}>${label}</button>${body}</figure>`;
 };
 
 /**
@@ -177,7 +179,7 @@ export const renderCodeCopyBlock = (
 const createInlineCopyHandler = (copiedLabel: string): string => {
   const label = jsString(copiedLabel);
 
-  return `var b=this,f=b.closest('[data-nizel-code-copy]'),s=f?f.querySelector('[data-nizel-copy-source]'):null,v=s?s.value:'',p=b.textContent,d=function(){b.textContent='${label}';setTimeout(function(){b.textContent=p;},1200)},c=function(){var t=document.createElement('textarea');t.value=v;t.setAttribute('readonly','');t.style.position='fixed';t.style.opacity='0';document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);d()};if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(v).then(d,c)}else{c()}`;
+  return `var b=this,f=b.closest('[data-nizel-code-copy]'),s=f?f.querySelector('[data-nizel-copy-source]'):null,l=b.querySelector('[data-nizel-copy-label]'),v=s?s.value:'',p=l?l.textContent:b.textContent,d=function(){if(l){l.textContent='${label}'}else{b.textContent='${label}'}setTimeout(function(){if(l){l.textContent=p}else{b.textContent=p}},1200)},c=function(){var t=document.createElement('textarea');t.value=v;t.setAttribute('readonly','');t.style.position='fixed';t.style.opacity='0';document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);d()};if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(v).then(d,c)}else{c()}`;
 };
 
 /**

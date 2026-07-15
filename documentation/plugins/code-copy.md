@@ -50,7 +50,9 @@ console.log('hello from the rendered block');
 <figure class="nizel-code-copy" data-nizel-code-copy>
   <figcaption>filename.js</figcaption>
   <textarea class="nizel-code-copy__source" data-nizel-copy-source hidden readonly tabindex="-1" aria-hidden="true" style="display: none">console.log("hello")</textarea>
-  <button type="button" class="nizel-code-copy__button" data-nizel-copy-button onclick="...">Copy</button>
+  <button type="button" class="nizel-code-copy__button" data-nizel-copy-button onclick="...">
+    <span class="nizel-code-copy__label" data-nizel-copy-label>Copy</span>
+  </button>
   <pre><code class="language-js">console.log("hello")</code></pre>
 </figure>
 ```

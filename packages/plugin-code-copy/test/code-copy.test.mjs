@@ -34,7 +34,9 @@ test('unit: renders escaped copy markup for one code block', () => {
   assert.match(html, /onclick="/);
   assert.match(html, /navigator\.clipboard/);
   assert.match(html, /querySelector\('\[data-nizel-copy-source\]'\)/);
-  assert.match(html, /Copy &lt;code&gt;/);
+  assert.match(html, /querySelector\('\[data-nizel-copy-label\]'\)/);
+  assert.match(html, /<button type="button" class="nizel-code-copy__button"[^>]*><span class="nizel-code-copy__label" data-nizel-copy-label>Copy &lt;code&gt;<\/span><\/button>/);
+  assert.doesNotMatch(html, /data-nizel-copy-button[^>]*>Copy &lt;code&gt;<\/button>/);
   assert.match(html, /const x = &quot;&lt;&quot;/);
 });
 
