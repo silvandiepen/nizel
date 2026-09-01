@@ -49,9 +49,9 @@ Only `:open-icon(...)` is supported. Generic `:icon(...)` remains available for 
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
-| `mode` | `'inline-svg' \| 'semantic'` | `'inline-svg'` | Render local SVG markup or app-owned semantic spans. |
+| `mode` | `'inline-svg' / 'semantic'` | `'inline-svg'` | Render local SVG markup or app-owned semantic spans. |
 | `className` | `string` | `'nizel-open-icon'` | Wrapper class. |
-| `defaultSize` | `number \| string` | `'1em'` | Default inherited icon size. |
+| `defaultSize` | `number / string` | `'1em'` | Default inherited icon size. |
 | `defaultColor` | `string` | - | Optional default color. |
 | `aliases` | `Record<string, string>` | `{}` | Maps shorthand names to catalog names. |
 | `validateIcons` | `boolean` | `true` | Checks the local catalog. |

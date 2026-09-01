@@ -47,7 +47,7 @@ Press <span class="nizel-kbd-group" data-shortcut="Cmd+K"><kbd class="nizel-kbd"
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
-| `platform` | `'macos' \| 'windows' \| 'linux' \| 'auto'` | `'auto'` | Platform used for `Mod`. |
+| `platform` | `'macos' / 'windows' / 'linux' / 'auto'` | `'auto'` | Platform used for `Mod`. |
 | `className` | `string` | `'nizel-kbd'` | Class for each `<kbd>`. |
 | `separatorClassName` | `string` | `'nizel-kbd-separator'` | Class for the visible `+` separator. |
 | `groupClassName` | `string` | `'nizel-kbd-group'` | Class for the shortcut wrapper. |

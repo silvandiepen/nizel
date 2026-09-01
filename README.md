@@ -113,6 +113,10 @@ Date: {{ publishedAt | format('date', 'dd MMM yyyy') }}
 - Plugin system
 - Safe output defaults
 - Presets for blog, docs, email, and minimal usage
+- AST and portable document to Markdown
+- Versioned, serializable documents
+- Streaming Markdown completion
+- Renderer-friendly tree traversal
 
 ## Documentation
 
@@ -135,6 +139,29 @@ Date: {{ publishedAt | format('date', 'dd MMM yyyy') }}
 - [Safety](./docs/safety.md)
 - [Testing](./docs/testing.md)
 - [Implementation plan](./docs/implementation-plan.md)
+- [Application rendering roadmap](./docs/application-rendering-roadmap.md)
+
+## Portable Documents and Streaming
+
+Parse content once, serialize it, and render the AST later without shipping the parser with it:
+
+```ts
+import {
+  completeStreamingMarkdown,
+  deserializeNizelDocument,
+  serializeNizelDocument,
+  useNizel,
+} from 'nizel';
+
+const nizel = useNizel();
+const document = await nizel.document('# Hello');
+const payload = serializeNizelDocument(document);
+const restored = deserializeNizelDocument(payload);
+
+const html = nizel.render(restored.ast);
+const markdown = nizel.markdown(restored);
+const partial = completeStreamingMarkdown('Hello **world');
+```
 
 ## Design principle
 

@@ -19,26 +19,33 @@ const processor = useNizel({
   // optional configuration
 });
 
-const result = processor.process('# Hello {{ name }}', {
+const result = await processor('# Hello {{ name }}', {
   data: { name: 'World' }
 });
 ```
 
 ## Result
 
-`process()` returns:
+The processor returns:
 
-- `files` — output files (HTML by default)
-- `pages` — page metadata from frontmatter
-- `project` — project-level data
-- `languages` — language info
+- `result`, `html`, `text`, and `ast`
+- `meta` and `frontmatter`
+- `title`, `description`, and `excerpt`
+- `toc`, `headings`, `links`, and `images`
+- `readingTime`
 
 ## Convenience Methods
 
 ```js
-processor.parse(markdown);  // AST only, no rendering
-processor.render(markdown); // HTML string
+await processor.parse(markdown);   // AST only
+processor.render(ast);             // AST to HTML
+processor.markdown(ast);           // AST to Markdown
+await processor.document(markdown); // portable document
 ```
+
+Portable documents use the versioned `nizel/document` schema and can be passed
+through `serializeNizelDocument()` and `deserializeNizelDocument()`. Use
+`completeStreamingMarkdown()` before parsing incomplete streamed content.
 
 ## Features
 

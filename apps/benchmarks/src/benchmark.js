@@ -63,6 +63,7 @@ const benchmarkMode = async ({ fixture, mode, engines, time, warmupTime }) => {
 
 const benchmarkColdImport = async ({ fixture, time, warmupTime }) => {
   const imports = [
+    ['comark', async () => Promise.all([import('comark'), import('@comark/html')])],
     ['markdown-it', async () => import('markdown-it')],
     ['marked', async () => import('marked')],
     ['remark', async () => Promise.all([import('unified'), import('remark-parse'), import('remark-gfm'), import('remark-html')])],

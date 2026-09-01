@@ -33,28 +33,27 @@ const nizel = useNizel({
 });
 ```
 
-## With Variables
+## Parse a document
 
 ```ts
-const { html } = await nizel(
-  `
+const document = `
 ---
-title: {{ product.name | title }}
-slug: {{ product.name | kebab }}
+title: Getting started
 ---
 
-# {{ meta.title }}
+# Getting started
 
-Price: {{ price | format('currency', 'EUR') }}
-`,
-  {
-    variables: {
-      product: { name: 'nizel handbook' },
-      price: 29.99,
-    },
-  },
-);
+Nizel returns HTML, metadata, a table of contents, and a stable AST.
+`;
+
+const result = await nizel(document);
+
+console.log(result.html);
+console.log(result.meta.title);
+console.log(result.toc);
 ```
+
+Template variables are an optional, separate feature. See [Templates](/guides/template) when you need runtime interpolation.
 
 ## Result
 

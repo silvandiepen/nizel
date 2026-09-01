@@ -37,6 +37,6 @@ The preset also includes alert blocks.
 | --- | --- | --- | --- |
 | `alerts` | `boolean` | `true` | Include GitHub-style alert support. |
 | `autolinks` | `boolean` | `true` | Include configurable bare URL and email autolinks. |
-| `taskLists` | `boolean \| TaskListPluginOptions` | `true` | Include task-list checkbox rendering. |
+| `taskLists` | `boolean / TaskListPluginOptions` | `true` | Include task-list checkbox rendering. |
 
 Browser IIFE: `NizelGfm` from `dist/gfm.iife.js`.

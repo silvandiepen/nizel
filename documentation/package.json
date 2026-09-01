@@ -1,22 +1,40 @@
 {
   "name": "@nizel/documentation",
   "private": true,
+  "type": "module",
   "engines": {
     "node": "^20.19.0 || >=22.12.0 <26"
   },
   "scripts": {
-    "build": "rimraf public && npx girk",
-    "test": "node -e \"process.exit(0)\"",
-    "typecheck": "node -e \"process.exit(0)\"",
-    "serve": "npx serve public",
-    "deploy": "wrangler pages deploy public --project-name=nizel-docs",
-    "test:run": "node -e \"process.exit(0)\""
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build && node scripts/generate-static.mjs",
+    "test": "vitest run",
+    "typecheck": "vue-tsc --noEmit",
+    "serve": "vite preview",
+    "deploy": "wrangler pages deploy dist --project-name=nizel-docs",
+    "test:run": "vitest run"
   },
   "dependencies": {
-    "girky": "^1.31.7",
-    "rimraf": "^4.3.0"
+    "@sil/ui": "^2.6.2",
+    "bemm": "^1.4.0",
+    "nizel": "^0.1.0",
+    "nizel-plugin-shiki": "^0.1.1",
+    "open-icon": "^1.1.9",
+    "shiki": "^4.0.2",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0"
   },
   "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "@vue/test-utils": "^2.4.6",
+    "happy-dom": "^15.11.7",
+    "sass": "^1.81.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.3",
+    "vitest": "^4.1.5",
+    "vue-tsc": "^2.1.10",
     "wrangler": "^4.76.0"
   }
 }

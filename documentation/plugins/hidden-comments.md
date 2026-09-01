@@ -66,7 +66,7 @@ hiddenCommentsPlugin({ injectCss: true });
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
-| `mode` | `'hide' \| 'small' \| 'render' \| 'remove'` | `'hide'` | Controls how comments appear in rendered HTML. |
+| `mode` | `'hide' / 'small' / 'render' / 'remove'` | `'hide'` | Controls how comments appear in rendered HTML. |
 | `injectCss` | `boolean` | `false` | Prepends minimal CSS to the generated HTML. |
 | `className` | `string` | `'nizel-hidden-comment'` | Base class used for generated spans. |
 

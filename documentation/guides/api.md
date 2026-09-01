@@ -20,17 +20,17 @@ const nizel = useNizel(options);
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `output` | `'html' \| 'ast' \| 'text'` | `'html'` | Main output format |
-| `frontmatter` | `boolean` | `true` | Extract YAML frontmatter |
-| `toc` | `boolean` | `true` | Generate table of contents |
-| `anchors` | `boolean` | `true` | Add id attributes to headings |
-| `slugStyle` | `'github' \| 'classic'` | `'github'` | Slug generation style |
-| `elements` | `object` | `{}` | Customize HTML element output |
-| `plugins` | `array` | `[]` | Plugin instances |
-| `preset` | `string` | `undefined` | Built-in preset name |
-| `safe` | `boolean` | `true` | Sanitize output |
-| `variables` | `object` | `{}` | Template variables |
-| `autolinks` | `boolean \| object` | `{ enabled: true }` | Auto-link URLs |
+| output | `'html' / 'ast' / 'text'` | `'html'` | Main output format |
+| frontmatter | `boolean` | `true` | Extract YAML frontmatter |
+| toc | `boolean` | `true` | Generate table of contents |
+| anchors | `boolean` | `true` | Add id attributes to headings |
+| slugStyle | `'github' / 'classic'` | `'github'` | Slug generation style |
+| elements | `object` | `{}` | Customize HTML element output |
+| plugins | `array` | `[]` | Plugin instances |
+| preset | `string` | `undefined` | Built-in preset name |
+| safe | `boolean` | `true` | Sanitize output |
+| variables | `object` | `{}` | Template variables |
+| autolinks | `boolean / object` | `{ enabled: true }` | Auto-link URLs |
 
 ### Usage
 
@@ -96,7 +96,7 @@ const markdown = htmlToMarkdown('<h1>Intro</h1><p>Hello <strong>world</strong>.<
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `unsupported` | `'preserve' \| 'drop'` | `'preserve'` | Preserve HTML that Markdown cannot represent, or drop unsupported markup and keep readable text where possible. |
+| `unsupported` | `'preserve' / 'drop'` | `'preserve'` | Preserve HTML that Markdown cannot represent, or drop unsupported markup and keep readable text where possible. |
 
 See [HTML to Markdown](/guides/html-to-markdown/index.html) for conversion rules and unsupported HTML policy.
 

@@ -77,11 +77,11 @@ The native app can pass Markdown in, receive formatted Markdown back, and save t
 | `tables` | `boolean` | `true` | Align pipe tables. |
 | `headingSpacing` | `boolean` | `true` | Normalize heading marker spacing. |
 | `blankLines` | `boolean` | `true` | Normalize blank lines around block starts. |
-| `unorderedListMarker` | `'-' \| '*' \| '+'` | `'-'` | Preferred unordered-list marker. |
-| `nestedListIndent` | `2 \| 4` | `2` | Spaces per nested-list level. |
+| `unorderedListMarker` | `'-' / '*' / '+'` | `'-'` | Preferred unordered-list marker. |
+| `nestedListIndent` | `2 / 4` | `2` | Spaces per nested-list level. |
 | `renumberOrderedLists` | `boolean` | `true` | Renumber ordered lists per nesting level. |
-| `codeFenceMarker` | ``'```' \| '~~~'`` | ``'```'`` | Preferred code-fence marker. |
-| `horizontalRule` | `'---' \| '***' \| '___'` | `'---'` | Preferred thematic-break marker. |
+| `codeFenceMarker` | ``'```' / '~~~'`` | ``'```'`` | Preferred code-fence marker. |
+| `horizontalRule` | `'---' / '***' / '___'` | `'---'` | Preferred thematic-break marker. |
 | `blockquoteSpacing` | `boolean` | `true` | Normalize blockquote marker spacing. |
 | `htmlInlineTags` | `boolean` | `true` | Convert simple inline HTML emphasis tags to Markdown. |
 | `imageShortcodes` | `boolean` | `true` | Convert `[img=url]` shortcodes to Markdown images. |

@@ -3,6 +3,8 @@ import { extractFrontmatter } from './frontmatter.js';
 import { resolveOptions } from './options.js';
 import { parseMarkdown } from './parse.js';
 import { renderHtml } from './render.js';
+import { renderMarkdown } from './markdown.js';
+import { createNizelDocument } from './document.js';
 import { renderTemplate } from './template.js';
 import type {
   NizelElementRules,
@@ -112,6 +114,11 @@ function createNizel<TMeta extends Record<string, unknown> = Record<string, unkn
     return renderHtml(ast, withAutolinkElements(resolved.elements ?? {}, resolved.autolinks), resolved.blocks ?? {}, {
       unwrapStandaloneImages: resolved.unwrapStandaloneImages === true,
     });
+  };
+  nizel.markdown = (value, markdownOptions) => renderMarkdown(value, markdownOptions);
+  nizel.document = async (markdown, runtimeOptions) => {
+    const result = await process(markdown, runtimeOptions);
+    return createNizelDocument(result);
   };
 
   return nizel;

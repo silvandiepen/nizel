@@ -84,9 +84,9 @@ The root `nizel-plugin-shiki` entrypoint does not import Shiki. The `/javascript
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
-| `highlighter` | `(code, input) => string \| undefined` | - | Function that returns highlighted HTML. |
+| `highlighter` | `(code, input) => string / undefined` | - | Function that returns highlighted HTML. |
 | `theme` | `string` | - | Theme name passed to the highlighter input. |
-| `mode` | `'blocks' \| 'inline'` | `'blocks'` | Set to `'inline'` to skip highlighting and render the fallback. |
+| `mode` | `'blocks' / 'inline'` | `'blocks'` | Set to `'inline'` to skip highlighting and render the fallback. |
 
 The highlighter receives this input object:
 

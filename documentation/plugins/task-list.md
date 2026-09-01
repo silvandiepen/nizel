@@ -53,7 +53,7 @@ Markers are supported on ordered and unordered lists, and inside nested lists an
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
-| `mode` | `'view' \| 'edit'` | `'view'` | `view` renders disabled checkboxes; `edit` renders enabled checkboxes the user can toggle. |
+| `mode` | `'view' / 'edit'` | `'view'` | `view` renders disabled checkboxes; `edit` renders enabled checkboxes the user can toggle. |
 
 ## Modes
 

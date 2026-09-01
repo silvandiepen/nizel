@@ -48,6 +48,11 @@ export type NizelProcessor = {
   preset(name: NizelPresetName): NizelProcessor;
   parse(markdown: string, runtimeOptions?: NizelOptions): Promise<NizelRootNode>;
   render(ast: NizelRootNode, runtimeOptions?: NizelOptions): string;
+  markdown(value: NizelRootNode | NizelDocument, options?: NizelMarkdownRenderOptions): string;
+  document<TMeta extends Record<string, unknown> = Record<string, unknown>>(
+    markdown: string,
+    runtimeOptions?: NizelOptions<TMeta>,
+  ): Promise<NizelDocument<TMeta>>;
 };
 
 export type NizelUseNizel = {
@@ -75,6 +80,48 @@ export type NizelResult<TOutput = string, TMeta = Record<string, unknown>> = {
     words: number;
     minutes: number;
   };
+};
+
+/** A portable, versioned Nizel document suitable for storage or transport. */
+export type NizelDocument<TMeta extends Record<string, unknown> = Record<string, unknown>> = {
+  schema: 'nizel/document';
+  version: 1;
+  ast: NizelRootNode;
+  meta: TMeta;
+};
+
+export type NizelMarkdownRenderOptions = {
+  frontmatter?: boolean;
+  bullet?: '-' | '*' | '+';
+  fence?: '`' | '~';
+  customBlocks?: Record<string, NizelCustomBlockMarkdownRenderer>;
+};
+
+export type NizelCustomBlockMarkdownRenderer = (
+  node: NizelCustomBlockNode,
+  context: { render(nodes: NizelBlockNode[]): string },
+) => string;
+
+export type NizelStreamingOptions = {
+  /** Complete an unclosed leading frontmatter fence. */
+  frontmatter?: boolean;
+  /** Complete Nizel custom block fences. */
+  customBlocks?: boolean;
+};
+
+export type NizelRendererProps = Record<string, unknown>;
+
+export type NizelRenderAdapter<TOutput> = {
+  text(value: string, node: NizelTextNode): TOutput;
+  element(name: string, props: NizelRendererProps, children: TOutput[], node: NizelNode): TOutput;
+  caret?(props: NizelRendererProps): TOutput;
+};
+
+export type NizelTreeRenderOptions<TOutput> = {
+  components?: Partial<Record<string, string>>;
+  streaming?: boolean;
+  caret?: boolean | NizelRendererProps;
+  adapter: NizelRenderAdapter<TOutput>;
 };
 
 export type NizelRootNode = {

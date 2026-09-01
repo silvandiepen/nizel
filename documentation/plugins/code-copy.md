@@ -42,7 +42,7 @@ console.log('hello from the rendered block');
 | --- | --- | --- | --- |
 | `label` | `string` | `'Copy'` | Button text for generated copy controls. |
 | `copiedLabel` | `string` | `'Copied'` | Temporary button text after copying. |
-| `mode` | `'inline' \| 'button'` | `'inline'` | Inline copy handler or button-only markup. |
+| `mode` | `'inline' / 'button'` | `'inline'` | Inline copy handler or button-only markup. |
 
 ## Output
 

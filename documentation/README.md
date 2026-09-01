@@ -90,4 +90,3 @@ Compliance means your content renders consistently. No surprises. No edge cases.
 - [Safety](/guides/safety/index.html) — safe output defaults
 - [HTML to Markdown](/guides/html-to-markdown/index.html) — import HTML while preserving unsupported constructs
 - [Testing](/guides/testing/index.html) — test suite and conformance
-- [Release Notes](/release-notes/index.html) — version history

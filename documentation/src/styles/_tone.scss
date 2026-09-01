@@ -1,0 +1,4 @@
+@function ink($percent) { @return color-mix(in srgb, var(--color-foreground), transparent (100% - $percent)); }
+@function surface() { @return ink(5%); }
+@function selected() { @return color-mix(in srgb, var(--color-primary) 12%, var(--color-background)); }
+@function muted() { @return ink(64%); }

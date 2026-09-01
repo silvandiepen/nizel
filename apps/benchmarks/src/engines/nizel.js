@@ -5,20 +5,23 @@ export const name = 'nizel';
 export const createNizelEngine = async () => {
   const { useNizel } = await importNizel();
   const processor = useNizel();
-  const kitchenSinkProcessor = useNizel({ plugins: await createKitchenSinkPlugins() });
+  let kitchenSinkProcessorPromise;
 
   return {
     name: usesLocalNizel() ? 'nizel-local' : name,
     async render(markdown) {
-      return processorFor(markdown).html(markdown);
+      if (!isKitchenSink(markdown)) return processor.html(markdown);
+      return (await kitchenSinkProcessor()).html(markdown);
     },
     parse(markdown) {
-      return processorFor(markdown).parse(markdown);
+      if (!isKitchenSink(markdown)) return processor.parse(markdown);
+      return kitchenSinkProcessor().then((configured) => configured.parse(markdown));
     },
   };
 
-  function processorFor(markdown) {
-    return isKitchenSink(markdown) ? kitchenSinkProcessor : processor;
+  function kitchenSinkProcessor() {
+    kitchenSinkProcessorPromise ??= createKitchenSinkPlugins().then((plugins) => useNizel({ plugins }));
+    return kitchenSinkProcessorPromise;
   }
 };
 

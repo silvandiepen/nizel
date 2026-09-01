@@ -32,6 +32,8 @@ export const readPackageInfo = async () => {
     node: process.version,
     platform: `${process.platform}-${process.arch}`,
     packages: {
+      comark: await readPackageVersion('comark'),
+      '@comark/html': await readPackageVersion('@comark/html'),
       'markdown-it': await readPackageVersion('markdown-it'),
       marked: await readPackageVersion('marked'),
       nizel: localNizel ? `${localNizel.name}@${localNizel.version}` : await readPackageVersion('nizel'),

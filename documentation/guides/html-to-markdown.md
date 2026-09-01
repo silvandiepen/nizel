@@ -40,7 +40,7 @@ htmlToMarkdown(source: string | Node | Range | Selection | ArrayLike<Node>, opti
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `unsupported` | `'preserve' \| 'drop'` | `'preserve'` | Controls how HTML that Markdown cannot represent is handled. |
+| `unsupported` | `'preserve' / 'drop'` | `'preserve'` | Controls how HTML that Markdown cannot represent is handled. |
 
 ### `unsupported: 'preserve'`
 
