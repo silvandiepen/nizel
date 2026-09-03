@@ -93,6 +93,9 @@ jobs:
       - name: Publish plugin-heading-anchors
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-heading-anchors
 
+      - name: Publish plugin-hidden-comments
+        run: node scripts/publish-workspace-if-new.mjs nizel-plugin-hidden-comments
+
       - name: Publish plugin-kbd
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-kbd
 
