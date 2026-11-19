@@ -10,6 +10,12 @@ Nizel has an optional first-party WebAssembly backend for Markdown to HTML and H
 
 ## Use the optional build
 
+The first Wasm release is Nizel 0.1.16. If the npm registry cannot resolve the version, install the [release archive](https://github.com/silvandiepen/nizel/releases/tag/nizel%400.1.16):
+
+~~~sh
+npm install https://github.com/silvandiepen/nizel/releases/download/nizel%400.1.16/nizel-0.1.16.tgz
+~~~
+
 For Node.js, import from the Wasm entry point:
 
 ~~~js
