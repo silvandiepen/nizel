@@ -33,6 +33,16 @@ export type InlineParseState = {
   references: Map<string, ReferenceDefinition>;
 };
 
+const inlineTokenPatternWithoutBareEmail =
+  /(?<inlineHtml><!-->|<!--->|<!--[\s\S]*?-->|<\?[\s\S]*?\?>|<![A-Z][^>]*>|<!\[CDATA\[[\s\S]*?\]\]>|<\/?[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?)*\s*\/?>)|(?<hardSpaces> {2,}\n)|(?<hardBackslash>\\\n)|(?<softBreak>\n)|(?<!`)(?<codeTicks>`+)(?!`)(?<codeValue>[\s\S]*?)(?<!`)\k<codeTicks>(?!`)|\\(?<escaped>[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])|&(?<entity>[A-Za-z][A-Za-z0-9]+|#[0-9]+|#[xX][0-9A-Fa-f]+);|!\[(?<refImageAlt>[^\]]*)\]\[(?<refImageLabel>[^\]]*)\]|\[(?<refLinkText>[^\]`<\[]+)\]\[(?<refLinkLabel>[^\]]*)\]|!\[(?<inlineImageAlt>[^\]`<]*)\]\([ \t\n]*(?<inlineImageHref><[^<>\n\\]*>|(?!<)(?:\\.|[^() \t\n`\\]|\([^()\n]*(?:\([^()\n]*\)[^()\n]*)*\))*)(?:[ \t\n]+(?:"(?<inlineImageTitle>(?:\\.|[^"`])*)"|'(?<inlineImageTitleSingle>[^']*)'|\((?<inlineImageTitleParen>[^)]*)\)))?[ \t\n]*\)|\[(?<inlineLinkText>[^\]`<]*)\]\([ \t\n]*(?<inlineLinkHref><[^<>\n\\]*>|(?!<)(?:\\.|[^() \t\n`\\]|\([^()\n]*(?:\([^()\n]*\)[^()\n]*)*\))*)(?:[ \t\n]+(?:"(?<inlineLinkTitle>(?:\\.|[^"`])*)"|'(?<inlineLinkTitleSingle>[^']*)'|\((?<inlineLinkTitleParen>[^)]*)\)))?[ \t\n]*\)|<(?<angleUrl>[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*)>|<(?<angleEmail>[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)*)>|!\[(?<shortcutImageAlt>(?:\\\]|[^\]`<\[])+)\]|\[(?<shortcutLinkText>(?:\\\]|[^\]`<\[])+)\]|~~(?<deleteValue>[^~`]+)~~|(?<bareUrl>https?:\/\/[^\s<`]+)/giu;
+const bareEmailPattern = /(?<bareEmail>[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/giu;
+// Bare email matching can retry at every character of a long word. Only enable
+// that alternative when the source includes an at sign.
+const inlineTokenPatternWithBareEmail = new RegExp(
+  inlineTokenPatternWithoutBareEmail.source + '|' + bareEmailPattern.source,
+  inlineTokenPatternWithoutBareEmail.flags,
+);
+
 /**
  * Parses inline Markdown constructs inside paragraph-like content.
  */
@@ -55,6 +65,11 @@ export const parseInlineWithState = (
     return source ? [{ type: 'text', value: source }] : [];
   }
 
+  const hasAtSign = source.includes('@');
+  if (!hasAtSign && !hasNonEmphasisSyntax(source)) {
+    return resolveRemainingEmphasis([{ type: 'text', value: source }]);
+  }
+
   if (extractNestedLinks && hasBalancedLinkCandidate(source)) {
     const scanned = scanBalancedInlineLinks(source, options, state);
     if (scanned) return resolveRemainingEmphasis(scanned);
@@ -62,12 +77,15 @@ export const parseInlineWithState = (
 
   const nodes: NizelInlineNode[] = [];
   const safe = options.safe !== false;
-  const pattern =
-    /(?<inlineHtml><!-->|<!--->|<!--[\s\S]*?-->|<\?[\s\S]*?\?>|<![A-Z][^>]*>|<!\[CDATA\[[\s\S]*?\]\]>|<\/?[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?)*\s*\/?>)|(?<hardSpaces> {2,}\n)|(?<hardBackslash>\\\n)|(?<softBreak>\n)|(?<!`)(?<codeTicks>`+)(?!`)(?<codeValue>[\s\S]*?)(?<!`)\k<codeTicks>(?!`)|\\(?<escaped>[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])|&(?<entity>[A-Za-z][A-Za-z0-9]+|#[0-9]+|#[xX][0-9A-Fa-f]+);|!\[(?<refImageAlt>[^\]]*)\]\[(?<refImageLabel>[^\]]*)\]|\[(?<refLinkText>[^\]`<\[]+)\]\[(?<refLinkLabel>[^\]]*)\]|!\[(?<inlineImageAlt>[^\]`<]*)\]\([ \t\n]*(?<inlineImageHref><[^<>\n\\]*>|(?!<)(?:\\.|[^() \t\n`\\]|\([^()\n]*(?:\([^()\n]*\)[^()\n]*)*\))*)(?:[ \t\n]+(?:"(?<inlineImageTitle>(?:\\.|[^"`])*)"|'(?<inlineImageTitleSingle>[^']*)'|\((?<inlineImageTitleParen>[^)]*)\)))?[ \t\n]*\)|\[(?<inlineLinkText>[^\]`<]*)\]\([ \t\n]*(?<inlineLinkHref><[^<>\n\\]*>|(?!<)(?:\\.|[^() \t\n`\\]|\([^()\n]*(?:\([^()\n]*\)[^()\n]*)*\))*)(?:[ \t\n]+(?:"(?<inlineLinkTitle>(?:\\.|[^"`])*)"|'(?<inlineLinkTitleSingle>[^']*)'|\((?<inlineLinkTitleParen>[^)]*)\)))?[ \t\n]*\)|<(?<angleUrl>[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*)>|<(?<angleEmail>[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)*)>|!\[(?<shortcutImageAlt>(?:\\\]|[^\]`<\[])+)\]|\[(?<shortcutLinkText>(?:\\\]|[^\]`<\[])+)\]|~~(?<deleteValue>[^~`]+)~~|(?<bareUrl>https?:\/\/[^\s<`]+)|(?<bareEmail>[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/giu;
+  const pattern = hasAtSign ? inlineTokenPatternWithBareEmail : inlineTokenPatternWithoutBareEmail;
   let lastIndex = 0;
-  let match: RegExpExecArray | null;
+  while (true) {
+    // Child inline parses can reuse the same regex, so keep the cursor local.
+    pattern.lastIndex = lastIndex;
+    const match = pattern.exec(source);
+    if (!match) break;
+    const end = pattern.lastIndex;
 
-  while ((match = pattern.exec(source))) {
     if (match.index > lastIndex) {
       nodes.push({ type: 'text', value: source.slice(lastIndex, match.index) });
     }
@@ -207,7 +225,7 @@ export const parseInlineWithState = (
       nodes.push({ type: 'text', value: match[0] });
     }
 
-    lastIndex = pattern.lastIndex;
+    lastIndex = end;
   }
 
   if (lastIndex < source.length) nodes.push({ type: 'text', value: source.slice(lastIndex) });
@@ -225,6 +243,11 @@ const hasInlineSyntax = (source: string, autolinks: boolean): boolean => {
     source.includes('https://') ||
     source.includes('@')
   );
+};
+
+/** Checks whether inline tokenization is needed before resolving emphasis. */
+const hasNonEmphasisSyntax = (source: string): boolean => {
+  return /[`<&\n[~\\]|https?:\/\//i.test(source);
 };
 
 /**

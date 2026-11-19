@@ -203,3 +203,5 @@ npm run benchmark:plugins -- --time=100 --warmup=25
 ```
 
 The benchmark reports `core`, each individual plugin, `kit-default`, and `kit-all` so you can see the cost of each setting and the full native-app bundle profile.
+
+The [WebAssembly guide](/guides/webassembly/index.html) covers opt-in imports, supported inputs, and fallback behavior.

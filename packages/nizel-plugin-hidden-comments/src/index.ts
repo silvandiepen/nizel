@@ -9,34 +9,38 @@ export type HiddenCommentsPluginOptions = {
 };
 
 type NormalizedOptions = Required<HiddenCommentsPluginOptions>;
+type CommentToken = { token: string; comment: string };
+const tokenPrefix = 'NIZEL_HIDDEN_COMMENT_';
+const orderedReplacementPattern = /\$[$&'`]|NIZEL_HIDDEN_COMMENT_/;
+const commentTokenPattern = /<p>(\s*)(NIZEL_HIDDEN_COMMENT_(0|[1-9][0-9]*)_[a-z0-9]*)(\s*)<\/p>|(NIZEL_HIDDEN_COMMENT_(0|[1-9][0-9]*)_[a-z0-9]*)/g;
 
 /**
  * Handles Markdown HTML comments as first-class renderable content.
  */
 export const hiddenCommentsPlugin = (options: HiddenCommentsPluginOptions = {}): NizelPlugin => {
   const normalized = normalizeOptions(options);
-  let comments = new Map<string, string>();
-  let nextIndex = 0;
+  const classNeedsOrderedReplacement = orderedReplacementPattern.test(normalized.className);
+  const style = normalized.injectCss && normalized.mode !== 'remove'
+    ? hiddenCommentsStyleTag(normalized.className) + '\n'
+    : '';
+  let comments: CommentToken[] = [];
+  let needsOrderedReplacement = classNeedsOrderedReplacement;
 
   return {
     name: 'hidden-comments',
     hooks: {
       beforeParse(markdown) {
-        comments = new Map<string, string>();
-        nextIndex = 0;
+        comments = [];
+        needsOrderedReplacement = classNeedsOrderedReplacement;
         return transformMarkdownComments(markdown, normalized, (comment) => {
-          const token = `NIZEL_HIDDEN_COMMENT_${nextIndex}_${Math.random().toString(36).slice(2)}`;
-          nextIndex += 1;
-          comments.set(token, comment);
+          const token = `${tokenPrefix}${comments.length}_${Math.random().toString(36).slice(2)}`;
+          comments.push({ token, comment });
+          needsOrderedReplacement ||= orderedReplacementPattern.test(comment);
           return token;
         });
       },
       afterRender(html) {
-        let nextHtml = restoreCommentTokens(html, comments, normalized);
-        if (normalized.injectCss && normalized.mode !== 'remove') {
-          nextHtml = `${hiddenCommentsStyleTag(normalized.className)}\n${nextHtml}`;
-        }
-        return nextHtml;
+        return style + restoreCommentTokens(html, comments, normalized, needsOrderedReplacement);
       },
     },
     htmlToMarkdown: hiddenCommentsToMarkdown(normalized),
@@ -136,34 +140,52 @@ const getOpeningFenceLine = (line: string): { marker: string; length: number } |
 };
 
 const isClosingFenceLine = (line: string, fence: { marker: string; length: number }): boolean => {
-  const lineText = line.replace(/\r?\n$/, '');
-  const escapedMarker = fence.marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const pattern = new RegExp(`^ {0,3}${escapedMarker}{${fence.length},} *$`);
-  return pattern.test(lineText);
+  const match = /^ {0,3}(`{3,}|~{3,}) *$/.exec(line.replace(/\r?\n$/, ''));
+  const marker = match?.[1];
+  return marker !== undefined && marker[0] === fence.marker && marker.length >= fence.length;
 };
 
-const renderCommentElement = (comment: string, options: NormalizedOptions): string => {
+const commentElementStart = (options: NormalizedOptions): string => {
   const classes = [
     options.className,
     `${options.className}--${options.mode}`,
     'print-hidden-comment',
   ];
   const mode = escapeHtml(options.mode);
-  return `<span class="${classes.map(escapeHtml).join(' ')}" data-nizel-hidden-comment="" data-hidden-comment-mode="${mode}">${escapeHtml(comment)}</span>`;
+  return `<span class="${classes.map(escapeHtml).join(' ')}" data-nizel-hidden-comment="" data-hidden-comment-mode="${mode}">`;
 };
+
+const renderCommentElement = (comment: string, options: NormalizedOptions): string =>
+  commentElementStart(options) + escapeHtml(comment) + '</span>';
 
 const restoreCommentTokens = (
   html: string,
-  comments: Map<string, string>,
+  comments: CommentToken[],
   options: NormalizedOptions,
+  needsOrderedReplacement: boolean,
 ): string => {
-  if (!comments.size || options.mode === 'remove') return html;
+  if (!comments.length) return html;
+  const openingTag = commentElementStart(options);
 
+  if (!needsOrderedReplacement) {
+    return html.replace(commentTokenPattern, (match, leading, blockToken, blockIndex, trailing, inlineToken, inlineIndex) => {
+      const candidate = blockToken ?? inlineToken;
+      const entry = comments[Number(blockIndex ?? inlineIndex)];
+      if (!entry || !candidate.startsWith(entry.token)) return match;
+      const rendered = openingTag + escapeHtml(entry.comment) + '</span>';
+      const suffix = candidate.slice(entry.token.length);
+      if (blockToken && suffix) return '<p>' + leading + rendered + suffix + trailing + '</p>';
+      return rendered + suffix;
+    });
+  }
+
+  // String replacements historically interpret dollar sequences and can emit
+  // another token. Keep the original replacement order for those inputs.
   let nextHtml = html;
-  for (const [token, comment] of comments) {
+  for (const { token, comment } of comments) {
     const tokenPattern = new RegExp(escapeRegExp(token), 'g');
     const blockPattern = new RegExp(`<p>\\s*${escapeRegExp(token)}\\s*</p>`, 'g');
-    const rendered = renderCommentElement(comment, options);
+    const rendered = openingTag + escapeHtml(comment) + '</span>';
     nextHtml = nextHtml.replace(blockPattern, rendered).replace(tokenPattern, rendered);
   }
   return nextHtml;

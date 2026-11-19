@@ -76,3 +76,24 @@ test('scanBalancedInlineLinks leaves sources without balanced links to the regex
 test('stripInlineMarkdown turns inline Markdown into plain text', () => {
   assert.equal(stripInlineMarkdown('**Read** [`code`](/docs) ![Alt *text*](/img.png)', options), 'Read code Alt text');
 });
+
+test('keeps the parent token cursor when a nested inline parse uses the same tokenizer', () => {
+  const nodes = parseInline('~~left &amp; right~~ and `code`', options);
+  assert.deepEqual(nodes, [
+    { type: 'delete', children: [{ type: 'text', value: 'left & right' }] },
+    { type: 'text', value: ' and ' },
+    { type: 'inlineCode', code: 'code' },
+  ]);
+});
+
+test('preserves nested and adjacent emphasis after a long plain text run', () => {
+  const plain = 'x'.repeat(2048) + ' ';
+  assert.deepEqual(parseInline(plain + '***one*** _two_ **three**', options), [
+    { type: 'text', value: plain },
+    { type: 'emphasis', children: [{ type: 'strong', children: [{ type: 'text', value: 'one' }] }] },
+    { type: 'text', value: ' ' },
+    { type: 'emphasis', children: [{ type: 'text', value: 'two' }] },
+    { type: 'text', value: ' ' },
+    { type: 'strong', children: [{ type: 'text', value: 'three' }] },
+  ]);
+});

@@ -301,3 +301,5 @@ The root benchmark scripts rebuild Nizel before running. If you run the benchmar
 ~~~bash
 npm run build --workspace nizel
 ~~~
+
+The [WebAssembly guide](/guides/webassembly/index.html) covers opt-in imports, supported inputs, and fallback behavior.

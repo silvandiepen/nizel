@@ -19,48 +19,44 @@ export type InlineToken =
  */
 export const resolveRemainingEmphasis = (nodes: NizelInlineNode[]): NizelInlineNode[] => {
   const tokens = tokenizeEmphasisDelimiters(nodes);
-  let changed = true;
+  for (let closeIndex = 0; closeIndex < tokens.length; closeIndex += 1) {
+    const closer = tokens[closeIndex];
+    if (closer.type !== 'delimiter' || !closer.close || closer.length === 0) continue;
 
-  while (changed) {
-    changed = false;
-    for (let closeIndex = 0; closeIndex < tokens.length; closeIndex += 1) {
-      const closer = tokens[closeIndex];
-      if (closer.type !== 'delimiter' || !closer.close || closer.length === 0) continue;
-
-      for (let openIndex = closeIndex - 1; openIndex >= 0; openIndex -= 1) {
-        const opener = tokens[openIndex];
-        if (
-          opener.type !== 'delimiter' ||
-          !opener.open ||
-          opener.char !== closer.char ||
-          opener.length === 0
-        ) {
-          continue;
-        }
-
-        if (isForbiddenDelimiterMatch(opener, closer)) continue;
-
-        const size = opener.length >= 2 && closer.length >= 2 ? 2 : 1;
-        const children = inlineTokensToNodes(tokens.slice(openIndex + 1, closeIndex));
-        const wrapped: NizelInlineNode =
-          size === 2
-            ? { type: 'strong', children: resolveRemainingEmphasis(children) }
-            : { type: 'emphasis', children: resolveRemainingEmphasis(children) };
-
-        const replacement: InlineToken[] = [];
-        if (opener.length > size) {
-          replacement.push({ ...opener, length: opener.length - size });
-        }
-        replacement.push({ type: 'node', node: wrapped });
-        if (closer.length > size) {
-          replacement.push({ ...closer, length: closer.length - size });
-        }
-
-        tokens.splice(openIndex, closeIndex - openIndex + 1, ...replacement);
-        changed = true;
-        closeIndex = -1;
-        break;
+    for (let openIndex = closeIndex - 1; openIndex >= 0; openIndex -= 1) {
+      const opener = tokens[openIndex];
+      if (
+        opener.type !== 'delimiter' ||
+        !opener.open ||
+        opener.char !== closer.char ||
+        opener.length === 0
+      ) {
+        continue;
       }
+
+      if (isForbiddenDelimiterMatch(opener, closer)) continue;
+
+      const size = opener.length >= 2 && closer.length >= 2 ? 2 : 1;
+      const children = inlineTokensToNodes(tokens.slice(openIndex + 1, closeIndex));
+      const wrapped: NizelInlineNode =
+        size === 2
+          ? { type: 'strong', children: resolveRemainingEmphasis(children) }
+          : { type: 'emphasis', children: resolveRemainingEmphasis(children) };
+
+      const replacement: InlineToken[] = [];
+      if (opener.length > size) {
+        replacement.push({ ...opener, length: opener.length - size });
+      }
+      replacement.push({ type: 'node', node: wrapped });
+      if (closer.length > size) {
+        replacement.push({ ...closer, length: closer.length - size });
+      }
+
+      tokens.splice(openIndex, closeIndex - openIndex + 1, ...replacement);
+      // Tokens before the opener have the same preceding delimiters.
+      // Only the replacement and the later closers need to be reconsidered.
+      closeIndex = openIndex - 1;
+      break;
     }
   }
 

@@ -20,6 +20,14 @@
     "./browser": {
       "types": "./dist/browser.d.ts",
       "import": "./dist/browser.js"
+    },
+    "./wasm": {
+      "types": "./dist/wasm.d.ts",
+      "import": "./dist/wasm.js"
+    },
+    "./browser/wasm": {
+      "types": "./dist/browser-wasm.d.ts",
+      "import": "./dist/browser-wasm.js"
     }
   },
   "files": [
@@ -31,19 +39,21 @@
     "@sil/format": "^0.0.9"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && npm run build:browser",
+    "build": "tsc -p tsconfig.json && npm run build:wasm && npm run build:browser",
     "build:browser": "esbuild src/browser.ts --bundle --platform=browser --format=esm --target=safari14 --outfile=dist/browser/nizel.js && esbuild src/browser.ts --bundle --platform=browser --format=iife --global-name=Nizel --target=safari14 --outfile=dist/browser/nizel.iife.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && vitest run test/*.mjs",
     "test:commonmark:browser": "npm run build && NIZEL_COMMONMARK_ENTRY=../dist/browser/nizel.js node conformance/commonmark-spec-runner.mjs",
     "test:watch": "npm run build && vitest test/*.mjs",
-    "test:run": "vitest run test/*.mjs"
+    "test:run": "vitest run test/*.mjs",
+    "build:wasm": "node scripts/build-wasm.mjs"
   },
   "publishConfig": {
     "access": "public",
     "provenance": true
   },
   "devDependencies": {
+    "assemblyscript": "0.28.20",
     "esbuild": "^0.27.3"
   }
 }

@@ -42,6 +42,7 @@ const groups = [
   { title: "Parse and render", slug: "parse-render", icon: "code", description: "CommonMark input becomes safe, application-ready output.", features: [
     { title: "CommonMark parser", description: "A predictable Markdown parser with full CommonMark conformance coverage.", details: ["652 / 652 specification examples", "Block and inline parsing", "Node.js, browsers, and Workers"], to: "/guides/getting-started" },
     { title: "HTML rendering", description: "Render the AST with configurable elements and heading anchors.", details: ["Custom element output", "Generated heading IDs", "AST-first rendering API"], to: "/guides/elements" },
+    { title: "Optional WebAssembly", description: "Accelerate supported Markdown and HTML conversions with the same API.", details: ["Offline Node and browser builds", "Automatic JavaScript fallback"], to: "/guides/webassembly" },
     { title: "Reverse Markdown", description: "Convert semantic HTML back into readable Markdown.", details: ["HTML → Markdown conversion", "Preserve or drop unsupported HTML", "Browser selection and round trips"], to: "/guides/html-to-markdown" },
   ] },
   { title: "Extract structure", slug: "structure", icon: "tree", description: "Build navigation, search, previews, and metadata without parsing twice.", features: [

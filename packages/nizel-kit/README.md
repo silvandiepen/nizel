@@ -70,3 +70,9 @@ Load `nizel-kit.iife.js`, read `NizelKit.supportedPlugins` to build the settings
 ## License
 
 MIT
+
+## Optional Wasm kit
+
+Use `nizel-kit/wasm` with the same functions and options as the normal kit. To embed it in an offline WebView, use `dist/nizel-kit.wasm.iife.js` in place of the normal IIFE. Both expose `NizelKit` with the same methods. Use the matching Nizel release.
+
+The Wasm backend accelerates supported inputs in both directions. Formats or plugin hooks that need the existing parser take the JavaScript path. Standard kit imports and the normal browser IIFE use JavaScript. See the [Nizel package documentation](../nizel/README.md#optional-webassembly-renderer) for syntax support and fallback behavior.

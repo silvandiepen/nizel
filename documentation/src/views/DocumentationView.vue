@@ -22,7 +22,7 @@ const guideGroups = [
   { label: "Start", items: takeFrom(guideItems, ["index", "getting-started", "api", "result"]) },
   { label: "Process content", items: takeFrom(guideItems, ["pipeline", "elements", "frontmatter", "filters", "template", "toc"]) },
   { label: "Extend", items: takeFrom(guideItems, ["plugins", "presets", "transforms", "styling"]) },
-  { label: "Integrate", items: takeFrom(guideItems, ["nizel-format", "nizel-kit", "html-to-markdown"]) },
+  { label: "Integrate", items: takeFrom(guideItems, ["nizel-format", "nizel-kit", "html-to-markdown", "webassembly"]) },
   { label: "Quality", items: takeFrom(guideItems, ["safety", "testing", "benchmarks"]) },
 ];
 const pluginGroups = [

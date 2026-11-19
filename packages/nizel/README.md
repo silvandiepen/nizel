@@ -110,3 +110,24 @@ For ready-to-link content styling, use `nizel-style`. It ships scoped CSS for co
 ## License
 
 MIT
+
+## Optional WebAssembly renderer
+
+Import from `nizel/wasm` on Node or `nizel/browser/wasm` in a browser build. The opt-in entry points have the same exports and call signatures as the corresponding JavaScript entry points.
+
+```js
+import { useNizel, htmlToMarkdown } from 'nizel/wasm';
+
+const nizel = useNizel();
+const html = await nizel.html('A **bold** word.');
+const markdown = htmlToMarkdown(html);
+```
+
+The module is compiled lazily on the first eligible call. The binary is included in the package, so initialization needs no network request. Standard imports keep using JavaScript. Consumers can switch imports independently in the same process. To disable Wasm, switch back to the original entry point.
+
+- Markdown acceleration covers ASCII paragraphs, line breaks, uncomplicated ATX headings and IDs, and simple inline code and emphasis. HTML conversion covers the corresponding semantic markup, common named entities, and simple headings with matching IDs.
+- The backend falls back for unsupported syntax, custom rendering rules, AST transforms, reverse plugin handlers, or inputs over 1,048,576 UTF-16 code units. It also falls back when the runtime blocks compilation or a Wasm operation fails. Before-parse and after-render hooks run in either path.
+- AST, document, metadata, and text APIs continue to use the existing JS implementation. The browser wrapper accepts the same strings, nodes, ranges, and selections.
+- Run `npm run build --workspace nizel` to build the optional binary from `packages/nizel/assembly/renderer.ts`. The AssemblyScript compiler is a build dependency. The package verification suite compares both entry points, both conversion directions, missing-Wasm fallback, options, and plugin behavior against the stock implementation.
+
+For the offline WebView bundle, use `nizel-kit/wasm` or the `nizel-kit.wasm.iife.js` build from the matching `nizel-kit` release. Keep JavaScript fallback enabled and measure the HTML subset and plugin configuration you actually ship. On a site with a restrictive Content Security Policy, compilation must be permitted for the fast path to run.

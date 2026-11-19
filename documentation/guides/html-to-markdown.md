@@ -174,3 +174,5 @@ Markdown has no native representation for many HTML features:
 - table cell spans and alignment beyond basic GFM tables
 
 The default `preserve` mode keeps those constructs as raw HTML. The `drop` mode is intentionally lossy and best suited for plain-text publishing targets.
+
+The [WebAssembly guide](/guides/webassembly/index.html) covers opt-in imports, supported inputs, and fallback behavior.

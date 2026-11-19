@@ -1,11 +1,10 @@
 import {
   useBrowserNizel,
-  type NizelBrowserHtmlSource,
   type NizelBrowserMountTarget,
   type NizelBrowserProcessor,
-  type NizelHtmlToMarkdownOptions,
 } from 'nizel/browser';
 import type { NizelOptions, NizelPlugin } from 'nizel';
+import { createKitProcessor } from './processor.js';
 import { abbrPlugin, type AbbrPluginOptions } from 'nizel-plugin-abbr';
 import { alertPlugin, type AlertPluginOptions } from 'nizel-plugin-alert';
 import { autolinkPlugin, type AutolinkPluginOptions } from 'nizel-plugin-autolink';
@@ -284,38 +283,8 @@ export const createPlugins = (
  * Creates a browser/WebView processor with selected official plugins.
  */
 export function useNizelKit(options: NizelKitOptions = {}): NizelBrowserProcessor {
-  const { enabledPlugins, pluginOptions, plugins = [], ...nizelOptions } = options;
-  const resolvedPlugins = [...createPlugins(enabledPlugins, pluginOptions), ...plugins];
-  const processor = useBrowserNizel({
-    ...nizelOptions,
-    plugins: resolvedPlugins,
-  });
-
-  const htmlToMarkdown = processor.htmlToMarkdown.bind(processor);
-  processor.htmlToMarkdown = (source: NizelBrowserHtmlSource, reverseOptions?: NizelHtmlToMarkdownOptions) => {
-    return htmlToMarkdown(source, withKitHtmlToMarkdownPlugins(reverseOptions, resolvedPlugins));
-  };
-  const nodeToMarkdown = processor.nodeToMarkdown.bind(processor);
-  processor.nodeToMarkdown = (source: NizelBrowserHtmlSource, reverseOptions?: NizelHtmlToMarkdownOptions) => {
-    return nodeToMarkdown(source, withKitHtmlToMarkdownPlugins(reverseOptions, resolvedPlugins));
-  };
-  const selectionToMarkdown = processor.selectionToMarkdown.bind(processor);
-  processor.selectionToMarkdown = (selection?: Selection | null, reverseOptions?: NizelHtmlToMarkdownOptions) => {
-    return selectionToMarkdown(selection, withKitHtmlToMarkdownPlugins(reverseOptions, resolvedPlugins));
-  };
-
-  return processor;
+  return createKitProcessor(options, useBrowserNizel, createPlugins);
 }
-
-const withKitHtmlToMarkdownPlugins = (
-  options: NizelHtmlToMarkdownOptions | undefined,
-  plugins: NizelPlugin[],
-): NizelHtmlToMarkdownOptions => {
-  return {
-    ...options,
-    plugins: [...plugins, ...(options?.plugins ?? [])],
-  };
-};
 
 /**
  * Renders Markdown to HTML using selected official plugins.

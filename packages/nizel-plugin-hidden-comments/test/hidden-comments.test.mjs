@@ -70,3 +70,33 @@ test('injects css when explicitly enabled', async () => {
 test('exports the markdown transformer', () => {
   assert.match(transformMarkdownComments('A <!-- note --> B'), /data-nizel-hidden-comment/);
 });
+
+test('restores many standalone and inline comments in order', async () => {
+  const count = 600;
+  const markdown = Array.from({ length: count }, (_, index) =>
+    '<!-- standalone ' + index + ' -->\n\nBefore <!-- inline ' + index + ' -->after',
+  ).join('\n\n');
+  const html = await render(markdown);
+  const comments = [...html.matchAll(/&lt;!-- (standalone|inline) ([0-9]+) --&gt;/g)]
+    .map(([, placement, index]) => [placement, Number(index)]);
+  assert.deepEqual(comments, Array.from({ length: count }, (_, index) =>
+    [['standalone', index], ['inline', index]],
+  ).flat());
+  assert.doesNotMatch(html, /<p><span[^>]*>&lt;!-- standalone/);
+  assert.match(html, /<\/span>after<\/p>/);
+  assert.doesNotMatch(html, /NIZEL_HIDDEN_COMMENT_/);
+});
+
+test('leaves unrelated placeholders intact alongside real comments', async () => {
+  const lookalike = 'NIZEL_HIDDEN_COMMENT_999999_unrelated';
+  const html = await render(lookalike + '\n\n<!-- real comment -->');
+  assert.match(html, new RegExp('<p>' + lookalike + '</p>'));
+  assert.match(html, /&lt;!-- real comment --&gt;/);
+});
+
+test('preserves existing dollar substitution in comment output', () => {
+  const plugin = hiddenCommentsPlugin();
+  const token = plugin.hooks.beforeParse('<!-- $$ -->');
+  const html = plugin.hooks.afterRender('<p>' + token + '</p>');
+  assert.match(html, /&lt;!-- \$ --&gt;<\/span>$/);
+});

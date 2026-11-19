@@ -66,7 +66,7 @@ export function parseMarkdown(markdown: string, options: ParseOptions): NizelRoo
     ? expandLeadingTabsToLines(normalizedMarkdown)
     : normalizedMarkdown.split('\n');
   const { contentLines, references } =
-    normalizedMarkdown.includes('[') && hasPossibleReferenceDefinitionStart(normalizedMarkdown)
+    normalizedMarkdown.includes(']:') && hasPossibleReferenceDefinitionStart(normalizedMarkdown)
       ? extractReferenceDefinitions(lines)
       : { contentLines: lines, references: new Map() };
   const children = parseBlocks(contentLines, options, new Map<string, number>(), { references });
@@ -93,7 +93,8 @@ function parseBlocks(
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
-    if (!line.trim()) continue;
+    const trimmed = line.trim();
+    if (!trimmed) continue;
 
     if (!options.safe) {
       const htmlBlock = readHtmlBlock(lines, index);
@@ -104,7 +105,7 @@ function parseBlocks(
       }
     }
 
-    const customBlock = /^::([A-Za-z][\w-]*)(?:\s+(.*))?$/.exec(line.trim());
+    const customBlock = /^::([A-Za-z][\w-]*)(?:\s+(.*))?$/.exec(trimmed);
     if (customBlock) {
       const parsed = readCustomBlock(lines, index);
       const args = splitWords(customBlock[2] ?? '');
@@ -192,9 +193,8 @@ function parseBlocks(
     }
 
     const setext = lines[index + 1] && isSetextUnderline(lines[index + 1]);
-    if (setext && line.trim() && !isBlockStart(line, options, lines, index)) {
-      const source = line.trim();
-      const inlineChildren = parseInlineWithState(source, options, state);
+    if (setext && !isBlockStart(line, options, lines, index)) {
+      const inlineChildren = parseInlineWithState(trimmed, options, state);
       const text = stripInlineNodes(inlineChildren);
       const node: NizelHeadingNode = {
         type: 'heading',

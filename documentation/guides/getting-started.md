@@ -83,3 +83,5 @@ const {
 - [API Reference](/guides/api/index.html) — every option and return value
 - [Pipeline](/guides/pipeline/index.html) — how processing works internally
 - [Template Variables](/guides/template/index.html) — inject data into Markdown
+
+The [WebAssembly guide](/guides/webassembly/index.html) covers opt-in imports, supported inputs, and fallback behavior.

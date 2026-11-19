@@ -6,6 +6,14 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      scope:
+        description: Packages to publish
+        type: choice
+        options:
+          - all
+          - nizel-wasm
+        default: all
 
 concurrency:
   group: publish-${{ github.ref }}
@@ -37,7 +45,14 @@ jobs:
         run: npm ci
 
       - name: Version packages
-        run: node scripts/version-workspaces-for-publish.mjs
+        env:
+          RELEASE_SCOPE: ${{ inputs.scope || 'all' }}
+        run: |
+          if [ "$RELEASE_SCOPE" = nizel-wasm ]; then
+            node scripts/version-workspaces-for-publish.mjs nizel nizel-kit
+          else
+            node scripts/version-workspaces-for-publish.mjs
+          fi
 
       - name: Build
         run: npm run build
@@ -49,84 +64,111 @@ jobs:
         run: node scripts/publish-workspace-if-new.mjs nizel
 
       - name: Publish plugin-abbr
+        if: inputs.scope != 'nizel-wasm'
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-abbr
 
       - name: Publish plugin-autolink
+        if: inputs.scope != 'nizel-wasm'
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-autolink
 
       - name: Publish plugin-badge
+        if: inputs.scope != 'nizel-wasm'
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-badge
 
       - name: Publish plugin-code-copy
+        if: inputs.scope != 'nizel-wasm'
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-code-copy
 
       - name: Publish plugin-citations
+        if: inputs.scope != 'nizel-wasm'
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-citations
 
       - name: Publish plugin-shiki
+        if: inputs.scope != 'nizel-wasm'
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-shiki
 
       - name: Publish plugin-alert
+        if: inputs.scope != 'nizel-wasm'
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-alert
 
       - name: Publish plugin-deflist
+        if: inputs.scope != 'nizel-wasm'
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-deflist
 
       - name: Publish plugin-details
+        if: inputs.scope != 'nizel-wasm'
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-details
 
       - name: Publish plugin-diagrams
+        if: inputs.scope != 'nizel-wasm'
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-diagrams
 
       - name: Publish plugin-emoji
+        if: inputs.scope != 'nizel-wasm'
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-emoji
 
       - name: Publish plugin-footnotes
+        if: inputs.scope != 'nizel-wasm'
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-footnotes
 
       - name: Publish plugin-frontmatter-ui
+        if: inputs.scope != 'nizel-wasm'
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-frontmatter-ui
 
       - name: Publish plugin-gfm
+        if: inputs.scope != 'nizel-wasm'
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-gfm
 
       - name: Publish plugin-heading-anchors
+        if: inputs.scope != 'nizel-wasm'
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-heading-anchors
 
       - name: Publish plugin-hidden-comments
+        if: inputs.scope != 'nizel-wasm'
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-hidden-comments
 
       - name: Publish plugin-kbd
+        if: inputs.scope != 'nizel-wasm'
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-kbd
 
       - name: Publish plugin-math
+        if: inputs.scope != 'nizel-wasm'
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-math
 
       - name: Publish plugin-media
+        if: inputs.scope != 'nizel-wasm'
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-media
 
       - name: Publish plugin-open-icon
+        if: inputs.scope != 'nizel-wasm'
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-open-icon
 
       - name: Publish plugin-print
+        if: inputs.scope != 'nizel-wasm'
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-print
 
       - name: Publish plugin-sanitize
+        if: inputs.scope != 'nizel-wasm'
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-sanitize
 
       - name: Publish plugin-task-list
+        if: inputs.scope != 'nizel-wasm'
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-task-list
 
       - name: Publish plugin-toc
+        if: inputs.scope != 'nizel-wasm'
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-toc
 
       - name: Publish plugin-typography
+        if: inputs.scope != 'nizel-wasm'
         run: node scripts/publish-workspace-if-new.mjs nizel-plugin-typography
 
       - name: Publish nizel-format
+        if: inputs.scope != 'nizel-wasm'
         run: node scripts/publish-workspace-if-new.mjs nizel-format
 
       - name: Publish nizel-style
+        if: inputs.scope != 'nizel-wasm'
         run: node scripts/publish-workspace-if-new.mjs nizel-style
 
       - name: Publish nizel-kit

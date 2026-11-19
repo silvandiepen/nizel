@@ -1,17 +1,21 @@
 import { slugCase } from '@sil/case';
 
+const htmlEntities: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+};
+
+/** Looks up the HTML entity for a matched character. */
+const replaceHtmlEntity = (character: string): string => htmlEntities[character];
+
 /**
  * Escapes a value for safe HTML text or attribute output.
  */
 export const escapeHtml = (value: unknown): string => {
   const text = String(value);
-  return /[&<>"]/.test(text)
-    ? text
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-    : text;
+  return /[&<>"]/.test(text) ? text.replace(/[&<>"]/g, replaceHtmlEntity) : text;
 };
 
 /**
