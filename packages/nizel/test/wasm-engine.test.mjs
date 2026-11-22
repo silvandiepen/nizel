@@ -62,7 +62,9 @@ test('engine never differs from JavaScript on 20,000 fuzzed documents', async ()
     cwd: new URL('..', import.meta.url),
     encoding: 'utf8',
   });
-  assert.match(output, / 0 differences/, output);
+  // Forward, reverse, decoded AST and hook-path counts must all be zero.
+  assert.doesNotMatch(output, /[1-9]\d* differences/, output);
+  assert.equal(output.match(/ 0 differences/g)?.length, 4, output);
 }, 120000);
 
 test('engine declines the blockquote input that never terminates in JavaScript (NIZEL-002)', async () => {

@@ -36,7 +36,7 @@ fn render_block(block: &Block, out: &mut String) {
         }
         Block::ThematicBreak => out.push_str("<hr />"),
         Block::Html { value } => out.push_str(value),
-        Block::Code { code, lang, filename, highlight_lines } => {
+        Block::Code { code, lang, filename, highlight_lines, .. } => {
             out.push_str("<pre><code");
             if let Some(lang) = lang.as_deref().filter(|l| !l.is_empty()) {
                 attr(out, "class", &format!("language-{lang}"));
@@ -81,7 +81,7 @@ fn render_block(block: &Block, out: &mut String) {
             }
             out.push_str("</tbody></table>");
         }
-        Block::CustomBlock { name, children } => {
+        Block::CustomBlock { name, children, .. } => {
             out.push_str("<div");
             attr(out, "data-nizel-block", name);
             out.push('>');
@@ -186,7 +186,7 @@ fn render_inline(nodes: &[Inline], out: &mut String) {
                 }
                 out.push_str(" />");
             }
-            Inline::Link { href, title, children } => {
+            Inline::Link { href, title, children, .. } => {
                 out.push_str("<a");
                 // `node.href?.toLowerCase().trim().startsWith('javascript:')` drops the href.
                 if !crate::js::trim(&href.to_lowercase()).starts_with("javascript:") {

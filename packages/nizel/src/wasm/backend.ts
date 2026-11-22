@@ -1,6 +1,7 @@
 import engineEncoded from './engine-bytes.js';
 import type { NizelHtmlToMarkdownOptions } from '../html-to-markdown.js';
-import type { NizelOptions, NizelPlugin } from '../types.js';
+import type { NizelOptions, NizelPlugin, NizelRootNode } from '../types.js';
+import { decodeAst } from './ast-codec.js';
 
 // The Rust engine (packages/nizel/engine): Nizel's parser, renderer and
 // HTML-to-Markdown converter ported behaviour for behaviour.
@@ -9,6 +10,7 @@ type Engine = {
   input: (length: number) => number;
   output: () => number;
   render: (length: number, flags: number) => number;
+  parse: (length: number, flags: number) => number;
   reverse: (length: number, flags: number) => number;
 };
 
@@ -29,21 +31,49 @@ function getEngine(): Engine | null {
   return cachedEngine;
 }
 
+/** Copies `source` into the engine and runs `direction`; the output length, or undefined. */
+function call(engine: Engine, direction: 'render' | 'parse' | 'reverse', source: string, flags: number): number | undefined {
+  const capacity = source.length * 3;
+  const at = engine.input(capacity);
+  const { written } = encoder.encodeInto(source, new Uint8Array(engine.memory.buffer, at, capacity));
+  const length = engine[direction](written, flags);
+  return length < 0 ? undefined : length;
+}
+
 /** Runs one conversion; undefined when JavaScript must produce the result. */
 function run(direction: 'render' | 'reverse', source: string, flags: number): string | undefined {
   if (source.length > maximumSourceLength || !isWellFormed(source)) return undefined;
   const engine = getEngine();
   if (!engine) return undefined;
   try {
-    const capacity = source.length * 3;
-    const at = engine.input(capacity);
-    const { written } = encoder.encodeInto(source, new Uint8Array(engine.memory.buffer, at, capacity));
-    const length = engine[direction](written, flags);
-    if (length < 0) return undefined;
-    return decoder.decode(new Uint8Array(engine.memory.buffer, engine.output(), length));
+    const length = call(engine, direction, source, flags);
+    return length === undefined ? undefined : decoder.decode(new Uint8Array(engine.memory.buffer, engine.output(), length));
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Parses prepared Markdown with the engine into the AST `parseMarkdown`
+ * builds, calling custom block `parse` definitions as it does. Used when
+ * plugins, transforms, element rules or block renderers run in JavaScript.
+ */
+export function parseWasm(source: string, options: NizelOptions): NizelRootNode | undefined {
+  if (source.length > maximumSourceLength || !isWellFormed(source)) return undefined;
+  const engine = getEngine();
+  if (!engine) return undefined;
+  let bytes: Uint8Array;
+  try {
+    const length = call(engine, 'parse', source, renderFlags(options));
+    if (length === undefined) return undefined;
+    bytes = new Uint8Array(engine.memory.buffer, engine.output(), length).slice();
+  } catch {
+    return undefined;
+  }
+  const blocks = options.blocks ?? {};
+  return decodeAst(bytes, (node, content) => {
+    node.value = blocks[node.name]?.parse?.({ name: node.name, args: node.args, props: node.props, content });
+  });
 }
 
 /** Option bits shared with `engine/src/lib.rs`. */
@@ -58,7 +88,7 @@ function renderFlags(options: NizelOptions): number {
 
 /** Renders prepared Markdown with the engine; undefined means JavaScript renders it. */
 export function renderWasm(source: string, options: NizelOptions): string | undefined {
-  // Not ported to the engine yet: these still render in JavaScript.
+  // These parse with the engine (parseWasm) and render through the JavaScript renderer.
   if (options.plugins?.some(plugin => blocksRender(plugin, source)) || options.transforms?.length ||
       Object.keys(options.blocks ?? {}).length || Object.keys(options.elements ?? {}).length ||
       options.unwrapStandaloneImages || hasAutolinkAttributes(options.autolinks)) return undefined;

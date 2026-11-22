@@ -49,7 +49,7 @@ run); "mismatch" means it produced different bytes, which is a bug.
 | 2. GFM cases | not built yet |
 | 3. Nizel suite through Wasm entry points | 28/28 suites, 424 tests passed (features not yet in the engine still fall back to JavaScript; see gate 6) |
 | 4. nizel-kit parity, every profile | not built yet |
-| 5. Differential fuzzer (seed 7) | forward: 200000 generated, 199624 compared, 376 declined, 0 differences; reverse: 380461 compared, 18787 deferred to JavaScript, 0 differences |
+| 5. Differential fuzzer (seed 7) | forward: 200000 generated, 199624 compared, 376 declined, 0 differences; reverse: 380461 compared, 18787 deferred to JavaScript, 0 differences; ast: 199624 compared, 0 differences; hooks through nizel/wasm: 49894 compared, 0 differences |
 | 6. Zero syntax fallbacks | not met (engine declines unported syntax) |
 | 7. Lezin iPhone tests | not run |
 | Speed (≥5x, cold start, size) | forward measured below (raw engine, not yet behind the entry points) |
@@ -58,24 +58,24 @@ run); "mismatch" means it produced different bytes, which is a bug.
 
 | Fixture | Bytes | Identical | JavaScript ms | Engine ms | Speedup |
 | --- | --- | --- | --- | --- | --- |
-| commonmark | 44210 | yes | 21.500 | 3.525 | 6.1x |
-| gfm | 559 | yes | 0.151 | 0.027 | 5.6x |
-| readme | 997 | yes | 0.062 | 0.029 | 2.1x |
-| large | 2093 | yes | 0.601 | 0.099 | 6.1x |
-| code-heavy | 700 | yes | 0.025 | 0.013 | 2.0x |
-| 46 KB GFM | 45838 | yes | 13.003 | 2.695 | 4.8x |
-| emphasis draft | 56800 | yes | 14.735 | 3.771 | 3.9x |
-| plain draft | 54600 | yes | 1.426 | 1.110 | 1.3x |
+| commonmark | 44210 | yes | 31.478 | 12.305 | 2.6x |
+| gfm | 559 | yes | 0.216 | 0.021 | 10.2x |
+| readme | 997 | yes | 0.061 | 0.023 | 2.6x |
+| large | 2093 | yes | 1.228 | 0.135 | 9.1x |
+| code-heavy | 700 | yes | 0.026 | 0.013 | 2.0x |
+| 46 KB GFM | 45838 | yes | 5.384 | 2.393 | 2.2x |
+| emphasis draft | 56800 | yes | 22.231 | 11.479 | 1.9x |
+| plain draft | 54600 | yes | 1.484 | 1.067 | 1.4x |
 
 ## Speed: reverse, raw engine vs `htmlToMarkdown` (Node, warm median)
 
 | Fixture (as HTML) | Bytes | Identical | JavaScript ms | Engine ms | Speedup |
 | --- | --- | --- | --- | --- | --- |
-| commonmark | 63766 | yes | 22.734 | 3.837 | 5.9x |
-| gfm | 921 | yes | 0.119 | 0.052 | 2.3x |
-| readme | 1423 | yes | 0.108 | 0.062 | 1.7x |
-| large | 3008 | yes | 0.218 | 0.162 | 1.3x |
-| code-heavy | 992 | yes | 0.046 | 0.029 | 1.6x |
-| 46 KB GFM | 76073 | yes | 10.351 | 5.003 | 2.1x |
-| emphasis draft | 77599 | yes | 13.480 | 4.005 | 3.4x |
-| plain draft | 62999 | yes | 5.525 | 2.747 | 2.0x |
+| commonmark | 63766 | yes | 15.144 | 3.104 | 4.9x |
+| gfm | 921 | yes | 0.123 | 0.061 | 2.0x |
+| readme | 1423 | yes | 0.103 | 0.074 | 1.4x |
+| large | 3008 | yes | 0.636 | 0.172 | 3.7x |
+| code-heavy | 992 | yes | 0.052 | 0.036 | 1.5x |
+| 46 KB GFM | 76073 | yes | 18.250 | 4.633 | 3.9x |
+| emphasis draft | 77599 | yes | 30.606 | 5.280 | 5.8x |
+| plain draft | 62999 | yes | 5.338 | 3.098 | 1.7x |

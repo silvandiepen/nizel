@@ -15,6 +15,7 @@
 pub mod ast;
 pub mod backtrack;
 pub mod block;
+pub mod codec;
 pub mod common;
 pub mod emphasis;
 pub mod html;
@@ -66,6 +67,27 @@ pub extern "C" fn render(len: usize, flags: u32) -> i32 {
     convert(len, |source, out| render_markdown(source, flags, out))
 }
 
+/// Markdown → binary AST (`codec.rs`), for documents whose plugins,
+/// transforms, element rules or block definitions run in JavaScript.
+#[unsafe(no_mangle)]
+pub extern "C" fn parse(len: usize, flags: u32) -> i32 {
+    INPUT.with(|input| {
+        let input = input.borrow();
+        let Ok(source) = std::str::from_utf8(&input[..len.min(input.len())]) else {
+            return status::INVALID_UTF8;
+        };
+        let options = parse_options(flags);
+        match block::parse_markdown(source, &options) {
+            Ok(blocks) => OUTPUT.with(|output| {
+                let mut output = output.borrow_mut();
+                *output = codec::encode(&blocks);
+                output.len() as i32
+            }),
+            Err(code) => code,
+        }
+    })
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn reverse(len: usize, flags: u32) -> i32 {
     convert(len, |source, out| reverse_html(source, flags, out))
@@ -90,15 +112,18 @@ fn convert(len: usize, run: impl FnOnce(&str, &mut String) -> Result<(), i32>) -
     })
 }
 
-/// Markdown → HTML. Mirrors `renderHtml(parseMarkdown(source, options))`.
-pub fn render_markdown(source: &str, flags: u32, out: &mut String) -> Result<(), i32> {
-    let options = block::Options {
+fn parse_options(flags: u32) -> block::Options {
+    block::Options {
         anchors: flags & flags::ANCHORS != 0,
         autolinks: flags & flags::AUTOLINKS != 0,
         safe: flags & flags::SAFE != 0,
         slug_classic: flags & flags::SLUG_CLASSIC != 0,
-    };
-    let blocks = block::parse_markdown(source, &options)?;
+    }
+}
+
+/// Markdown → HTML. Mirrors `renderHtml(parseMarkdown(source, options))`.
+pub fn render_markdown(source: &str, flags: u32, out: &mut String) -> Result<(), i32> {
+    let blocks = block::parse_markdown(source, &parse_options(flags))?;
     render::render_blocks(&blocks, out);
     Ok(())
 }

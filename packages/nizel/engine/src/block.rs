@@ -116,10 +116,11 @@ fn parse_blocks(lines: &[String], ctx: &Ctx, seen: &mut HashMap<String, usize>) 
                 continue;
             }
         }
-        if let Some(name) = custom_block_name(trimmed) {
-            let (content, end) = read_custom_block(lines, index);
+        if let Some((name, args)) = custom_block_name(trimmed) {
+            let (content, end, props) = read_custom_block(lines, index);
             let content_lines: Vec<String> = content.split('\n').map(str::to_string).collect();
-            children.push(Block::CustomBlock { name: name.to_string(), children: parse_blocks(&content_lines, ctx, seen)? });
+            let children_blocks = parse_blocks(&content_lines, ctx, seen)?;
+            children.push(Block::CustomBlock { name: name.to_string(), args: split_words(args), props, content, children: children_blocks });
             index = end + 1;
             continue;
         }
@@ -138,6 +139,8 @@ fn parse_blocks(lines: &[String], ctx: &Ctx, seen: &mut HashMap<String, usize>) 
                 let (filename, highlight_lines) = parse_code_meta(&info.meta);
                 children.push(Block::Code {
                     code: if code.is_empty() { String::new() } else { format!("{}\n", code.join("\n")) },
+                    fenced: true,
+                    meta: (!info.meta.is_empty()).then(|| info.meta.clone()),
                     lang: info.lang,
                     filename,
                     highlight_lines,
@@ -159,7 +162,9 @@ fn parse_blocks(lines: &[String], ctx: &Ctx, seen: &mut HashMap<String, usize>) 
             }
             children.push(Block::Code {
                 code: if code.is_empty() { String::new() } else { format!("{}\n", code.join("\n")) },
+                fenced: false,
                 lang: None,
+                meta: None,
                 filename: None,
                 highlight_lines: None,
             });
@@ -584,8 +589,8 @@ fn normalize_paragraph_source(lines: &[String]) -> String {
     joined.trim_end_matches([' ', '\t']).to_string()
 }
 
-/// `/^::([A-Za-z][\w-]*)(?:\s+(.*))?$/` on the trimmed line → the name.
-fn custom_block_name(trimmed: &str) -> Option<&str> {
+/// `/^::([A-Za-z][\w-]*)(?:\s+(.*))?$/` on the trimmed line → (name, args source).
+fn custom_block_name(trimmed: &str) -> Option<(&str, &str)> {
     let rest = trimmed.strip_prefix("::")?;
     if !rest.bytes().next().is_some_and(|b| b.is_ascii_alphabetic()) {
         return None;
@@ -594,22 +599,77 @@ fn custom_block_name(trimmed: &str) -> Option<&str> {
     let after = &rest[name..];
     let matches = after.is_empty()
         || (after.chars().next().is_some_and(js::is_space) && js::trim_start(after).chars().all(js::is_dot));
-    matches.then_some(&rest[..name])
+    matches.then(|| (&rest[..name], js::trim_start(after)))
 }
 
-/// `readCustomBlock` → (content, end index).
-fn read_custom_block(lines: &[String], start: usize) -> (String, usize) {
+/// `splitWords`.
+fn split_words(source: &str) -> Vec<String> {
+    let trimmed = js::trim(source);
+    if trimmed.is_empty() {
+        return Vec::new();
+    }
+    trimmed.split(js::is_space).filter(|w| !w.is_empty()).map(str::to_string).collect()
+}
+
+/// `parseProps`: `/^([A-Za-z0-9_-]+):\s*(.*)$/` per trimmed line; later keys overwrite.
+fn parse_props(lines: &[String]) -> Vec<(String, crate::ast::Prop)> {
+    let mut props: Vec<(String, crate::ast::Prop)> = Vec::new();
+    for line in lines {
+        let trimmed = js::trim(line);
+        let key = trimmed.bytes().take_while(|b| b.is_ascii_alphanumeric() || *b == b'_' || *b == b'-').count();
+        if key == 0 || !trimmed[key..].starts_with(':') {
+            continue;
+        }
+        let value = js::trim_start(&trimmed[key + 1..]);
+        if !value.chars().all(js::is_dot) {
+            continue;
+        }
+        let prop = parse_primitive(value);
+        match props.iter_mut().find(|(name, _)| name == &trimmed[..key]) {
+            Some(existing) => existing.1 = prop,
+            None => props.push((trimmed[..key].to_string(), prop)),
+        }
+    }
+    props
+}
+
+/// `parsePrimitive`.
+fn parse_primitive(value: &str) -> crate::ast::Prop {
+    use crate::ast::Prop;
+    let trimmed = js::trim(value);
+    match trimmed {
+        "true" => return Prop::Bool(true),
+        "false" => return Prop::Bool(false),
+        "null" => return Prop::Null,
+        _ => {}
+    }
+    let digits = trimmed.strip_prefix('-').unwrap_or(trimmed);
+    let int = digits.bytes().take_while(u8::is_ascii_digit).count();
+    let numeric = int > 0
+        && (int == digits.len()
+            || (digits.as_bytes()[int] == b'.' && digits.len() > int + 1 && digits[int + 1..].bytes().all(|b| b.is_ascii_digit())));
+    if numeric {
+        return Prop::Number(jsnum::number(trimmed));
+    }
+    // `.replace(/^["']|["']$/g, '')`
+    let start = usize::from(trimmed.starts_with(['"', '\'']));
+    let end = if trimmed.len() > start && trimmed.ends_with(['"', '\'']) { trimmed.len() - 1 } else { trimmed.len() };
+    Prop::Text(trimmed[start..end].to_string())
+}
+
+/// `readCustomBlock` → (content, end index, props).
+fn read_custom_block(lines: &[String], start: usize) -> (String, usize, Vec<(String, crate::ast::Prop)>) {
     let find = |from: usize| (from..lines.len()).find(|&i| js::trim(&lines[i]) == "::");
     let Some(first) = find(start + 1) else {
-        return (lines[start + 1..].join("\n"), lines.len() - 1);
+        return (lines[start + 1..].join("\n"), lines.len() - 1, Vec::new());
     };
     let before = &lines[start + 1..first];
     if !before.is_empty() && before.iter().all(|line| is_prop_or_blank(line)) {
         let closing = find(first + 1);
         let content = lines[first + 1..closing.unwrap_or(lines.len())].join("\n");
-        return (content, closing.unwrap_or(lines.len() - 1));
+        return (content, closing.unwrap_or(lines.len() - 1), parse_props(before));
     }
-    (before.join("\n"), first)
+    (before.join("\n"), first, Vec::new())
 }
 
 /// `isPropOrBlank`: blank, or `/^[A-Za-z0-9_-]+:\s*.*$/` on the trimmed line.

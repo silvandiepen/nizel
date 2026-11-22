@@ -97,6 +97,8 @@ fn parse_inline_with_state(source: &str, ctx: &Ctx, extract_nested_links: bool) 
                     Some(reference) => nodes.push(Inline::Link {
                         href: reference.href.clone(),
                         title: reference.title.clone(),
+                        has_title: true,
+                        external: is_external_href(&reference.href),
                         children: parse_inline_with_state(slice(text), ctx, true)?,
                     }),
                     None => nodes.push(Inline::text(decode_string_content(matched))),
@@ -107,18 +109,24 @@ fn parse_inline_with_state(source: &str, ctx: &Ctx, extract_nested_links: bool) 
                 src: normalize_href(&decode_string_content(normalize_inline_destination(slice(href)))),
                 title: title.map(|t| decode_string_content(slice(t))),
             }),
-            Token::InlineLink { text, href, title } => nodes.push(Inline::Link {
-                href: normalize_href(&decode_string_content(normalize_inline_destination(slice(href)))),
-                title: title.map(|t| decode_string_content(slice(t))),
-                children: parse_inline_with_state(slice(text), ctx, true)?,
-            }),
+            Token::InlineLink { text, href, title } => {
+                let href = normalize_href(&decode_string_content(normalize_inline_destination(slice(href))));
+                nodes.push(Inline::Link {
+                    external: is_external_href(&href),
+                    href,
+                    title: title.map(|t| decode_string_content(slice(t))),
+                    has_title: true,
+                    children: parse_inline_with_state(slice(text), ctx, true)?,
+                });
+            }
             Token::AngleUrl => {
                 let url = &matched[1..matched.len() - 1];
-                nodes.push(Inline::Link { href: normalize_href(url), title: None, children: vec![Inline::text(url)] });
+                let href = normalize_href(url);
+                nodes.push(Inline::Link { external: is_external_href(&href), href, title: None, has_title: false, children: vec![Inline::text(url)] });
             }
             Token::AngleEmail => {
                 let email = &matched[1..matched.len() - 1];
-                nodes.push(Inline::Link { href: format!("mailto:{email}"), title: None, children: vec![Inline::text(email)] });
+                nodes.push(Inline::Link { href: format!("mailto:{email}"), title: None, has_title: false, external: false, children: vec![Inline::text(email)] });
             }
             Token::ShortcutImage { text } => {
                 let alt = decode_string_content(slice(text));
@@ -137,6 +145,8 @@ fn parse_inline_with_state(source: &str, ctx: &Ctx, extract_nested_links: bool) 
                     Some(reference) => nodes.push(Inline::Link {
                         href: reference.href.clone(),
                         title: reference.title.clone(),
+                        has_title: true,
+                        external: is_external_href(&reference.href),
                         children: parse_inline_with_state(&label, ctx, true)?,
                     }),
                     None => nodes.push(Inline::text(decode_string_content(matched))),
@@ -145,13 +155,13 @@ fn parse_inline_with_state(source: &str, ctx: &Ctx, extract_nested_links: bool) 
             Token::Delete => nodes.push(Inline::Delete { children: parse_inline_with_state(&matched[2..matched.len() - 2], ctx, true)? }),
             Token::BareUrl if options.autolinks => {
                 let href = trim_trailing_punctuation(matched);
-                nodes.push(Inline::Link { href: href.to_string(), title: None, children: vec![Inline::text(href)] });
+                nodes.push(Inline::Link { href: href.to_string(), title: None, has_title: false, external: true, children: vec![Inline::text(href)] });
                 if href.len() < matched.len() {
                     nodes.push(Inline::text(&matched[href.len()..]));
                 }
             }
             Token::BareEmail if options.autolinks => {
-                nodes.push(Inline::Link { href: format!("mailto:{matched}"), title: None, children: vec![Inline::text(matched)] });
+                nodes.push(Inline::Link { href: format!("mailto:{matched}"), title: None, has_title: false, external: false, children: vec![Inline::text(matched)] });
             }
             Token::BareUrl | Token::BareEmail => nodes.push(Inline::text(matched)),
         }
@@ -220,7 +230,7 @@ fn scan_balanced_inline_links(source: &str, ctx: &Ctx) -> Result<Option<Vec<Inli
         if image {
             nodes.push(Inline::Image { alt: strip_inline_markdown(label, ctx)?, src: href, title });
         } else {
-            nodes.push(Inline::Link { href, title, children: parse_inline_with_state(label, ctx, false)? });
+            nodes.push(Inline::Link { external: is_external_href(&href), href, title, has_title: true, children: parse_inline_with_state(label, ctx, false)? });
         }
         found = true;
         cursor = destination.end + 1;
@@ -233,6 +243,12 @@ fn scan_balanced_inline_links(source: &str, ctx: &Ctx) -> Result<Option<Vec<Inli
         nodes.extend(parse_inline_with_state(&source[cursor..], ctx, false)?);
     }
     Ok(Some(nodes))
+}
+
+/// `isExternalHref`: `/^(?:https?:)?\/\//`.
+pub fn is_external_href(href: &str) -> bool {
+    let rest = href.strip_prefix("https:").or_else(|| href.strip_prefix("http:")).unwrap_or(href);
+    rest.starts_with("//")
 }
 
 /// `normalizeInlineDestination`.

@@ -4,7 +4,11 @@
 //
 //   node scripts/wasm-fuzz.mjs [--count 200000] [--seed 1] [--show 5]
 import { readFile } from 'node:fs/promises';
+import { isDeepStrictEqual } from 'node:util';
 import * as stock from '../dist/index.js';
+import * as wasmEntry from '../dist/wasm.js';
+import { parseMarkdown } from '../dist/parse.js';
+import { parseWasm } from '../dist/wasm/backend.js';
 import { extractFrontmatter } from '../dist/frontmatter.js';
 
 const args = process.argv.slice(2);
@@ -108,6 +112,24 @@ const profiles = [
   { options: { anchors: false, autolinks: false, frontmatter: false, safe: false }, flags: 0 },
 ];
 
+// Options whose features run around the engine's AST: element rules, block
+// definitions (parse + render), transforms, an afterParse plugin, standalone
+// image unwrapping and autolink attributes.
+const hookOptions = {
+  elements: { p: { class: 'para' }, a: (node) => ({ attrs: { 'data-ext': String(node.external) } }) },
+  blocks: { note: { parse: ({ args, props, content }) => ({ args, props, length: content.length }), formats: { html: (node, ctx) => `<aside data-v="${ctx.escape(JSON.stringify(node.value))}">${ctx.render(node.children)}</aside>` } } },
+  transforms: [(ast) => ({ ...ast, children: [...ast.children, { type: 'paragraph', children: [{ type: 'text', value: 'end' }] }] })],
+  plugins: [{ name: 'count', hooks: { afterParse: (ast) => { ast.children.unshift({ type: 'html', value: `<!--${ast.children.length}-->` }); } } }],
+  unwrapStandaloneImages: true,
+  autolinks: { target: '_blank', rel: 'noopener' },
+};
+const hookStock = stock.useNizel(hookOptions);
+const hookWasm = wasmEntry.useNizel(hookOptions);
+let astCompared = 0;
+const astDiffs = [];
+let hookCompared = 0;
+const hookDiffs = [];
+
 let compared = 0;
 let declined = 0;
 const diffs = [];
@@ -128,6 +150,23 @@ for (let i = 0; i < count; i += 1) {
   const expected = await stock.useNizel(profile.options).html(markdown);
   if (actual !== expected) diffs.push({ markdown, flags: profile.flags, expected, actual });
   checkReverse(expected, flagsFor[i % 2]);
+
+  // The decoded engine AST must be exactly the JavaScript parser's.
+  const parseOptions = profile.flags & 4
+    ? { anchors: true, autolinks: { enabled: true }, blocks: {}, safe: true, slugStyle: undefined }
+    : { anchors: false, autolinks: false, blocks: {}, safe: false, slugStyle: undefined };
+  const decoded = parseWasm(source, profile.flags & 4 ? {} : { anchors: false, autolinks: false, safe: false });
+  if (decoded !== undefined) {
+    astCompared += 1;
+    const reference = parseMarkdown(source, parseOptions);
+    if (!isDeepStrictEqual(decoded, reference)) astDiffs.push({ markdown: source, expected: reference, actual: decoded });
+  }
+  if (i % 4 === 0) {
+    hookCompared += 1;
+    const viaWasm = await hookWasm.html(markdown);
+    const viaJs = await hookStock.html(markdown);
+    if (viaWasm !== viaJs) hookDiffs.push({ markdown, expected: viaJs, actual: viaWasm });
+  }
   let soup = '';
   const soupLength = 1 + random(16);
   for (let j = 0; j < soupLength; j += 1) soup += pick(htmlAtoms);
@@ -136,6 +175,12 @@ for (let i = 0; i < count; i += 1) {
 
 console.log(`fuzz: ${count} generated, ${compared} compared, ${declined} declined, ${diffs.length} differences`);
 console.log(`reverse: ${reverseCompared} compared, ${reverseDeferred} deferred to JavaScript, ${reverseDiffs.length} differences`);
+console.log(`ast: ${astCompared} compared, ${astDiffs.length} differences; hooks through nizel/wasm: ${hookCompared} compared, ${hookDiffs.length} differences`);
+for (const diff of [...astDiffs, ...hookDiffs].slice(0, show)) {
+  console.log('\nmarkdown:', JSON.stringify(diff.markdown));
+  console.log('expected:', JSON.stringify(diff.expected).slice(0, 600));
+  console.log('actual:  ', JSON.stringify(diff.actual).slice(0, 600));
+}
 for (const diff of reverseDiffs.slice(0, show)) {
   console.log('\nhtml:    ', JSON.stringify(diff.html), 'flags', diff.flags);
   console.log('expected:', JSON.stringify(diff.expected));
@@ -147,4 +192,4 @@ for (const diff of diffs.slice(0, show)) {
   console.log('expected:', JSON.stringify(diff.expected));
   console.log('actual:  ', JSON.stringify(diff.actual));
 }
-process.exitCode = diffs.length === 0 && reverseDiffs.length === 0 ? 0 : 1;
+process.exitCode = diffs.length + reverseDiffs.length + astDiffs.length + hookDiffs.length === 0 ? 0 : 1;
