@@ -52,6 +52,42 @@ fn render_block(block: &Block, out: &mut String) {
             escape_html_into(out, code);
             out.push_str("</code></pre>");
         }
+        Block::Table { align, rows } => {
+            out.push_str("<table>");
+            let row = |out: &mut String, cells: &[Vec<Inline>], tag: &str| {
+                out.push_str("<tr>");
+                for (index, cell) in cells.iter().enumerate() {
+                    out.push('<');
+                    out.push_str(tag);
+                    if let Some(Some(value)) = align.get(index) {
+                        attr(out, "align", value);
+                    }
+                    out.push('>');
+                    render_inline(cell, out);
+                    out.push_str("</");
+                    out.push_str(tag);
+                    out.push('>');
+                }
+                out.push_str("</tr>");
+            };
+            if let Some(header) = rows.first() {
+                out.push_str("<thead>");
+                row(out, header, "th");
+                out.push_str("</thead>");
+            }
+            out.push_str("<tbody>");
+            for body in rows.iter().skip(1) {
+                row(out, body, "td");
+            }
+            out.push_str("</tbody></table>");
+        }
+        Block::CustomBlock { name, children } => {
+            out.push_str("<div");
+            attr(out, "data-nizel-block", name);
+            out.push('>');
+            render_blocks(children, out);
+            out.push_str("</div>");
+        }
         Block::Blockquote { children } => {
             out.push_str("<blockquote>\n");
             if !children.is_empty() {

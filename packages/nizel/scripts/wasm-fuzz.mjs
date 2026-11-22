@@ -15,6 +15,8 @@ const option = (name, fallback) => {
 const count = option('--count', 200000);
 let seed = option('--seed', 1) >>> 0;
 const show = option('--show', 5);
+const showDeclined = option('--declined', 0);
+const declinedSamples = [];
 
 const bytes = await readFile(new URL('../dist/wasm/engine.wasm', import.meta.url));
 const { instance } = await WebAssembly.instantiate(bytes);
@@ -26,8 +28,10 @@ const engineRender = (source, flags) => {
   const at = input(encoded.length);
   new Uint8Array(memory.buffer, at, encoded.length).set(encoded);
   const length = render(encoded.length, flags);
+  lastStatus = length;
   return length < 0 ? undefined : decoder.decode(new Uint8Array(memory.buffer, output(), length));
 };
+let lastStatus = 0;
 
 const random = (n) => {
   seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
@@ -53,6 +57,8 @@ const atoms = [
   '\n    code\n', '\n\tcode\n', '\n> ', '\n>> ', '\n > > ', '\n>\t', '\n- ', '\n  - ', '\n    - ', '\n* ', '\n+ ', '\n1. ',
   '\n2. ', '\n1) ', '\n10. ', '\n- [ ] ', '\n- [x] ', '\n* [X] ', '\n-\t', '\n1.\t', '\n   ', '\n\n- ', '\n\n  ', '\n> - ',
   '\n- > ', '\n- # h', '\n---\n', '\n***\n', '\n===\n', '\nlazy', '\n  indented', '\n      deep',
+  '\n| a | b |\n|---|---|\n', '\n|:-|-:|:-:|\n', '\n| --- | --- |\n', '\nx|y\n', '| c [r] |', '\n|\n', '||',
+  '\n::note\n', '\n::tip a "b" c\n', '\n::\n', '\nkey: value\n', '\nn-1: 2\n', '\n::x-y\n', '\n::9bad\n',
 ];
 
 const profiles = [
@@ -73,6 +79,7 @@ for (let i = 0; i < count; i += 1) {
   const actual = engineRender(source, profile.flags);
   if (actual === undefined) {
     declined += 1;
+    if (declinedSamples.length < showDeclined) declinedSamples.push(`${lastStatus} ${JSON.stringify(source).replace(/[\u2028\u2029]/g, (c) => "\\u" + c.charCodeAt(0).toString(16))}`);
     continue;
   }
   compared += 1;
@@ -81,6 +88,7 @@ for (let i = 0; i < count; i += 1) {
 }
 
 console.log(`fuzz: ${count} generated, ${compared} compared, ${declined} declined, ${diffs.length} differences`);
+for (const sample of declinedSamples) console.log('declined:', sample);
 for (const diff of diffs.slice(0, show)) {
   console.log('\nmarkdown:', JSON.stringify(diff.markdown), 'flags', diff.flags);
   console.log('expected:', JSON.stringify(diff.expected));

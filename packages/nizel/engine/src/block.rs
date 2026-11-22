@@ -116,9 +116,12 @@ fn parse_blocks(lines: &[String], ctx: &Ctx, seen: &mut HashMap<String, usize>) 
                 continue;
             }
         }
-        // Custom blocks are not ported yet.
-        if custom_block_line(trimmed) {
-            return Err(UNSUPPORTED);
+        if let Some(name) = custom_block_name(trimmed) {
+            let (content, end) = read_custom_block(lines, index);
+            let content_lines: Vec<String> = content.split('\n').map(str::to_string).collect();
+            children.push(Block::CustomBlock { name: name.to_string(), children: parse_blocks(&content_lines, ctx, seen)? });
+            index = end + 1;
+            continue;
         }
 
         if let Some(fence) = opening_fence(line) {
@@ -186,7 +189,18 @@ fn parse_blocks(lines: &[String], ctx: &Ctx, seen: &mut HashMap<String, usize>) 
         }
 
         if is_table_start(lines, index) {
-            return Err(UNSUPPORTED);
+            // Cells go through `parseInline`: the document's references are not visible there.
+            let empty = References::new();
+            let cell_ctx = Ctx { options, references: &empty };
+            let align = split_table_row(&lines[index + 1]).into_iter().map(cell_alignment).collect();
+            let mut rows = vec![table_cells(&lines[index], &cell_ctx)?];
+            index += 2;
+            while index < lines.len() && lines[index].contains('|') && !js::trim(&lines[index]).is_empty() {
+                rows.push(table_cells(&lines[index], &cell_ctx)?);
+                index += 1;
+            }
+            children.push(Block::Table { align, rows });
+            continue;
         }
 
         if blockquote_start(line) {
@@ -570,21 +584,64 @@ fn normalize_paragraph_source(lines: &[String]) -> String {
     joined.trim_end_matches([' ', '\t']).to_string()
 }
 
-/// `/^::([A-Za-z][\w-]*)(?:\s+(.*))?$/` on the trimmed line.
-fn custom_block_line(trimmed: &str) -> bool {
-    let Some(rest) = trimmed.strip_prefix("::") else { return false };
+/// `/^::([A-Za-z][\w-]*)(?:\s+(.*))?$/` on the trimmed line → the name.
+fn custom_block_name(trimmed: &str) -> Option<&str> {
+    let rest = trimmed.strip_prefix("::")?;
     if !rest.bytes().next().is_some_and(|b| b.is_ascii_alphabetic()) {
-        return false;
+        return None;
     }
     let name = rest.bytes().take_while(|b| b.is_ascii_alphanumeric() || *b == b'_' || *b == b'-').count();
     let after = &rest[name..];
-    if after.is_empty() {
+    let matches = after.is_empty()
+        || (after.chars().next().is_some_and(js::is_space) && js::trim_start(after).chars().all(js::is_dot));
+    matches.then_some(&rest[..name])
+}
+
+/// `readCustomBlock` → (content, end index).
+fn read_custom_block(lines: &[String], start: usize) -> (String, usize) {
+    let find = |from: usize| (from..lines.len()).find(|&i| js::trim(&lines[i]) == "::");
+    let Some(first) = find(start + 1) else {
+        return (lines[start + 1..].join("\n"), lines.len() - 1);
+    };
+    let before = &lines[start + 1..first];
+    if !before.is_empty() && before.iter().all(|line| is_prop_or_blank(line)) {
+        let closing = find(first + 1);
+        let content = lines[first + 1..closing.unwrap_or(lines.len())].join("\n");
+        return (content, closing.unwrap_or(lines.len() - 1));
+    }
+    (before.join("\n"), first)
+}
+
+/// `isPropOrBlank`: blank, or `/^[A-Za-z0-9_-]+:\s*.*$/` on the trimmed line.
+fn is_prop_or_blank(line: &str) -> bool {
+    let trimmed = js::trim(line);
+    if trimmed.is_empty() {
         return true;
     }
-    if !after.chars().next().is_some_and(js::is_space) {
-        return false;
+    let key = trimmed.bytes().take_while(|b| b.is_ascii_alphanumeric() || *b == b'_' || *b == b'-').count();
+    key > 0 && trimmed[key..].starts_with(':') && js::trim_start(&trimmed[key + 1..]).chars().all(js::is_dot)
+}
+
+/// `splitTableRow`: trim, drop one leading and one trailing pipe, split on `|`.
+fn split_table_row(line: &str) -> Vec<&str> {
+    let t = js::trim(line);
+    let start = usize::from(t.starts_with('|'));
+    let end = if t.len() > start && t.ends_with('|') { t.len() - 1 } else { t.len() };
+    t[start..end].split('|').collect()
+}
+
+fn cell_alignment(cell: &str) -> Option<&'static str> {
+    let trimmed = js::trim(cell);
+    match (trimmed.starts_with(':'), trimmed.ends_with(':')) {
+        (true, true) => Some("center"),
+        (false, true) => Some("right"),
+        (true, false) => Some("left"),
+        _ => None,
     }
-    js::trim_start(after).chars().all(js::is_dot)
+}
+
+fn table_cells(line: &str, ctx: &Ctx) -> Result<Vec<Vec<crate::ast::Inline>>> {
+    split_table_row(line).into_iter().map(|cell| parse_inline(js::trim(cell), ctx)).collect()
 }
 
 pub struct OpeningFence<'a> {

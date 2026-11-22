@@ -49,7 +49,7 @@ run); "mismatch" means it produced different bytes, which is a bug.
 | 2. GFM cases | not built yet |
 | 3. Nizel suite through Wasm entry points | not built yet |
 | 4. nizel-kit parity, every profile | not built yet |
-| 5. Differential fuzzer (forward, seed 7) | 200000 generated, 200000 compared, 0 declined, 0 differences |
+| 5. Differential fuzzer (forward, seed 7) | 200000 generated, 199605 compared, 395 declined, 0 differences |
 | 6. Zero syntax fallbacks | not met (engine declines unported syntax) |
 | 7. Lezin iPhone tests | not run |
 | Speed (≥5x, cold start, size) | not measured |

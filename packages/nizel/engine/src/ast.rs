@@ -9,6 +9,9 @@ pub enum Block {
     Code { code: String, lang: Option<String>, filename: Option<String>, highlight_lines: Option<Vec<f64>> },
     Blockquote { children: Vec<Block> },
     List { ordered: bool, start: Option<u64>, tight: bool, items: Vec<ListItem> },
+    /// The first row is the header.
+    Table { align: Vec<Option<&'static str>>, rows: Vec<Vec<Vec<Inline>>> },
+    CustomBlock { name: String, children: Vec<Block> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
