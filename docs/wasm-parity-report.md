@@ -8,38 +8,38 @@ run); "mismatch" means it produced different bytes, which is a bug.
 
 | Profile | Forward pass | Forward mismatch | Reverse pass | Reverse mismatch | Cases |
 | --- | --- | --- | --- | --- | --- |
-| default | 46 | 0 | 0 | 0 | 652 |
-| bare | 48 | 0 | 0 | 0 | 652 |
+| default | 327 | 0 | 0 | 0 | 652 |
+| bare | 244 | 0 | 0 | 0 | 652 |
 
 ### By section (default profile, forward / reverse passing)
 
 | Section | Cases | Forward | Reverse |
 | --- | --- | --- | --- |
 | Tabs | 11 | 2 | 0 |
-| Backslash escapes | 13 | 0 | 0 |
-| Entity and numeric character references | 17 | 0 | 0 |
+| Backslash escapes | 13 | 5 | 0 |
+| Entity and numeric character references | 17 | 11 | 0 |
 | Precedence | 1 | 0 | 0 |
-| Thematic breaks | 19 | 11 | 0 |
-| ATX headings | 18 | 13 | 0 |
-| Setext headings | 27 | 8 | 0 |
-| Indented code blocks | 12 | 0 | 0 |
-| Fenced code blocks | 29 | 0 | 0 |
-| HTML blocks | 44 | 0 | 0 |
+| Thematic breaks | 19 | 15 | 0 |
+| ATX headings | 18 | 17 | 0 |
+| Setext headings | 27 | 20 | 0 |
+| Indented code blocks | 12 | 1 | 0 |
+| Fenced code blocks | 29 | 1 | 0 |
+| HTML blocks | 44 | 37 | 0 |
 | Link reference definitions | 27 | 0 | 0 |
-| Paragraphs | 8 | 2 | 0 |
+| Paragraphs | 8 | 7 | 0 |
 | Blank lines | 1 | 1 | 0 |
 | Block quotes | 25 | 0 | 0 |
-| List items | 48 | 4 | 0 |
-| Lists | 26 | 0 | 0 |
-| Inlines | 1 | 0 | 0 |
-| Code spans | 22 | 0 | 0 |
-| Emphasis and strong emphasis | 132 | 0 | 0 |
+| List items | 48 | 5 | 0 |
+| Lists | 26 | 1 | 0 |
+| Inlines | 1 | 1 | 0 |
+| Code spans | 22 | 20 | 0 |
+| Emphasis and strong emphasis | 132 | 126 | 0 |
 | Links | 90 | 0 | 0 |
 | Images | 22 | 0 | 0 |
-| Autolinks | 19 | 0 | 0 |
-| Raw HTML | 20 | 0 | 0 |
-| Hard line breaks | 15 | 2 | 0 |
-| Soft line breaks | 2 | 0 | 0 |
+| Autolinks | 19 | 18 | 0 |
+| Raw HTML | 20 | 19 | 0 |
+| Hard line breaks | 15 | 15 | 0 |
+| Soft line breaks | 2 | 2 | 0 |
 | Textual content | 3 | 3 | 0 |
 
 ## Other gates
@@ -49,7 +49,7 @@ run); "mismatch" means it produced different bytes, which is a bug.
 | 2. GFM cases | not built yet |
 | 3. Nizel suite through Wasm entry points | not built yet |
 | 4. nizel-kit parity, every profile | not built yet |
-| 5. Differential fuzzer (200k) | not built yet |
+| 5. Differential fuzzer (forward, seed 7) | 200000 generated, 141207 compared, 58793 declined, 0 differences |
 | 6. Zero syntax fallbacks | not met (engine declines unported syntax) |
 | 7. Lezin iPhone tests | not run |
 | Speed (≥5x, cold start, size) | not measured |

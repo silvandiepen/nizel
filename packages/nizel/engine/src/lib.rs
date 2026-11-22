@@ -14,11 +14,13 @@
 
 pub mod ast;
 pub mod block;
+pub mod emphasis;
 pub mod inline;
 pub mod js;
 pub mod render;
 pub mod slug;
 pub mod status;
+pub mod unicode;
 
 use std::cell::RefCell;
 

@@ -4,6 +4,7 @@
 //
 //   node scripts/wasm-gates.mjs            # gates + report
 //   node scripts/wasm-gates.mjs --section "Tabs" --show 5   # print diffs
+import { execFileSync } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
 import { tests } from 'commonmark-spec';
 import * as stock from '../dist/index.js';
@@ -96,6 +97,13 @@ for (const result of results) {
 }
 
 if (!onlySection) {
+  let fuzz;
+  try {
+    fuzz = execFileSync(process.execPath, [new URL('wasm-fuzz.mjs', import.meta.url).pathname, '--count', '200000', '--seed', '7', '--show', '0'], { encoding: 'utf8' }).trim();
+  } catch (error) {
+    fuzz = String(error.stdout ?? error).trim();
+  }
+  console.log(fuzz);
   const lines = [
     '# Wasm engine parity report',
     '',
@@ -123,7 +131,7 @@ if (!onlySection) {
     '| 2. GFM cases | not built yet |',
     '| 3. Nizel suite through Wasm entry points | not built yet |',
     '| 4. nizel-kit parity, every profile | not built yet |',
-    '| 5. Differential fuzzer (200k) | not built yet |',
+    `| 5. Differential fuzzer (forward, seed 7) | ${fuzz.replace(/^fuzz: /, '')} |`,
     '| 6. Zero syntax fallbacks | not met (engine declines unported syntax) |',
     '| 7. Lezin iPhone tests | not run |',
     '| Speed (≥5x, cold start, size) | not measured |',
