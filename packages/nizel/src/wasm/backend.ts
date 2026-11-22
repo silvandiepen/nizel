@@ -1,4 +1,5 @@
 import encoded from './bytes.js';
+import engineEncoded from './engine-bytes.js';
 import type { NizelHtmlToMarkdownOptions } from '../html-to-markdown.js';
 import type { NizelOptions, NizelPlugin } from '../types.js';
 
@@ -9,7 +10,6 @@ type Renderer = { memory: WebAssembly.Memory; render: Convert; reverse: Convert 
 const inputAddress = 16384;
 const maximumSourceLength = 1024 * 1024;
 const pageSize = 65536;
-const unsupportedMarkdown = /[^A-Za-z0-9 .,!?'"\x60*#\n-]/;
 const unsupportedHtml = /<(?:a|div|img|ol|pre|span|table|ul)(?:[ >])/;
 let cachedRenderer: Renderer | null | undefined;
 
@@ -50,13 +50,65 @@ function convert(source: string, direction: 'render' | 'reverse', anchors = fals
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-/** Renders supported prepared Markdown without changing any plugin or AST semantics. */
+type Engine = {
+  memory: WebAssembly.Memory;
+  input: (length: number) => number;
+  output: () => number;
+  render: (length: number, flags: number) => number;
+};
+let cachedEngine: Engine | null | undefined;
+
+/** Lazily initializes the Rust engine and remembers unavailable runtimes. */
+function getEngine(): Engine | null {
+  if (cachedEngine !== undefined) return cachedEngine;
+  try {
+    const bytes = Uint8Array.from(atob(engineEncoded), character => character.charCodeAt(0));
+    cachedEngine = new WebAssembly.Instance(new WebAssembly.Module(bytes)).exports as Engine;
+  } catch {
+    cachedEngine = null;
+  }
+  return cachedEngine;
+}
+
+/** Option bits shared with `engine/src/lib.rs`. */
+function engineFlags(options: NizelOptions): number {
+  const autolinks = options.autolinks;
+  const autolinksEnabled = autolinks !== false && (typeof autolinks !== 'object' || autolinks.enabled !== false);
+  return (options.anchors !== false ? 1 : 0) |
+    (autolinksEnabled ? 2 : 0) |
+    (options.safe !== false ? 4 : 0) |
+    (options.slugStyle === 'classic' ? 8 : 0);
+}
+
+/** Renders prepared Markdown with the Rust engine; undefined means JavaScript renders it. */
 export function renderWasm(source: string, options: NizelOptions): string | undefined {
+  // Not ported to the engine yet: these still render in JavaScript.
   if (options.plugins?.some(plugin => blocksRender(plugin, source)) || options.transforms?.length ||
       Object.keys(options.blocks ?? {}).length || Object.keys(options.elements ?? {}).length ||
-      options.unwrapStandaloneImages || (options.slugStyle !== undefined && options.slugStyle !== 'github') ||
-      unsupportedMarkdown.test(source)) return undefined;
-  return convert(source, 'render', options.anchors !== false);
+      options.unwrapStandaloneImages || hasAutolinkAttributes(options.autolinks) ||
+      source.length > maximumSourceLength || !isWellFormed(source)) return undefined;
+  const engine = getEngine();
+  if (!engine) return undefined;
+  try {
+    const at = engine.input(source.length * 3);
+    const { written } = encoder.encodeInto(source, new Uint8Array(engine.memory.buffer, at, source.length * 3));
+    const length = engine.render(written, engineFlags(options));
+    if (length < 0) return undefined;
+    return decoder.decode(new Uint8Array(engine.memory.buffer, engine.output(), length));
+  } catch {
+    return undefined;
+  }
+}
+
+/** `withAutolinkElements` adds an `a` element rule for these. */
+function hasAutolinkAttributes(autolinks: NizelOptions['autolinks']): boolean {
+  return typeof autolinks === 'object' && autolinks !== null && Boolean(autolinks.target || autolinks.rel);
+}
+
+/** Lone surrogates cannot cross into the engine as UTF-8. */
+function isWellFormed(source: string): boolean {
+  const check = (source as string & { isWellFormed?: () => boolean }).isWellFormed;
+  return check ? check.call(source) : !/[\uD800-\uDFFF]/.test(source.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, ''));
 }
 
 /** Converts supported semantic HTML while leaving plugin handlers to JavaScript. */

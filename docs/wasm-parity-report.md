@@ -47,7 +47,7 @@ run); "mismatch" means it produced different bytes, which is a bug.
 | Gate | Status |
 | --- | --- |
 | 2. GFM cases | not built yet |
-| 3. Nizel suite through Wasm entry points | not built yet |
+| 3. Nizel suite through Wasm entry points | 28/28 suites, 424 tests passed (features not yet in the engine still fall back to JavaScript; see gate 6) |
 | 4. nizel-kit parity, every profile | not built yet |
 | 5. Differential fuzzer (forward, seed 7) | 200000 generated, 199605 compared, 395 declined, 0 differences |
 | 6. Zero syntax fallbacks | not met (engine declines unported syntax) |
@@ -58,11 +58,11 @@ run); "mismatch" means it produced different bytes, which is a bug.
 
 | Fixture | Bytes | Identical | JavaScript ms | Engine ms | Speedup |
 | --- | --- | --- | --- | --- | --- |
-| commonmark | 44210 | yes | 19.860 | 7.580 | 2.6x |
-| gfm | 559 | yes | 0.097 | 0.026 | 3.8x |
-| readme | 997 | yes | 0.055 | 0.030 | 1.8x |
-| large | 2093 | yes | 0.487 | 0.129 | 3.8x |
+| commonmark | 44210 | yes | 25.951 | 7.832 | 3.3x |
+| gfm | 559 | yes | 0.175 | 0.026 | 6.8x |
+| readme | 997 | yes | 0.053 | 0.032 | 1.7x |
+| large | 2093 | yes | 0.261 | 0.124 | 2.1x |
 | code-heavy | 700 | yes | 0.025 | 0.015 | 1.6x |
-| 46 KB GFM | 45838 | yes | 9.080 | 2.071 | 4.4x |
-| emphasis draft | 56800 | yes | 13.346 | 3.273 | 4.1x |
-| plain draft | 54600 | yes | 1.576 | 1.110 | 1.4x |
+| 46 KB GFM | 45838 | yes | 11.025 | 2.099 | 5.3x |
+| emphasis draft | 56800 | yes | 15.369 | 3.537 | 4.3x |
+| plain draft | 54600 | yes | 1.446 | 1.096 | 1.3x |

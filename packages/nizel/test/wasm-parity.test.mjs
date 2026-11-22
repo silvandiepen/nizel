@@ -13,13 +13,15 @@ test('opt-in exports mirror stock entry points', () => {
   assert.deepEqual(Object.keys(browserWasm).sort(), Object.keys(browser).sort());
 });
 
-test('uses Wasm in both directions and rejects unsupported input', () => {
+test('uses Wasm in both directions and rejects unsupported input', async () => {
   const source = '# Hello World\n\nA **bold word** with a soft\nline break.';
   const html = '<h1 id="hello-world">Hello World</h1>\n<p>A <strong>bold word</strong> with a soft\nline break.</p>';
   assert.equal(renderWasm(source, {}), html);
   assert.equal(reverseWasm(html), '# Hello World\n\nA **bold word** with a soft line break.');
-  assert.equal(renderWasm('# Repeat\n\n# Repeat', {}), undefined);
-  assert.equal(renderWasm('<script>hello</script>', {}), undefined);
+  // The Rust engine covers what the AssemblyScript renderer declined; it must match JavaScript exactly.
+  assert.equal(renderWasm('# Repeat\n\n# Repeat', {}), await stock.useNizel().html('# Repeat\n\n# Repeat'));
+  assert.equal(renderWasm('<script>hello</script>', {}), await stock.useNizel().html('<script>hello</script>'));
+  assert.equal(renderWasm('a'.repeat(1024 * 1024 + 1), {}), undefined);
   assert.equal(reverseWasm('<h1 id="different">Hello</h1>'), undefined);
   assert.equal(reverseWasm('<table><tr><td>One</td></tr></table>'), undefined);
   assert.equal(reverseWasm('<p>'+'a'.repeat(1024 * 1024)+'</p>'), undefined);

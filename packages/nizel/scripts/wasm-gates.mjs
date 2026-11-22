@@ -104,6 +104,17 @@ if (!onlySection) {
     fuzz = String(error.stdout ?? error).trim();
   }
   console.log(fuzz);
+  let suites;
+  try {
+    suites = execFileSync(process.execPath, [new URL('../../../scripts/test-wasm-entry-points.mjs', import.meta.url).pathname], { encoding: 'utf8' });
+  } catch (error) {
+    suites = String(error.stdout ?? error);
+  }
+  const suiteLines = suites.split('\n').filter((line) => /^(ok  |FAIL)/.test(line));
+  const suitesFailed = suiteLines.filter((line) => line.startsWith('FAIL')).length;
+  const testsPassed = suiteLines.reduce((sum, line) => sum + Number(/(\d+) passed/.exec(line)?.[1] ?? 0), 0);
+  const gate3 = `${suiteLines.length - suitesFailed}/${suiteLines.length} suites, ${testsPassed} tests passed${suitesFailed ? ` — **${suitesFailed} failing**` : ''} (features not yet in the engine still fall back to JavaScript; see gate 6)`;
+  console.log('gate 3:', gate3);
 
   // Speed: the raw engine (encode, render, decode) against useNizel().html.
   const { performance } = await import('node:perf_hooks');
@@ -160,7 +171,7 @@ if (!onlySection) {
     '| Gate | Status |',
     '| --- | --- |',
     '| 2. GFM cases | not built yet |',
-    '| 3. Nizel suite through Wasm entry points | not built yet |',
+    `| 3. Nizel suite through Wasm entry points | ${gate3} |`,
     '| 4. nizel-kit parity, every profile | not built yet |',
     `| 5. Differential fuzzer (forward, seed 7) | ${fuzz.replace(/^fuzz: /, '')} |`,
     '| 6. Zero syntax fallbacks | not met (engine declines unported syntax) |',

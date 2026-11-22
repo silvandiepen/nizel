@@ -40,7 +40,7 @@ test('optional WebView kit preserves API and official plugin output', async () =
   }
 });
 
-test('runs on Wasm with the default plugins for documents they do not touch', () => {
+test('runs on Wasm with task lists and hidden comments on, for documents they do not touch', () => {
   // A fresh process, so the module is compiled under the counting wrapper.
   const code = [
     'const calls = { render: 0, reverse: 0 };',
@@ -50,7 +50,8 @@ test('runs on Wasm with the default plugins for documents they do not touch', ()
     '  for (const name of ["render", "reverse"]) counted[name] = (...a) => { const n = exports[name](...a); if (n >= 0) calls[name]++; return n; };',
     '  Object.defineProperty(this, "exports", { value: counted }); } };',
     'const kit = await import("nizel-kit/wasm");',
-    'const options = { enabledPlugins: kit.defaultEnabledPlugins(), pluginOptions: { "task-list": { mode: "edit" }, "hidden-comments": { mode: "hide" } }, template: false };',
+    // Lezin's profile: the defaults plus task lists and hidden comments.
+    'const options = { enabledPlugins: [...kit.defaultEnabledPlugins(), "task-list", "hidden-comments"], pluginOptions: { "task-list": { mode: "edit" }, "hidden-comments": { mode: "hide" } }, template: false };',
     'const processor = kit.useNizelKit(options);',
     'const html = await processor.html("# Notes\\n\\nA **bold** and *quiet* line with `code`.");',
     'const markdown = processor.htmlToMarkdown(html);',
