@@ -20,6 +20,7 @@ pub mod emphasis;
 pub mod html;
 pub mod inline;
 pub mod js;
+pub mod jsnum;
 pub mod links;
 pub mod refs;
 pub mod render;

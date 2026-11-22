@@ -5,7 +5,9 @@
 //! exactly the point the JavaScript would enter them, so a document either
 //! comes out byte-identical or is declined — never different.
 
-use crate::ast::{strip_inline, Block};
+use crate::ast::{strip_inline, Block, ListItem};
+use crate::common::decode_string_content;
+use crate::jsnum;
 use crate::html::{is_interrupting_html_block_start, read_html_block};
 use crate::inline::{parse_inline, Ctx};
 use crate::refs::{self, References};
@@ -114,12 +116,51 @@ fn parse_blocks(lines: &[String], ctx: &Ctx, seen: &mut HashMap<String, usize>) 
                 continue;
             }
         }
-        // Custom blocks, fences and indented code are not ported yet.
-        if trimmed.starts_with("::") {
+        // Custom blocks are not ported yet.
+        if custom_block_line(trimmed) {
             return Err(UNSUPPORTED);
         }
-        if fence_start(line) || line.starts_with("    ") {
-            return Err(UNSUPPORTED);
+
+        if let Some(fence) = opening_fence(line) {
+            if let Some(info) = parse_fence_info(fence.info, fence.marker) {
+                let mut code: Vec<String> = Vec::new();
+                index += 1;
+                while index < lines.len() && !closes_fence(&lines[index], fence.marker, fence.length) {
+                    code.push(strip_fence_indent(&lines[index], fence.indent).to_string());
+                    index += 1;
+                }
+                if index >= lines.len() && code.last().is_some_and(String::is_empty) {
+                    code.pop();
+                }
+                let (filename, highlight_lines) = parse_code_meta(&info.meta);
+                children.push(Block::Code {
+                    code: if code.is_empty() { String::new() } else { format!("{}\n", code.join("\n")) },
+                    lang: info.lang,
+                    filename,
+                    highlight_lines,
+                });
+                index += 1;
+                continue;
+            }
+        }
+
+        if line.starts_with("    ") {
+            let mut code: Vec<&str> = Vec::new();
+            while index < lines.len() && (lines[index].starts_with("    ") || js::trim(&lines[index]).is_empty()) {
+                let l = lines[index].as_str();
+                code.push(&l[l.bytes().take(4).take_while(|&b| b == b' ').count()..]);
+                index += 1;
+            }
+            while code.last().is_some_and(|l| js::trim(l).is_empty()) {
+                code.pop();
+            }
+            children.push(Block::Code {
+                code: if code.is_empty() { String::new() } else { format!("{}\n", code.join("\n")) },
+                lang: None,
+                filename: None,
+                highlight_lines: None,
+            });
+            continue;
         }
 
         if is_thematic_break(line) {
@@ -144,8 +185,69 @@ fn parse_blocks(lines: &[String], ctx: &Ctx, seen: &mut HashMap<String, usize>) 
             }
         }
 
-        if is_table_start(lines, index) || blockquote_start(line) || parse_list_marker(line).is_some() {
+        if is_table_start(lines, index) {
             return Err(UNSUPPORTED);
+        }
+
+        if blockquote_start(line) {
+            let start = index;
+            let mut quote_lines: Vec<String> = Vec::new();
+            let mut allow_lazy = false;
+            while index < lines.len() {
+                if let Some((marker_len, marker_ends_space, rest)) = quote_marker(&lines[index]) {
+                    let column = if marker_ends_space { marker_len } else { marker_len + 1 };
+                    let quote_line = expand_leading_tabs_from_column(rest, column);
+                    quote_lines.push(quote_line);
+                    allow_lazy = can_start_lazy_continuation(&quote_lines[quote_lines.len() - 1], options, &quote_lines, quote_lines.len() - 1);
+                    index += 1;
+                    continue;
+                }
+                if allow_lazy && can_continue_lazily(&lines[index], options, lines, index) {
+                    let l = &lines[index];
+                    quote_lines.push(if setext_underline(l).is_some() { format!("\\{l}") } else { l.clone() });
+                    allow_lazy = true;
+                    index += 1;
+                    continue;
+                }
+                break;
+            }
+            if quote_lines.last().is_some_and(String::is_empty) {
+                quote_lines.pop();
+            }
+            // `if (index > 0) index -= 1; else index += 1;` then the loop's `+= 1`.
+            if index > 0 {
+                if index == start {
+                    // Nothing was consumed: the JavaScript revisits this line forever (NIZEL-002).
+                    return Err(UNSUPPORTED);
+                }
+            } else {
+                index += 2;
+            }
+            children.push(Block::Blockquote { children: parse_blocks(&quote_lines, ctx, seen)? });
+            continue;
+        }
+
+        if let Some(opening) = parse_list_marker(line) {
+            let mut items: Vec<ListItem> = Vec::new();
+            let mut tight = true;
+            while index < lines.len() {
+                if !items.is_empty() && is_thematic_break(&lines[index]) {
+                    break;
+                }
+                let Some(marker) = parse_list_marker(&lines[index]) else { break };
+                if marker.ordered != opening.ordered || marker.marker != opening.marker {
+                    break;
+                }
+                let (checked, clean_body) = task_box(&marker.body);
+                let (item_children, end, loose) = parse_list_item_blocks(clean_body, lines, index, &opening, marker.content_indent, ctx, seen)?;
+                if loose {
+                    tight = false;
+                }
+                items.push(ListItem { checked, children: item_children });
+                index = end + 1;
+            }
+            children.push(Block::List { ordered: opening.ordered, start: opening.start, tight, items });
+            continue;
         }
 
         let mut paragraph = vec![normalize_paragraph_line(line)];
@@ -355,12 +457,13 @@ fn is_table_delimiter_row(line: &str) -> bool {
         })
 }
 
-/// `parseListMarker` from `parse/list.ts`, reduced to "is there one" and
-/// the fields paragraph interruption needs.
+/// `parseListMarker` from `parse/list.ts`.
 pub struct ListMarker {
+    pub body: String,
+    pub content_indent: usize,
+    pub marker: u8,
     pub ordered: bool,
     pub start: Option<u64>,
-    pub body_empty: bool,
 }
 
 pub fn parse_list_marker(line: &str) -> Option<ListMarker> {
@@ -380,21 +483,29 @@ pub fn parse_list_marker(line: &str) -> Option<ListMarker> {
         let body = &after[padding..];
         // `(.*)$` without the `m` flag: a line terminator in the body fails the whole match.
         if (padding > 0 || body.is_empty()) && body.chars().all(js::is_dot) {
-            return Some(ListMarker { ordered: false, start: None, body_empty: list_marker_body_empty(padding, body) });
+            return Some(ListMarker {
+                body: list_marker_body(&after[..padding], body),
+                content_indent: list_content_indent(indent, 1, padding),
+                marker: first,
+                ordered: false,
+                start: None,
+            });
         }
     }
     let digits = rest.bytes().take_while(u8::is_ascii_digit).count();
     if (1..=9).contains(&digits) {
         let delimiter = rest.as_bytes().get(digits).copied();
-        if matches!(delimiter, Some(b'.') | Some(b')')) {
+        if let Some(delimiter @ (b'.' | b')')) = delimiter {
             let after = &rest[digits + 1..];
             let padding = after.bytes().take_while(|b| *b == b' ' || *b == b'\t').count();
             let body = &after[padding..];
             if (padding > 0 || body.is_empty()) && body.chars().all(js::is_dot) {
                 return Some(ListMarker {
+                    body: list_marker_body(&after[..padding], body),
+                    content_indent: list_content_indent(indent, digits + 1, padding),
+                    marker: delimiter,
                     ordered: true,
                     start: rest[..digits].parse().ok(),
-                    body_empty: list_marker_body_empty(padding, body),
                 });
             }
         }
@@ -402,14 +513,19 @@ pub fn parse_list_marker(line: &str) -> Option<ListMarker> {
     None
 }
 
-/// `listMarkerBody(...) === ''`: padding beyond four columns stays in the body.
-fn list_marker_body_empty(padding: usize, body: &str) -> bool {
-    if padding > 4 { false } else { body.is_empty() }
+/// `listMarkerBody`: padding beyond four columns stays in the body.
+fn list_marker_body(padding: &str, body: &str) -> String {
+    if padding.len() > 4 { format!("{}{body}", &padding[1..]) } else { body.to_string() }
+}
+
+/// `listContentIndent`.
+fn list_content_indent(indent: usize, marker_length: usize, padding: usize) -> usize {
+    indent + marker_length + if padding > 0 && padding <= 4 { padding } else { 1 }
 }
 
 /// `isParagraphInterruptingListMarker`.
 fn is_paragraph_interrupting_list_marker(line: &str) -> bool {
-    parse_list_marker(line).is_some_and(|marker| !marker.body_empty && (!marker.ordered || marker.start == Some(1)))
+    parse_list_marker(line).is_some_and(|marker| !marker.body.is_empty() && (!marker.ordered || marker.start == Some(1)))
 }
 
 /// `expandListMarkerTabs` from `parse/list.ts`.
@@ -452,4 +568,319 @@ fn normalize_paragraph_line(line: &str) -> String {
 fn normalize_paragraph_source(lines: &[String]) -> String {
     let joined = lines.join("\n");
     joined.trim_end_matches([' ', '\t']).to_string()
+}
+
+/// `/^::([A-Za-z][\w-]*)(?:\s+(.*))?$/` on the trimmed line.
+fn custom_block_line(trimmed: &str) -> bool {
+    let Some(rest) = trimmed.strip_prefix("::") else { return false };
+    if !rest.bytes().next().is_some_and(|b| b.is_ascii_alphabetic()) {
+        return false;
+    }
+    let name = rest.bytes().take_while(|b| b.is_ascii_alphanumeric() || *b == b'_' || *b == b'-').count();
+    let after = &rest[name..];
+    if after.is_empty() {
+        return true;
+    }
+    if !after.chars().next().is_some_and(js::is_space) {
+        return false;
+    }
+    js::trim_start(after).chars().all(js::is_dot)
+}
+
+pub struct OpeningFence<'a> {
+    pub indent: usize,
+    pub marker: u8,
+    pub length: usize,
+    pub info: &'a str,
+}
+
+/// `/^( {0,3})(`{3,}|~{3,})[ \t]*(.*)$/`
+pub fn opening_fence(line: &str) -> Option<OpeningFence<'_>> {
+    let indent = js::up_to_three_spaces(line);
+    let rest = &line[indent..];
+    let marker = rest.bytes().next().filter(|b| *b == b'`' || *b == b'~')?;
+    let length = js::run_of(rest, marker);
+    if length < 3 {
+        return None;
+    }
+    let after = &rest[length..];
+    let info = after.trim_start_matches([' ', '\t']);
+    info.chars().all(js::is_dot).then_some(OpeningFence { indent, marker, length, info })
+}
+
+/// `^ {0,3}\${marker}{${length},}\s*$`
+pub fn closes_fence(line: &str, marker: u8, length: usize) -> bool {
+    let rest = &line[js::up_to_three_spaces(line)..];
+    let run = js::run_of(rest, marker);
+    run >= length && js::trim_end(&rest[run..]).is_empty()
+}
+
+struct FenceInfo {
+    lang: Option<String>,
+    meta: String,
+}
+
+/// `parseFenceInfo`; `None` when invalid.
+fn parse_fence_info(info: &str, marker: u8) -> Option<FenceInfo> {
+    let meta = decode_string_content(js::trim(info));
+    if marker == b'`' && meta.contains('`') {
+        return None;
+    }
+    if meta.is_empty() {
+        return Some(FenceInfo { lang: None, meta });
+    }
+    let lang_len = meta.char_indices().find(|&(_, c)| js::is_space(c)).map_or(meta.len(), |(i, _)| i);
+    Some(FenceInfo { lang: Some(meta[..lang_len].to_string()), meta })
+}
+
+/// `stripFenceIndent`.
+fn strip_fence_indent(line: &str, indent: usize) -> &str {
+    let spaces = line.bytes().take(indent).take_while(|&b| b == b' ').count();
+    &line[spaces..]
+}
+
+/// `parseCodeMeta` → (filename, highlight lines).
+fn parse_code_meta(meta: &str) -> (Option<String>, Option<Vec<f64>>) {
+    let mut filename = None;
+    let mut from = 0;
+    while let Some(found) = meta[from..].find("filename=") {
+        let value = from + found + "filename=".len();
+        let rest = &meta[value..];
+        let quoted = |q: char| rest.strip_prefix(q).and_then(|r| r.find(q).filter(|&n| n > 0).map(|n| r[..n].to_string()));
+        let bare = || {
+            let n = rest.char_indices().find(|&(_, c)| js::is_space(c)).map_or(rest.len(), |(i, _)| i);
+            (n > 0).then(|| rest[..n].to_string())
+        };
+        if let Some(name) = quoted('"').or_else(|| quoted('\'')).or_else(bare) {
+            filename = Some(name);
+            break;
+        }
+        from = from + found + 1;
+    }
+    let mut highlight = None;
+    for (open, _) in meta.match_indices('{') {
+        let rest = &meta[open + 1..];
+        if let Some(close) = rest.find('}').filter(|&n| n > 0) {
+            highlight = Some(expand_line_ranges(&rest[..close]));
+            break;
+        }
+    }
+    (filename, highlight)
+}
+
+/// `expandLineRanges`.
+fn expand_line_ranges(source: &str) -> Vec<f64> {
+    let mut lines: Vec<f64> = Vec::new();
+    for part in source.split(',') {
+        let mut bounds = js::trim(part).split('-');
+        let start = jsnum::number(bounds.next().unwrap_or(""));
+        let end = bounds.next().map(jsnum::number);
+        if !start.is_finite() {
+            continue;
+        }
+        match end {
+            Some(end) if end.is_finite() => {
+                let mut line = start;
+                while line <= end {
+                    lines.push(line);
+                    line += 1.0;
+                }
+            }
+            _ => lines.push(start),
+        }
+    }
+    for line in &mut lines {
+        if *line == 0.0 {
+            *line = 0.0;
+        }
+    }
+    lines.sort_by(|a, b| a.partial_cmp(b).expect("finite"));
+    lines.dedup();
+    lines
+}
+
+/// `/^( {0,3}> ?)(.*)$/` → (marker length, marker ends with a space, rest).
+fn quote_marker(line: &str) -> Option<(usize, bool, &str)> {
+    let indent = js::up_to_three_spaces(line);
+    if line.as_bytes().get(indent) != Some(&b'>') {
+        return None;
+    }
+    let mut marker_len = indent + 1;
+    let space = line.as_bytes().get(marker_len) == Some(&b' ');
+    if space {
+        marker_len += 1;
+    }
+    let rest = &line[marker_len..];
+    rest.chars().all(js::is_dot).then_some((marker_len, space, rest))
+}
+
+/// `expandLeadingTabsFromColumn` (columns count code points).
+fn expand_leading_tabs_from_column(line: &str, start_column: usize) -> String {
+    let mut result = String::with_capacity(line.len() + 4);
+    let mut column = start_column;
+    let mut leading = true;
+    for c in line.chars() {
+        if c == '\t' && leading {
+            let spaces = 4 - (column % 4);
+            result.extend(std::iter::repeat_n(' ', spaces));
+            column += spaces;
+            continue;
+        }
+        result.push(c);
+        column += 1;
+        if c != ' ' {
+            leading = false;
+        }
+    }
+    result
+}
+
+/// `lazyContinuationCandidate`.
+fn lazy_continuation_candidate(line: &str) -> String {
+    let mut candidate = line.to_string();
+    loop {
+        // `/^ {0,3}> ?(.*)$/`
+        if let Some((_, _, rest)) = quote_marker(&candidate) {
+            candidate = rest.to_string();
+            continue;
+        }
+        if let Some(marker) = parse_list_marker(&candidate) {
+            if blockquote_start(&marker.body) {
+                candidate = marker.body;
+                continue;
+            }
+        }
+        return candidate;
+    }
+}
+
+/// `canStartLazyBlockquoteContinuation`.
+fn can_start_lazy_continuation(line: &str, options: &Options, lines: &[String], index: usize) -> bool {
+    let candidate = lazy_continuation_candidate(line);
+    !js::trim(&candidate).is_empty()
+        && !fence_start(&candidate)
+        && !candidate.starts_with("    ")
+        && !is_block_start(&candidate, options, lines, index)
+}
+
+/// `canContinueBlockquoteLazily`.
+fn can_continue_lazily(line: &str, options: &Options, lines: &[String], index: usize) -> bool {
+    !js::trim(line).is_empty()
+        && !blockquote_start(line)
+        && !fence_start(line)
+        && !is_thematic_break(line)
+        && parse_list_marker(line).is_none()
+        && !is_table_start(lines, index)
+        && !(!options.safe && is_interrupting_html_block_start(line))
+}
+
+/// `/^\[[ xX]\]\s+/` → (checked, body without the box).
+fn task_box(body: &str) -> (Option<bool>, &str) {
+    let b = body.as_bytes();
+    if b.len() >= 3 && b[0] == b'[' && matches!(b[1], b' ' | b'x' | b'X') && b[2] == b']' {
+        let after = &body[3..];
+        if after.chars().next().is_some_and(js::is_space) {
+            return (Some(b[1] != b' '), js::trim_start(after));
+        }
+    }
+    (None, body)
+}
+
+fn count_leading_spaces(line: &str) -> usize {
+    line.bytes().take_while(|&b| b == b' ').count()
+}
+
+/// `openingFenceClosePattern` → (marker, length).
+fn opening_fence_close(line: &str) -> Option<(u8, usize)> {
+    opening_fence(line).map(|fence| (fence.marker, fence.length))
+}
+
+/// `updateOpenFence`.
+fn update_open_fence(open: Option<(u8, usize)>, line: &str) -> Option<(u8, usize)> {
+    match open {
+        Some((marker, length)) => if closes_fence(line, marker, length) { None } else { open },
+        None => opening_fence_close(line),
+    }
+}
+
+fn same_list(opening: &ListMarker, marker: &ListMarker) -> bool {
+    marker.ordered == opening.ordered && marker.marker == opening.marker
+}
+
+/// `parseListItemBlocks` → (children, end index, loose).
+fn parse_list_item_blocks(
+    first_line: &str,
+    lines: &[String],
+    index: usize,
+    opening: &ListMarker,
+    content_indent: usize,
+    ctx: &Ctx,
+    seen: &mut HashMap<String, usize>,
+) -> Result<(Vec<Block>, usize, bool)> {
+    let options = ctx.options;
+    let mut item_lines: Vec<String> = vec![first_line.to_string()];
+    let mut cursor = index + 1;
+    let mut loose = false;
+    let mut saw_blank = false;
+    let mut open_fence = opening_fence_close(first_line);
+    while cursor < lines.len() {
+        let line = &lines[cursor];
+        if let Some(marker) = parse_list_marker(line) {
+            if same_list(opening, &marker) && count_leading_spaces(line) < content_indent {
+                break;
+            }
+        }
+        if js::trim(line).is_empty() {
+            if open_fence.is_some() {
+                item_lines.push(String::new());
+                cursor += 1;
+                continue;
+            }
+            let Some(next_content) = (cursor + 1..lines.len()).find(|&i| !js::trim(&lines[i]).is_empty()) else { break };
+            if let Some(next_marker) = parse_list_marker(&lines[next_content]) {
+                if same_list(opening, &next_marker) && count_leading_spaces(&lines[next_content]) < content_indent {
+                    item_lines.push(String::new());
+                    loose = true;
+                    saw_blank = true;
+                    cursor += 1;
+                    continue;
+                }
+            }
+            if cursor == index + 1 && first_line.is_empty() {
+                break;
+            }
+            let next_indent = count_leading_spaces(&lines[next_content]);
+            if next_indent < content_indent {
+                break;
+            }
+            item_lines.push(String::new());
+            loose = !has_nested_list_marker_before_blank(&item_lines, next_indent - content_indent);
+            saw_blank = true;
+            cursor += 1;
+            continue;
+        }
+        if count_leading_spaces(line) >= content_indent {
+            let item_line = line[content_indent..].to_string();
+            open_fence = update_open_fence(open_fence, &item_line);
+            item_lines.push(item_line);
+            cursor += 1;
+            continue;
+        }
+        if !saw_blank && !is_block_start(line, options, lines, cursor) {
+            open_fence = update_open_fence(open_fence, line);
+            item_lines.push(line.clone());
+            cursor += 1;
+            continue;
+        }
+        break;
+    }
+    while item_lines.last().is_some_and(String::is_empty) {
+        item_lines.pop();
+    }
+    Ok((parse_blocks(&item_lines, ctx, seen)?, cursor - 1, loose))
+}
+
+/// `hasNestedListMarkerBeforeBlank`.
+fn has_nested_list_marker_before_blank(item_lines: &[String], relative_next_indent: usize) -> bool {
+    item_lines.iter().any(|line| parse_list_marker(line).is_some() && count_leading_spaces(line) < relative_next_indent)
 }

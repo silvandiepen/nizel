@@ -6,6 +6,15 @@ pub enum Block {
     Heading { depth: u8, id: Option<String>, children: Vec<Inline> },
     Paragraph { children: Vec<Inline> },
     ThematicBreak,
+    Code { code: String, lang: Option<String>, filename: Option<String>, highlight_lines: Option<Vec<f64>> },
+    Blockquote { children: Vec<Block> },
+    List { ordered: bool, start: Option<u64>, tight: bool, items: Vec<ListItem> },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ListItem {
+    pub checked: Option<bool>,
+    pub children: Vec<Block>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -36,6 +36,93 @@ fn render_block(block: &Block, out: &mut String) {
         }
         Block::ThematicBreak => out.push_str("<hr />"),
         Block::Html { value } => out.push_str(value),
+        Block::Code { code, lang, filename, highlight_lines } => {
+            out.push_str("<pre><code");
+            if let Some(lang) = lang.as_deref().filter(|l| !l.is_empty()) {
+                attr(out, "class", &format!("language-{lang}"));
+            }
+            if let Some(filename) = filename {
+                attr(out, "data-filename", filename);
+            }
+            if let Some(lines) = highlight_lines {
+                let joined: Vec<String> = lines.iter().map(|&n| crate::jsnum::to_string(n)).collect();
+                attr(out, "data-highlight-lines", &joined.join(","));
+            }
+            out.push('>');
+            escape_html_into(out, code);
+            out.push_str("</code></pre>");
+        }
+        Block::Blockquote { children } => {
+            out.push_str("<blockquote>\n");
+            if !children.is_empty() {
+                render_blocks(children, out);
+                out.push('\n');
+            }
+            out.push_str("</blockquote>");
+        }
+        Block::List { ordered, start, tight, items } => {
+            let tag = if *ordered { "ol" } else { "ul" };
+            out.push('<');
+            out.push_str(tag);
+            if let Some(start) = start.filter(|&n| n != 1) {
+                attr(out, "start", &start.to_string());
+            }
+            out.push_str(">\n");
+            for (index, item) in items.iter().enumerate() {
+                if index > 0 {
+                    out.push('\n');
+                }
+                out.push_str("<li");
+                if item.checked == Some(true) {
+                    out.push_str(" data-checked");
+                }
+                out.push('>');
+                render_list_item_children(&item.children, *tight, out);
+                out.push_str("</li>");
+            }
+            out.push_str("\n</");
+            out.push_str(tag);
+            out.push('>');
+        }
+    }
+}
+
+/// `renderListItemChildrenFast`.
+fn render_list_item_children(children: &[Block], tight: bool, out: &mut String) {
+    if children.is_empty() {
+        return;
+    }
+    if !tight {
+        out.push('\n');
+        render_blocks(children, out);
+        out.push('\n');
+        return;
+    }
+    let has_block_child = children.iter().any(|c| !matches!(c, Block::Paragraph { .. }));
+    let mut body = String::new();
+    for (index, child) in children.iter().enumerate() {
+        if index > 0 {
+            body.push('\n');
+        }
+        match child {
+            Block::Paragraph { children } => render_inline(children, &mut body),
+            other => render_block(other, &mut body),
+        }
+    }
+    let last_paragraph = matches!(children.last(), Some(Block::Paragraph { .. }));
+    let first_paragraph = matches!(children.first(), Some(Block::Paragraph { .. }));
+    if !has_block_child {
+        out.push_str(&body);
+    } else if last_paragraph {
+        out.push('\n');
+        out.push_str(&body);
+    } else if first_paragraph {
+        out.push_str(&body);
+        out.push('\n');
+    } else {
+        out.push('\n');
+        out.push_str(&body);
+        out.push('\n');
     }
 }
 

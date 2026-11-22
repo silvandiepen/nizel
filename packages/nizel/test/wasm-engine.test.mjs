@@ -64,3 +64,9 @@ test('engine never differs from JavaScript on 20,000 fuzzed documents', async ()
   });
   assert.match(output, / 0 differences/, output);
 }, 120000);
+
+test('engine declines the blockquote input that never terminates in JavaScript (NIZEL-002)', async () => {
+  assert.equal(engineRender('x\n\n> a b', 1 | 2 | 4), undefined);
+  // At the start of a document the JavaScript does terminate: an empty quote, and the next line is skipped.
+  assert.equal(engineRender('> a b\nskipped\nkept', 1 | 2 | 4), await stock.useNizel().html('> a b\nskipped\nkept'));
+});

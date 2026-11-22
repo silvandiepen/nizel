@@ -49,6 +49,10 @@ const atoms = [
   '\n[r]: <a b>\n', '[r]:\n/u', '[ r ]: /u', '[\\]]: /x', '[a]b]', '[a [b] c](d)', '[a](b(c)d)', '[a](b\\)c)', '[`]`](x)',
   '[<b>](c)', '[a](javascript:x)', '\n<div>\n', '<div>', '</div>', '<pre>', '</pre>', '<!-- x\n', '<?x', '<!X', '<![CDATA[', ']]>',
   '<script>', '</SCRIPT>', '<span a=1>', '<x\ny>', '(', ')', '"', '\n> [q]: /q\n',
+  '\n```\n', '\n```js\n', '\n~~~ py\n', '```js filename="a.js" {1-3,5}\n', "``` filename='b' {2,1.5,x,0x3,1e1}\n", '\n````\n',
+  '\n    code\n', '\n\tcode\n', '\n> ', '\n>> ', '\n > > ', '\n>\t', '\n- ', '\n  - ', '\n    - ', '\n* ', '\n+ ', '\n1. ',
+  '\n2. ', '\n1) ', '\n10. ', '\n- [ ] ', '\n- [x] ', '\n* [X] ', '\n-\t', '\n1.\t', '\n   ', '\n\n- ', '\n\n  ', '\n> - ',
+  '\n- > ', '\n- # h', '\n---\n', '\n***\n', '\n===\n', '\nlazy', '\n  indented', '\n      deep',
 ];
 
 const profiles = [
