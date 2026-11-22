@@ -54,6 +54,7 @@
   },
   "devDependencies": {
     "assemblyscript": "0.28.20",
+    "binaryen": "^131.0.0-nightly.20260721",
     "esbuild": "^0.27.3"
   }
 }
