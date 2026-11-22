@@ -20,7 +20,10 @@ export const taskListPlugin = (options: TaskListPluginOptions = {}): NizelPlugin
         return transformTaskLists(ast, mode);
       },
     },
+    // Only items written with a `[ ]` or `[x]` box become task items.
+    afterParseApplies: (markdown) => markdown.includes('['),
     htmlToMarkdown: taskListToMarkdown(),
+    htmlToMarkdownTags: ['ul', 'ol'],
   };
 };
 

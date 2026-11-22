@@ -347,6 +347,18 @@ export type NizelPlugin = {
    * Passed to `htmlToMarkdown` via `options.plugins`.
    */
   htmlToMarkdown?: NizelHtmlToMarkdownHandler | NizelHtmlToMarkdownHandler[];
+  /**
+   * The element tags `htmlToMarkdown` can claim. When set, the optional Wasm
+   * backend may convert HTML that contains none of them; without it, any
+   * reverse handler keeps the conversion in JavaScript.
+   */
+  htmlToMarkdownTags?: readonly string[];
+  /**
+   * Whether the `afterParse` hook can change the tree for this prepared
+   * Markdown. When it returns false, the optional Wasm backend may render the
+   * source; without it, any `afterParse` hook keeps rendering in JavaScript.
+   */
+  afterParseApplies?: (markdown: string) => boolean;
 };
 
 export type NizelBlockDefinition<TOptions = Record<string, unknown>> = {

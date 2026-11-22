@@ -25,6 +25,7 @@ export const autolinkPlugin = (options: AutolinkPluginOptions = {}): NizelPlugin
       autolinks: resolveAutolinkPluginOptions(options),
     },
     htmlToMarkdown: autolinkToMarkdown(),
+    htmlToMarkdownTags: ['a'],
   });
 };
 

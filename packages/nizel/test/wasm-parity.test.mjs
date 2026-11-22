@@ -78,6 +78,21 @@ test('runs compatible hooks once and honors AST and reverse hooks', async () => 
   assert.equal(wasm.htmlToMarkdown('<p>Original</p>', {plugins:[reversePlugin]}), 'Converted by plugin');
 });
 
+test('lets plugins that declare their reach keep the Wasm path', async () => {
+  const astPlugin = {hooks:{afterParse: ast => ({...ast,children:[]})}, afterParseApplies: source => source.includes('[')};
+  assert.equal(renderWasm('A **bold** word.', {plugins:[astPlugin]}), '<p>A <strong>bold</strong> word.</p>');
+  assert.equal(renderWasm('- [ ] Box', {plugins:[astPlugin]}), undefined);
+  assert.equal(await wasm.useNizel({plugins:[astPlugin]}).html('Kept'), '<p>Kept</p>');
+  assert.equal(await wasm.useNizel({plugins:[astPlugin]}).html('Gone [x]'), '');
+
+  const reversePlugin = {htmlToMarkdown: node => node.tag === 'span' ? 'Converted by plugin' : undefined, htmlToMarkdownTags: ['span']};
+  assert.equal(reverseWasm('<p>A <strong>bold</strong> word.</p>', {plugins:[reversePlugin]}), 'A **bold** word.');
+  assert.equal(reverseWasm('<p><span>x</span></p>', {plugins:[reversePlugin]}), undefined);
+  assert.equal(reverseWasm('<p><SPAN class="x">x</SPAN></p>', {plugins:[reversePlugin]}), undefined);
+  assert.equal(wasm.htmlToMarkdown('<p><span>x</span></p>', {plugins:[reversePlugin]}), 'Converted by plugin');
+  assert.equal(reverseWasm('<p>A <strong>word</strong></p>', {plugins:[{htmlToMarkdown: () => undefined}]}), undefined);
+});
+
 test('falls back when WebAssembly is unavailable', () => {
   const code = [
     'globalThis.WebAssembly = undefined;',

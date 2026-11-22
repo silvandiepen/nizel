@@ -1,6 +1,6 @@
 import encoded from './bytes.js';
 import type { NizelHtmlToMarkdownOptions } from '../html-to-markdown.js';
-import type { NizelOptions } from '../types.js';
+import type { NizelOptions, NizelPlugin } from '../types.js';
 
 type Convert = (source: number, length: number, destination: number, anchors: number) => number;
 type Renderer = { memory: WebAssembly.Memory; render: Convert; reverse: Convert };
@@ -52,7 +52,7 @@ const decoder = new TextDecoder();
 
 /** Renders supported prepared Markdown without changing any plugin or AST semantics. */
 export function renderWasm(source: string, options: NizelOptions): string | undefined {
-  if (options.plugins?.some(plugin => !!plugin.hooks?.afterParse) || options.transforms?.length ||
+  if (options.plugins?.some(plugin => blocksRender(plugin, source)) || options.transforms?.length ||
       Object.keys(options.blocks ?? {}).length || Object.keys(options.elements ?? {}).length ||
       options.unwrapStandaloneImages || (options.slugStyle !== undefined && options.slugStyle !== 'github') ||
       unsupportedMarkdown.test(source)) return undefined;
@@ -61,6 +61,20 @@ export function renderWasm(source: string, options: NizelOptions): string | unde
 
 /** Converts supported semantic HTML while leaving plugin handlers to JavaScript. */
 export function reverseWasm(source: string, options?: NizelHtmlToMarkdownOptions): string | undefined {
-  if (options?.plugins?.some(plugin => !!plugin.htmlToMarkdown) || unsupportedHtml.test(source)) return undefined;
+  if (unsupportedHtml.test(source) || options?.plugins?.some(plugin => blocksReverse(plugin, source))) return undefined;
   return convert(source, 'reverse');
+}
+
+/** An `afterParse` hook blocks Wasm unless its plugin says it cannot apply to this source. */
+function blocksRender(plugin: NizelPlugin, source: string): boolean {
+  if (!plugin.hooks?.afterParse) return false;
+  return plugin.afterParseApplies?.(source) ?? true;
+}
+
+/** A reverse handler blocks Wasm unless its plugin names its tags and none occur in the HTML. */
+function blocksReverse(plugin: NizelPlugin, source: string): boolean {
+  if (!plugin.htmlToMarkdown) return false;
+  const tags = plugin.htmlToMarkdownTags;
+  if (!tags) return true;
+  return tags.some(tag => new RegExp('<' + tag + '[\\s/>]', 'i').test(source));
 }

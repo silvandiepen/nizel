@@ -44,6 +44,7 @@ export const hiddenCommentsPlugin = (options: HiddenCommentsPluginOptions = {}):
       },
     },
     htmlToMarkdown: hiddenCommentsToMarkdown(normalized),
+    htmlToMarkdownTags: ['span'],
   };
 };
 
