@@ -1,6 +1,6 @@
 {
   "name": "nizel-plugin-task-list",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Task-list checkbox rendering plugin for Nizel.",
   "repository": {
     "type": "git",

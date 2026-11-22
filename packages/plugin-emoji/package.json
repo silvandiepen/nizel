@@ -1,6 +1,6 @@
 {
   "name": "nizel-plugin-emoji",
-  "version": "0.1.11",
+  "version": "0.1.13",
   "description": "Emoji shortcut support plugin for Nizel.",
   "repository": {
     "type": "git",

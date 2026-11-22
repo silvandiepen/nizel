@@ -1,6 +1,6 @@
 {
   "name": "nizel-plugin-open-icon",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Open Icon inline SVG plugin for Nizel.",
   "repository": {
     "type": "git",
