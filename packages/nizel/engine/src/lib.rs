@@ -12,6 +12,12 @@
 //!   produce JavaScript's exact output for it yet.
 //! - `output()` returns where the output bytes start.
 
+pub mod ast;
+pub mod block;
+pub mod inline;
+pub mod js;
+pub mod render;
+pub mod slug;
 pub mod status;
 
 use std::cell::RefCell;
@@ -74,8 +80,16 @@ fn convert(len: usize, run: impl FnOnce(&str, &mut String) -> Result<(), i32>) -
 }
 
 /// Markdown → HTML. Mirrors `renderHtml(parseMarkdown(source, options))`.
-pub fn render_markdown(_source: &str, _flags: u32, _out: &mut String) -> Result<(), i32> {
-    Err(status::UNSUPPORTED)
+pub fn render_markdown(source: &str, flags: u32, out: &mut String) -> Result<(), i32> {
+    let options = block::Options {
+        anchors: flags & flags::ANCHORS != 0,
+        autolinks: flags & flags::AUTOLINKS != 0,
+        safe: flags & flags::SAFE != 0,
+        slug_classic: flags & flags::SLUG_CLASSIC != 0,
+    };
+    let blocks = block::parse_markdown(source, &options)?;
+    render::render_blocks(&blocks, out);
+    Ok(())
 }
 
 /// HTML → Markdown. Mirrors `htmlToMarkdown(source)`.

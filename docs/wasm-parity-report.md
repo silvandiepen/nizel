@@ -8,28 +8,28 @@ run); "mismatch" means it produced different bytes, which is a bug.
 
 | Profile | Forward pass | Forward mismatch | Reverse pass | Reverse mismatch | Cases |
 | --- | --- | --- | --- | --- | --- |
-| default | 0 | 0 | 0 | 0 | 652 |
-| bare | 0 | 0 | 0 | 0 | 652 |
+| default | 46 | 0 | 0 | 0 | 652 |
+| bare | 48 | 0 | 0 | 0 | 652 |
 
 ### By section (default profile, forward / reverse passing)
 
 | Section | Cases | Forward | Reverse |
 | --- | --- | --- | --- |
-| Tabs | 11 | 0 | 0 |
+| Tabs | 11 | 2 | 0 |
 | Backslash escapes | 13 | 0 | 0 |
 | Entity and numeric character references | 17 | 0 | 0 |
 | Precedence | 1 | 0 | 0 |
-| Thematic breaks | 19 | 0 | 0 |
-| ATX headings | 18 | 0 | 0 |
-| Setext headings | 27 | 0 | 0 |
+| Thematic breaks | 19 | 11 | 0 |
+| ATX headings | 18 | 13 | 0 |
+| Setext headings | 27 | 8 | 0 |
 | Indented code blocks | 12 | 0 | 0 |
 | Fenced code blocks | 29 | 0 | 0 |
 | HTML blocks | 44 | 0 | 0 |
 | Link reference definitions | 27 | 0 | 0 |
-| Paragraphs | 8 | 0 | 0 |
-| Blank lines | 1 | 0 | 0 |
+| Paragraphs | 8 | 2 | 0 |
+| Blank lines | 1 | 1 | 0 |
 | Block quotes | 25 | 0 | 0 |
-| List items | 48 | 0 | 0 |
+| List items | 48 | 4 | 0 |
 | Lists | 26 | 0 | 0 |
 | Inlines | 1 | 0 | 0 |
 | Code spans | 22 | 0 | 0 |
@@ -38,9 +38,9 @@ run); "mismatch" means it produced different bytes, which is a bug.
 | Images | 22 | 0 | 0 |
 | Autolinks | 19 | 0 | 0 |
 | Raw HTML | 20 | 0 | 0 |
-| Hard line breaks | 15 | 0 | 0 |
+| Hard line breaks | 15 | 2 | 0 |
 | Soft line breaks | 2 | 0 | 0 |
-| Textual content | 3 | 0 | 0 |
+| Textual content | 3 | 3 | 0 |
 
 ## Other gates
 
