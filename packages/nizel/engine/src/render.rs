@@ -35,6 +35,7 @@ fn render_block(block: &Block, out: &mut String) {
             out.push_str("</p>");
         }
         Block::ThematicBreak => out.push_str("<hr />"),
+        Block::Html { value } => out.push_str(value),
     }
 }
 
@@ -53,6 +54,15 @@ fn render_inline(nodes: &[Inline], out: &mut String) {
             Inline::Strong { children } => wrap(out, "strong", children),
             Inline::Emphasis { children } => wrap(out, "em", children),
             Inline::Delete { children } => wrap(out, "del", children),
+            Inline::Image { src, alt, title } => {
+                out.push_str("<img");
+                attr(out, "src", src);
+                attr(out, "alt", alt);
+                if let Some(title) = title {
+                    attr(out, "title", title);
+                }
+                out.push_str(" />");
+            }
             Inline::Link { href, title, children } => {
                 out.push_str("<a");
                 // `node.href?.toLowerCase().trim().startsWith('javascript:')` drops the href.
@@ -72,6 +82,14 @@ fn render_inline(nodes: &[Inline], out: &mut String) {
             }
         }
     }
+}
+
+fn attr(out: &mut String, name: &str, value: &str) {
+    out.push(' ');
+    out.push_str(name);
+    out.push_str("=\"");
+    escape_html_into(out, value);
+    out.push('"');
 }
 
 fn wrap(out: &mut String, tag: &str, children: &[Inline]) {

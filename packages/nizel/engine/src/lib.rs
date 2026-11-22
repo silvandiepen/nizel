@@ -13,10 +13,15 @@
 //! - `output()` returns where the output bytes start.
 
 pub mod ast;
+pub mod backtrack;
 pub mod block;
+pub mod common;
 pub mod emphasis;
+pub mod html;
 pub mod inline;
 pub mod js;
+pub mod links;
+pub mod refs;
 pub mod render;
 pub mod slug;
 pub mod status;

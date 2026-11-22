@@ -2,6 +2,7 @@
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Block {
+    Html { value: String },
     Heading { depth: u8, id: Option<String>, children: Vec<Inline> },
     Paragraph { children: Vec<Inline> },
     ThematicBreak,
@@ -20,6 +21,7 @@ pub enum Inline {
     Emphasis { children: Vec<Inline> },
     Delete { children: Vec<Inline> },
     Link { href: String, title: Option<String>, children: Vec<Inline> },
+    Image { src: String, alt: String, title: Option<String> },
 }
 
 impl Inline {
@@ -51,6 +53,7 @@ fn strip_into(nodes: &[Inline], text: &mut String) {
             Inline::LineBreak { .. } => text.push('\n'),
             Inline::InlineCode { code } => text.push_str(code),
             Inline::InlineHtml { .. } => {}
+            Inline::Image { alt, .. } => text.push_str(alt),
             other => strip_into(other.children().unwrap_or(&[]), text),
         }
     }

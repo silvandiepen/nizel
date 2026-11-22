@@ -1,0 +1,315 @@
+//! `parse/references.ts`: link reference definitions, extracted before
+//! block parsing.
+
+use crate::backtrack::first_match;
+use crate::block::is_thematic_break;
+use crate::common::{decode_string_content, normalize_href, normalize_reference, Reference};
+use crate::html::read_html_block;
+use crate::js;
+use std::collections::HashMap;
+
+pub type References = HashMap<String, Reference>;
+
+/// `extractReferenceDefinitions` → (content lines, references).
+pub fn extract(lines: &[String]) -> (Vec<String>, References) {
+    let mut references = References::new();
+    let mut content: Vec<String> = Vec::with_capacity(lines.len());
+    let mut previous_was_reference = false;
+    let mut index = 0;
+    while index < lines.len() {
+        if let Some((_, end)) = read_html_block(lines, index) {
+            content.extend_from_slice(&lines[index..(end + 1).min(lines.len())]);
+            index = end + 1;
+            previous_was_reference = false;
+            continue;
+        }
+
+        let line = &lines[index];
+        let after_indent = &line[js::up_to_three_spaces(line)..];
+        let fence_marker = after_indent.bytes().next().filter(|b| *b == b'`' || *b == b'~');
+        if let Some(marker) = fence_marker.filter(|&m| js::run_of(after_indent, m) >= 3) {
+            let length = js::run_of(after_indent, marker);
+            content.push(line.clone());
+            index += 1;
+            while index < lines.len() {
+                content.push(lines[index].clone());
+                if closes_fence(&lines[index], marker, length) {
+                    break;
+                }
+                index += 1;
+            }
+            index += 1;
+            previous_was_reference = false;
+            continue;
+        }
+
+        if line.starts_with("    ") {
+            content.push(line.clone());
+            index += 1;
+            previous_was_reference = false;
+            continue;
+        }
+
+        if let Some(quoted) = blockquote_reference_line(line) {
+            if let Some((label, reference, _)) = read_reference_definition(&[quoted.to_string()], 0) {
+                references.entry(normalize_reference(&label)).or_insert(reference);
+                content.push(">".to_string());
+                previous_was_reference = true;
+                index += 1;
+                continue;
+            }
+        }
+
+        let can_start = index == 0
+            || js::trim(&lines[index - 1]).is_empty()
+            || previous_was_reference
+            || is_reference_start_after_block(&lines[index - 1]);
+        if !can_start {
+            content.push(line.clone());
+            previous_was_reference = false;
+            index += 1;
+            continue;
+        }
+
+        match read_reference_definition(lines, index) {
+            Some((label, reference, end)) => {
+                references.entry(normalize_reference(&label)).or_insert(reference);
+                index = end + 1;
+                previous_was_reference = true;
+            }
+            None => {
+                content.push(line.clone());
+                previous_was_reference = false;
+                index += 1;
+            }
+        }
+    }
+    (content, references)
+}
+
+/// `^ {0,3}\${marker}{${length},}\s*$`
+fn closes_fence(line: &str, marker: u8, length: usize) -> bool {
+    let rest = &line[js::up_to_three_spaces(line)..];
+    let run = js::run_of(rest, marker);
+    run >= length && js::trim_end(&rest[run..]).is_empty()
+}
+
+/// `/^>\s?(.*)$/` → group 1.
+fn blockquote_reference_line(line: &str) -> Option<&str> {
+    let rest = line.strip_prefix('>')?;
+    if let Some(c) = rest.chars().next().filter(|&c| js::is_space(c)) {
+        let after = &rest[c.len_utf8()..];
+        if after.chars().all(js::is_dot) {
+            return Some(after);
+        }
+    }
+    rest.chars().all(js::is_dot).then_some(rest)
+}
+
+/// `isReferenceStartAfterBlock`.
+fn is_reference_start_after_block(line: &str) -> bool {
+    let rest = &line[js::up_to_three_spaces(line)..];
+    let hashes = js::run_of(rest, b'#');
+    let atx = (1..=hashes.min(6)).any(|n| rest[n..].is_empty() || rest[n..].chars().next().is_some_and(js::is_space));
+    atx || is_thematic_break(line)
+}
+
+type Definition = (String, Reference, usize);
+
+/// `readReferenceDefinition`.
+pub fn read_reference_definition(lines: &[String], start: usize) -> Option<Definition> {
+    if let Some(found) = read_multiline_reference_definition(lines, start) {
+        return Some(found);
+    }
+    let line = &lines[start];
+    let open = js::up_to_three_spaces(line);
+    if line.as_bytes().get(open) != Some(&b'[') {
+        return None;
+    }
+    let (label_end, rest) = single_line_label(line, open + 1)?;
+    let mut parts = vec![rest.to_string()];
+    let mut cursor = start + 1;
+    while cursor < lines.len() && !js::trim(&lines[cursor]).is_empty() && can_continue_reference_definition(&parts, &lines[cursor]) {
+        parts.push(lines[cursor].clone());
+        cursor += 1;
+    }
+    let reference = parse_reference_definition_content(&parts.join("\n"))?;
+    Some((decode_string_content(&line[open + 1..label_end]), reference, cursor - 1))
+}
+
+/// A label item: `\\[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]` or `[^\[\]\n]`.
+/// Returns the next positions in regex priority order.
+fn label_items(s: &str, p: usize) -> Vec<usize> {
+    let mut next = Vec::with_capacity(2);
+    let b = s.as_bytes();
+    if b.get(p) == Some(&b'\\') && b.get(p + 1).is_some_and(u8::is_ascii_punctuation) {
+        next.push(p + 2);
+    }
+    if let Some(c) = s[p..].chars().next() {
+        if c != '[' && c != ']' && c != '\n' {
+            // `[^\[\]\n]` matches one UTF-16 unit; an astral character is two
+            // items, which only matters for the {1,999} count below.
+            next.push(p + c.len_utf8());
+        }
+    }
+    next
+}
+
+/// `^ {0,3}\[(ITEM{1,999})\]:[ \t]*(.*)$` from after the `[` → (label end, group 2).
+fn single_line_label(line: &str, start: usize) -> Option<(usize, &str)> {
+    // States carry the item count, as `{1,999}` bounds it.
+    first_match(
+        (start, 0usize),
+        |&(p, count)| {
+            if count >= 999 {
+                return Vec::new();
+            }
+            label_items(line, p)
+                .into_iter()
+                .map(|q| (q, count + if q - p == 4 { 2 } else { 1 }))
+                .filter(|&(_, n)| n <= 999)
+                .collect()
+        },
+        |&(p, count)| {
+            if count == 0 || !line[p..].starts_with("]:") {
+                return None;
+            }
+            let after = p + 2 + line[p + 2..].bytes().take_while(|b| *b == b' ' || *b == b'\t').count();
+            line[after..].chars().all(js::is_dot).then(|| (p, &line[after..]))
+        },
+    )
+}
+
+/// `readMultilineReferenceDefinition`.
+fn read_multiline_reference_definition(lines: &[String], start: usize) -> Option<Definition> {
+    let line = &lines[start];
+    let open = js::up_to_three_spaces(line);
+    if line.as_bytes().get(open) != Some(&b'[') {
+        return None;
+    }
+    // `^ {0,3}\[(ITEM*)$`
+    let whole = first_match(open + 1, |&p| label_items(line, p), |&p| (p == line.len()).then_some(()));
+    whole?;
+    let mut label_parts = vec![line[open + 1..].to_string()];
+    for cursor in start + 1..lines.len() {
+        let candidate = &lines[cursor];
+        let Some((label_end, rest)) = multiline_closer(candidate) else {
+            if js::trim(candidate).is_empty() {
+                return None;
+            }
+            label_parts.push(candidate.clone());
+            continue;
+        };
+        let indent = js::up_to_three_spaces(candidate);
+        label_parts.push(candidate[indent..label_end].to_string());
+        let label = label_parts.join("\n");
+        if js::trim(&label).is_empty() || label.encode_utf16().count() > 999 {
+            return None;
+        }
+        let mut parts = vec![rest.to_string()];
+        let mut content_cursor = cursor + 1;
+        while content_cursor < lines.len()
+            && !js::trim(&lines[content_cursor]).is_empty()
+            && can_continue_reference_definition(&parts, &lines[content_cursor])
+        {
+            parts.push(lines[content_cursor].clone());
+            content_cursor += 1;
+        }
+        let reference = parse_reference_definition_content(&parts.join("\n"))?;
+        return Some((decode_string_content(&label), reference, content_cursor - 1));
+    }
+    None
+}
+
+/// `^ {0,3}(ITEM*)\]:[ \t]*(.*)$` → (label end, group 2).
+fn multiline_closer(line: &str) -> Option<(usize, &str)> {
+    let start = js::up_to_three_spaces(line);
+    first_match(
+        start,
+        |&p| label_items(line, p),
+        |&p| {
+            if !line[p..].starts_with("]:") {
+                return None;
+            }
+            let after = p + 2 + line[p + 2..].bytes().take_while(|b| *b == b' ' || *b == b'\t').count();
+            line[after..].chars().all(js::is_dot).then(|| (p, &line[after..]))
+        },
+    )
+}
+
+/// `canContinueReferenceDefinition`.
+fn can_continue_reference_definition(parts: &[String], line: &str) -> bool {
+    let joined = parts.join("\n");
+    let collected = js::trim(&joined);
+    if collected.is_empty() || line.starts_with(' ') || has_open_reference_title(parts) {
+        return true;
+    }
+    let parsed = parse_reference_definition_content(collected);
+    parsed.is_none_or(|reference| reference.title.is_none())
+        && js::trim(line).starts_with(['"', '\'', '('])
+        && parse_reference_definition_content(&format!("{collected}\n{line}")).is_some()
+}
+
+/// `parseReferenceDefinitionContent`.
+pub fn parse_reference_definition_content(content: &str) -> Option<Reference> {
+    let mut rest = js::trim(content);
+    if rest.is_empty() {
+        return None;
+    }
+    let destination;
+    if let Some(after) = rest.strip_prefix('<') {
+        let close = after.find('>')?;
+        destination = &after[..close];
+        rest = &after[close + 1..];
+        if !rest.is_empty() && !rest.chars().next().is_some_and(js::is_space) {
+            return None;
+        }
+    } else {
+        let len = rest.char_indices().find(|&(_, c)| js::is_space(c)).map_or(rest.len(), |(i, _)| i);
+        destination = &rest[..len];
+        rest = &rest[len..];
+    }
+    let title = parse_reference_title(rest)?;
+    Some(Reference {
+        href: normalize_href(&decode_string_content(destination)),
+        title: title.map(decode_string_content),
+    })
+}
+
+/// `parseReferenceTitle`: `None` = invalid, `Some(None)` = no title.
+fn parse_reference_title(source: &str) -> Option<Option<&str>> {
+    let rest = js::trim(source);
+    if rest.is_empty() {
+        return Some(None);
+    }
+    let opener = rest.as_bytes()[0];
+    let closer = match opener {
+        b'(' => b')',
+        b'"' | b'\'' => opener,
+        _ => return None,
+    };
+    if !rest.ends_with(closer as char) {
+        return None;
+    }
+    // `rest.slice(1, -1)`: a lone quote is both opener and closer → "".
+    Some(Some(if rest.len() >= 2 { &rest[1..rest.len() - 1] } else { "" }))
+}
+
+/// `hasOpenReferenceTitle`.
+fn has_open_reference_title(parts: &[String]) -> bool {
+    let joined = parts.join("\n");
+    let content = js::trim(&joined);
+    // `/^<?\S+>?/` is always the first run of non-whitespace.
+    let destination = content.char_indices().find(|&(_, c)| js::is_space(c)).map_or(content.len(), |(i, _)| i);
+    if destination == 0 {
+        return false;
+    }
+    let rest = js::trim_start(&content[destination..]);
+    let Some(&opener) = rest.as_bytes().first() else { return false };
+    let closer = match opener {
+        b'(' => b')',
+        b'"' | b'\'' => opener,
+        _ => return false,
+    };
+    rest.encode_utf16().count() == 1 || !rest.ends_with(closer as char)
+}

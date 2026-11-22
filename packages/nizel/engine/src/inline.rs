@@ -10,16 +10,38 @@
 //! matches U+017F (ſ, folds to s) and U+212A (K, folds to k), and literal
 //! letters match case-insensitively (`https?` matches `HTTP` and `httpſ`).
 
-use crate::ast::Inline;
+use crate::ast::{strip_inline, Inline};
+use crate::backtrack::first_match;
 use crate::block::Options;
+use crate::common::{decode_string_content, normalize_href, normalize_reference, normalize_reference_label_for_lookup};
 use crate::emphasis::resolve_remaining_emphasis;
+use crate::html::{is_valid_inline_html_token, letter_iu, match_tag};
 use crate::js;
-use crate::status::UNSUPPORTED;
-use std::collections::HashSet;
+use crate::links;
+use crate::refs::References;
 
 type Result<T> = std::result::Result<T, i32>;
 
-pub fn parse_inline(source: &str, options: &Options) -> Result<Vec<Inline>> {
+/// What every inline parse sees: options and the document's references.
+pub struct Ctx<'a> {
+    pub options: &'a Options,
+    pub references: &'a References,
+}
+
+pub fn parse_inline(source: &str, ctx: &Ctx) -> Result<Vec<Inline>> {
+    parse_inline_with_state(source, ctx, true)
+}
+
+/// `stripInlineMarkdown`: parsed with the same options but no references.
+fn strip_inline_markdown(source: &str, ctx: &Ctx) -> Result<String> {
+    let empty = References::new();
+    let bare = Ctx { options: ctx.options, references: &empty };
+    Ok(strip_inline(&parse_inline_with_state(source, &bare, true)?))
+}
+
+/// `parseInlineWithState`.
+fn parse_inline_with_state(source: &str, ctx: &Ctx, extract_nested_links: bool) -> Result<Vec<Inline>> {
+    let options = ctx.options;
     if !has_inline_syntax(source, options.autolinks) {
         return Ok(if source.is_empty() { Vec::new() } else { vec![Inline::text(source)] });
     }
@@ -27,9 +49,10 @@ pub fn parse_inline(source: &str, options: &Options) -> Result<Vec<Inline>> {
     if !has_at && !has_non_emphasis_syntax(source) {
         return Ok(resolve_remaining_emphasis(vec![Inline::text(source)]));
     }
-    // Links, images and the balanced-label scanner all start at a `[`.
-    if source.contains('[') {
-        return Err(UNSUPPORTED);
+    if extract_nested_links && source.contains('[') {
+        if let Some(scanned) = scan_balanced_inline_links(source, ctx)? {
+            return Ok(resolve_remaining_emphasis(scanned));
+        }
     }
 
     let mut nodes: Vec<Inline> = Vec::new();
@@ -40,22 +63,55 @@ pub fn parse_inline(source: &str, options: &Options) -> Result<Vec<Inline>> {
             nodes.push(Inline::text(&source[last..start]));
         }
         let matched = &source[start..end];
+        let slice = |(a, b): (usize, usize)| &source[a..b];
         match token {
             Token::InlineHtml => {
-                if !options.safe {
-                    // isValidInlineHtmlToken is not ported yet.
-                    return Err(UNSUPPORTED);
+                if options.safe || !is_valid_inline_html_token(matched) {
+                    nodes.push(Inline::text(matched));
+                } else {
+                    nodes.push(Inline::InlineHtml { value: matched.to_string() });
                 }
-                nodes.push(Inline::text(matched));
             }
             Token::HardBreak => nodes.push(Inline::LineBreak { hard: true }),
             Token::SoftBreak => {
                 trim_trailing_soft_break_space(&mut nodes);
                 nodes.push(Inline::LineBreak { hard: false });
             }
-            Token::Code { value } => nodes.push(Inline::InlineCode { code: normalize_code_span(&source[value.0..value.1]) }),
+            Token::Code { value } => nodes.push(Inline::InlineCode { code: normalize_code_span(slice(value)) }),
             Token::Escaped => nodes.push(Inline::Text { value: matched[1..].to_string(), escaped: true }),
-            Token::Entity => nodes.push(Inline::Text { value: decode_entity(&matched[1..matched.len() - 1]), escaped: true }),
+            Token::Entity => nodes.push(Inline::Text { value: crate::common::decode_entity(&matched[1..matched.len() - 1]), escaped: true }),
+            Token::RefImage { alt, label } => {
+                let key = normalize_reference_label_for_lookup(if label.0 == label.1 { slice(alt) } else { slice(label) });
+                match ctx.references.get(&key) {
+                    Some(reference) => nodes.push(Inline::Image {
+                        alt: strip_inline_markdown(slice(alt), ctx)?,
+                        src: reference.href.clone(),
+                        title: reference.title.clone(),
+                    }),
+                    None => nodes.push(Inline::text(decode_string_content(matched))),
+                }
+            }
+            Token::RefLink { text, label } => {
+                let key = normalize_reference_label_for_lookup(if label.0 == label.1 { slice(text) } else { slice(label) });
+                match ctx.references.get(&key) {
+                    Some(reference) => nodes.push(Inline::Link {
+                        href: reference.href.clone(),
+                        title: reference.title.clone(),
+                        children: parse_inline_with_state(slice(text), ctx, true)?,
+                    }),
+                    None => nodes.push(Inline::text(decode_string_content(matched))),
+                }
+            }
+            Token::InlineImage { text, href, title } => nodes.push(Inline::Image {
+                alt: strip_inline_markdown(slice(text), ctx)?,
+                src: normalize_href(&decode_string_content(normalize_inline_destination(slice(href)))),
+                title: title.map(|t| decode_string_content(slice(t))),
+            }),
+            Token::InlineLink { text, href, title } => nodes.push(Inline::Link {
+                href: normalize_href(&decode_string_content(normalize_inline_destination(slice(href)))),
+                title: title.map(|t| decode_string_content(slice(t))),
+                children: parse_inline_with_state(slice(text), ctx, true)?,
+            }),
             Token::AngleUrl => {
                 let url = &matched[1..matched.len() - 1];
                 nodes.push(Inline::Link { href: normalize_href(url), title: None, children: vec![Inline::text(url)] });
@@ -64,7 +120,29 @@ pub fn parse_inline(source: &str, options: &Options) -> Result<Vec<Inline>> {
                 let email = &matched[1..matched.len() - 1];
                 nodes.push(Inline::Link { href: format!("mailto:{email}"), title: None, children: vec![Inline::text(email)] });
             }
-            Token::Delete => nodes.push(Inline::Delete { children: parse_inline(&matched[2..matched.len() - 2], options)? }),
+            Token::ShortcutImage { text } => {
+                let alt = decode_string_content(slice(text));
+                match ctx.references.get(&normalize_reference(&alt)) {
+                    Some(reference) => nodes.push(Inline::Image {
+                        alt: strip_inline_markdown(&alt, ctx)?,
+                        src: reference.href.clone(),
+                        title: reference.title.clone(),
+                    }),
+                    None => nodes.push(Inline::text(decode_string_content(matched))),
+                }
+            }
+            Token::ShortcutLink { text } => {
+                let label = decode_string_content(slice(text));
+                match ctx.references.get(&normalize_reference(&label)) {
+                    Some(reference) => nodes.push(Inline::Link {
+                        href: reference.href.clone(),
+                        title: reference.title.clone(),
+                        children: parse_inline_with_state(&label, ctx, true)?,
+                    }),
+                    None => nodes.push(Inline::text(decode_string_content(matched))),
+                }
+            }
+            Token::Delete => nodes.push(Inline::Delete { children: parse_inline_with_state(&matched[2..matched.len() - 2], ctx, true)? }),
             Token::BareUrl if options.autolinks => {
                 let href = trim_trailing_punctuation(matched);
                 nodes.push(Inline::Link { href: href.to_string(), title: None, children: vec![Inline::text(href)] });
@@ -83,6 +161,87 @@ pub fn parse_inline(source: &str, options: &Options) -> Result<Vec<Inline>> {
         nodes.push(Inline::text(&source[last..]));
     }
     Ok(resolve_remaining_emphasis(nodes))
+}
+
+/// `scanBalancedInlineLinks`.
+fn scan_balanced_inline_links(source: &str, ctx: &Ctx) -> Result<Option<Vec<Inline>>> {
+    let b = source.as_bytes();
+    let mut nodes: Vec<Inline> = Vec::new();
+    let mut cursor = 0;
+    let mut search = 0;
+    let mut found = false;
+    while cursor < source.len() {
+        let Some(opener) = links::next_inline_label_opener(source, search) else { break };
+        let image = b[opener] == b'!';
+        let label_start = opener + if image { 2 } else { 1 };
+        let Some(label_end) = links::find_balanced_label_end(source, label_start) else {
+            search = opener + 1;
+            continue;
+        };
+        let label = &source[label_start..label_end];
+        if !image && links::contains_inline_link(label) {
+            search = opener + 1;
+            continue;
+        }
+        let inline = if b.get(label_end + 1) == Some(&b'(') { links::read_inline_destination(source, label_end + 1) } else { None };
+        let destination = match inline {
+            Some(found) => Some(found),
+            None => links::read_inline_reference_destination(source, label_end, label, ctx.references),
+        };
+        let Some(destination) = destination else {
+            if let Some(unresolved_end) = links::read_unresolved_inline_reference_end(source, label_end).filter(|_| !image) {
+                let reference_label = &source[label_end + 2..unresolved_end];
+                if opener > cursor {
+                    nodes.extend(parse_inline_with_state(&source[cursor..opener], ctx, false)?);
+                }
+                nodes.push(Inline::text("["));
+                nodes.extend(parse_inline_with_state(label, ctx, false)?);
+                nodes.push(Inline::text("]"));
+                if links::read_inline_reference_destination(source, unresolved_end, reference_label, ctx.references).is_none() {
+                    nodes.push(Inline::text("["));
+                    nodes.extend(parse_inline_with_state(reference_label, ctx, false)?);
+                    nodes.push(Inline::text("]"));
+                    cursor = unresolved_end + 1;
+                } else {
+                    cursor = label_end + 1;
+                }
+                found = true;
+                search = unresolved_end + 1;
+                continue;
+            }
+            search = opener + 1;
+            continue;
+        };
+        if opener > cursor {
+            nodes.extend(parse_inline_with_state(&source[cursor..opener], ctx, false)?);
+        }
+        let href = normalize_href(&decode_string_content(&destination.href));
+        let title = destination.title.as_deref().map(decode_string_content);
+        if image {
+            nodes.push(Inline::Image { alt: strip_inline_markdown(label, ctx)?, src: href, title });
+        } else {
+            nodes.push(Inline::Link { href, title, children: parse_inline_with_state(label, ctx, false)? });
+        }
+        found = true;
+        cursor = destination.end + 1;
+        search = cursor;
+    }
+    if !found {
+        return Ok(None);
+    }
+    if cursor < source.len() {
+        nodes.extend(parse_inline_with_state(&source[cursor..], ctx, false)?);
+    }
+    Ok(Some(nodes))
+}
+
+/// `normalizeInlineDestination`.
+fn normalize_inline_destination(destination: &str) -> &str {
+    if destination.len() >= 2 && destination.starts_with('<') && destination.ends_with('>') {
+        &destination[1..destination.len() - 1]
+    } else {
+        destination
+    }
 }
 
 /// `hasInlineSyntax` (its URL checks are case-sensitive).
@@ -129,97 +288,18 @@ fn trim_trailing_punctuation(source: &str) -> &str {
     source.trim_end_matches([')', ',', '.', ';', ':', '!', '?'])
 }
 
-/// `decodeEntity` from `parse/common.ts` (without the `&` and `;`).
-pub fn decode_entity(entity: &str) -> String {
-    if let Some(hex) = entity.strip_prefix("#x").or_else(|| entity.strip_prefix("#X")) {
-        return decode_code_point(entity, parse_int(hex, 16));
-    }
-    if let Some(decimal) = entity.strip_prefix('#') {
-        return decode_code_point(entity, parse_int(decimal, 10));
-    }
-    let named = match entity {
-        "amp" => "&",
-        "lt" => "<",
-        "gt" => ">",
-        "quot" => "\"",
-        "apos" => "'",
-        "nbsp" => "\u{a0}",
-        "AElig" => "Æ",
-        "auml" => "ä",
-        "ClockwiseContourIntegral" => "∲",
-        "copy" => "©",
-        "Dcaron" => "Ď",
-        "DifferentialD" => "ⅆ",
-        "frac34" => "¾",
-        "HilbertSpace" => "ℋ",
-        "ngE" => "≧\u{338}",
-        "ouml" => "ö",
-        _ => return format!("&{entity};"),
-    };
-    named.to_string()
-}
-
-/// `Number.parseInt(digits, radix)` for a run of valid digits.
-fn parse_int(digits: &str, radix: u32) -> f64 {
-    if radix == 10 {
-        return digits.parse::<f64>().unwrap_or(f64::NAN);
-    }
-    let mut value = 0f64;
-    for c in digits.chars() {
-        value = value * radix as f64 + c.to_digit(radix).unwrap_or(0) as f64;
-    }
-    value
-}
-
-/// `decodeCodePoint`.
-fn decode_code_point(entity: &str, code_point: f64) -> String {
-    if !code_point.is_finite() || code_point == 0.0 || (0xd800 as f64..=0xdfff as f64).contains(&code_point) {
-        return "\u{fffd}".to_string();
-    }
-    if code_point > 0x10ffff as f64 {
-        return format!("&{entity};");
-    }
-    char::from_u32(code_point as u32).map_or_else(|| "\u{fffd}".to_string(), |c| c.to_string())
-}
-
-/// `normalizeHref`: `encodeURI(destination).replace(/%25([0-9A-Fa-f]{2})/g, '%$1')`.
-pub fn normalize_href(destination: &str) -> String {
-    const KEEP: &[u8] = b";,/?:@&=+$-_.!~*'()#";
-    let mut encoded = String::with_capacity(destination.len() + 8);
-    for &byte in destination.as_bytes() {
-        if byte.is_ascii_alphanumeric() || KEEP.contains(&byte) {
-            encoded.push(byte as char);
-        } else {
-            encoded.push('%');
-            encoded.push(hex_digit(byte >> 4));
-            encoded.push(hex_digit(byte & 15));
-        }
-    }
-    let bytes = encoded.as_bytes();
-    let mut out = String::with_capacity(encoded.len());
-    let mut index = 0;
-    while index < bytes.len() {
-        if bytes[index..].starts_with(b"%25") && index + 5 <= bytes.len() && bytes[index + 3].is_ascii_hexdigit() && bytes[index + 4].is_ascii_hexdigit() {
-            out.push('%');
-            out.push(bytes[index + 3] as char);
-            out.push(bytes[index + 4] as char);
-            index += 5;
-        } else {
-            out.push(bytes[index] as char);
-            index += 1;
-        }
-    }
-    out
-}
-
-fn hex_digit(nibble: u8) -> char {
-    b"0123456789ABCDEF"[nibble as usize] as char
-}
-
 // ---------------------------------------------------------------------------
 // The tokenizer.
 
+type Range = (usize, usize);
+
 enum Token {
+    RefImage { alt: Range, label: Range },
+    RefLink { text: Range, label: Range },
+    InlineImage { text: Range, href: Range, title: Option<Range> },
+    InlineLink { text: Range, href: Range, title: Option<Range> },
+    ShortcutImage { text: Range },
+    ShortcutLink { text: Range },
     InlineHtml,
     HardBreak,
     SoftBreak,
@@ -292,12 +372,41 @@ impl<'a> Scanner<'a> {
                     return Some((end, Token::Entity));
                 }
             }
+            b'!' if b.get(p + 1) == Some(&b'[') => {
+                if let Some((end, alt, label)) = match_reference_form(s, p + 2, |_| true) {
+                    return Some((end, Token::RefImage { alt, label }));
+                }
+                if let Some((end, text, href, title)) = match_inline_resource(s, p + 2) {
+                    return Some((end, Token::InlineImage { text, href, title }));
+                }
+            }
+            b'[' => {
+                if let Some((end, text, label)) = match_reference_form(s, p + 1, |c| !matches!(c, ']' | '`' | '<' | '[')).filter(|(_, t, _)| t.1 > t.0) {
+                    return Some((end, Token::RefLink { text, label }));
+                }
+                if let Some((end, text, href, title)) = match_inline_resource(s, p + 1) {
+                    return Some((end, Token::InlineLink { text, href, title }));
+                }
+            }
+            _ => {}
+        }
+        match b[p] {
             b'<' => {
                 if let Some(end) = match_angle_url(s, p) {
                     return Some((end, Token::AngleUrl));
                 }
                 if let Some(end) = match_angle_email(s, p) {
                     return Some((end, Token::AngleEmail));
+                }
+            }
+            b'!' if b.get(p + 1) == Some(&b'[') => {
+                if let Some((end, text)) = match_shortcut(s, p + 2) {
+                    return Some((end, Token::ShortcutImage { text }));
+                }
+            }
+            b'[' => {
+                if let Some((end, text)) = match_shortcut(s, p + 1) {
+                    return Some((end, Token::ShortcutLink { text }));
                 }
             }
             b'~' => {
@@ -358,7 +467,7 @@ fn run_len(s: &str, start: usize, keep: impl Fn(char) -> bool) -> usize {
 
 /// `[A-Za-z]` under the `iu` flags.
 fn is_letter_iu(c: char) -> bool {
-    c.is_ascii_alphabetic() || c == '\u{17f}' || c == '\u{212a}'
+    letter_iu(c)
 }
 
 fn is_alnum_iu(c: char) -> bool {
@@ -512,76 +621,157 @@ fn match_inline_html(s: &str, p: usize) -> Option<usize> {
     match_html_tag(s, p + 1)
 }
 
-/// `\/?[A-Za-z][A-Za-z0-9-]*` then the attribute loop, after the `<`.
-fn match_html_tag(s: &str, at: usize) -> Option<usize> {
-    let mut i = at;
-    if s.as_bytes().get(i) == Some(&b'/') {
-        i += 1;
-    }
-    let first = s[i..].chars().next()?;
-    if !is_letter_iu(first) {
+/// Matches a reference form `TEXT\]\[LABEL\]` after the opening bracket,
+/// where TEXT is a run of characters satisfying `text` (`[^\]]*` for
+/// images) and LABEL is `[^\]]*`.
+fn match_reference_form(s: &str, start: usize, text: impl Fn(char) -> bool) -> Option<(usize, Range, Range)> {
+    let text_end = start + s[start..].char_indices().find(|&(_, c)| c == ']' || !text(c)).map_or(s.len() - start, |(i, _)| i);
+    if !s[text_end..].starts_with("][") {
         return None;
     }
-    i += first.len_utf8();
-    i += run_len(s, i, |c| is_alnum_iu(c) || c == '-');
-    tag_attributes(s, i, &mut HashSet::new())
+    let label_start = text_end + 2;
+    let label_end = label_start + s[label_start..].find(']')?;
+    Some((label_end + 1, (start, text_end), (label_start, label_end)))
 }
 
-/// `(?:\s+ATTR)*\s*\/?>` from `i`, depth-first in the regex's priority
-/// order: another attribute (with a value, then without) before the end.
-/// ATTR is `[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?`.
-/// `failed` remembers loop positions already shown not to lead to a match.
-fn tag_attributes(s: &str, i: usize, failed: &mut HashSet<usize>) -> Option<usize> {
-    if failed.contains(&i) {
+fn is_link_space(b: Option<&u8>) -> bool {
+    matches!(b, Some(b' ' | b'\t' | b'\n'))
+}
+
+/// `TEXT\]\([ \t\n]*HREF(?:[ \t\n]+TITLE)?[ \t\n]*\)` after the opening
+/// bracket, TEXT being `[^\]`<]*`.
+fn match_inline_resource(s: &str, start: usize) -> Option<(usize, Range, Range, Option<Range>)> {
+    let b = s.as_bytes();
+    let text_end = start + b[start..].iter().position(|&c| matches!(c, b']' | b'`' | b'<')).unwrap_or(b.len() - start);
+    if !s[text_end..].starts_with("](") {
         return None;
     }
-    let spaces = run_len(s, i, js::is_space);
+    let mut q = text_end + 2;
+    while is_link_space(b.get(q)) {
+        q += 1;
+    }
+    let href_start = q;
+    if b.get(q) == Some(&b'<') {
+        // `<[^<>\n\\]*>`; the other alternative starts with (?!<).
+        let len = b[q + 1..].iter().position(|&c| matches!(c, b'<' | b'>' | b'\n' | b'\\'))?;
+        if b[q + 1 + len] != b'>' {
+            return None;
+        }
+        q += len + 2;
+    } else {
+        q = href_loop_end(s, q);
+    }
+    let href = (href_start, q);
+    // With a title first (the optional group is greedy), then without.
+    let spaces = b[q..].iter().take_while(|&&c| matches!(c, b' ' | b'\t' | b'\n')).count();
     if spaces > 0 {
-        let name_start = i + spaces;
-        if let Some(first) = s[name_start..].chars().next().filter(|&c| is_letter_iu(c) || c == '_' || c == ':') {
-            let mut name_end = name_start + first.len_utf8();
-            name_end += run_len(s, name_end, |c| is_alnum_iu(c) || matches!(c, '_' | '.' | ':' | '-'));
-            for next in attribute_values(s, name_end).into_iter().chain(std::iter::once(name_end)) {
-                if let Some(end) = tag_attributes(s, next, failed) {
-                    return Some(end);
+        if let Some((title, end)) = match_title(s, q + spaces) {
+            return Some((end, (start, text_end), href, Some(title)));
+        }
+    }
+    let close = q + spaces;
+    (b.get(close) == Some(&b')')).then_some((close + 1, (start, text_end), href, None))
+}
+
+/// The greedy href loop `(?:\\.|[^() \t\n`\\]|\([^()\n]*(?:\([^()\n]*\)[^()\n]*)*\))*`.
+fn href_loop_end(s: &str, mut q: usize) -> usize {
+    let b = s.as_bytes();
+    loop {
+        match b.get(q) {
+            Some(b'\\') => match s[q + 1..].chars().next() {
+                Some(c) if js::is_dot(c) => q += 1 + c.len_utf8(),
+                _ => return q,
+            },
+            Some(b'(') => match paren_group_end(b, q) {
+                Some(end) => q = end,
+                None => return q,
+            },
+            Some(b')' | b' ' | b'\t' | b'\n' | b'`') | None => return q,
+            Some(_) => q += s[q..].chars().next().map_or(1, char::len_utf8),
+        }
+    }
+}
+
+/// `\([^()\n]*(?:\([^()\n]*\)[^()\n]*)*\)` at `q` → end.
+fn paren_group_end(b: &[u8], q: usize) -> Option<usize> {
+    let plain = |from: usize| from + b[from..].iter().take_while(|&&c| !matches!(c, b'(' | b')' | b'\n')).count();
+    let mut i = plain(q + 1);
+    loop {
+        match b.get(i) {
+            Some(b')') => return Some(i + 1),
+            Some(b'(') => {
+                let inner = plain(i + 1);
+                if b.get(inner) != Some(&b')') {
+                    return None;
                 }
+                i = plain(inner + 1);
             }
-        }
-    }
-    if let Some(end) = tag_stop(s, i) {
-        return Some(end);
-    }
-    failed.insert(i);
-    None
-}
-
-/// End positions of `\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+)` from `i`, in
-/// priority order (an unquoted value longest first).
-fn attribute_values(s: &str, i: usize) -> Vec<usize> {
-    let eq = i + run_len(s, i, js::is_space);
-    if s.as_bytes().get(eq) != Some(&b'=') {
-        return Vec::new();
-    }
-    let v = eq + 1 + run_len(s, eq + 1, js::is_space);
-    match s.as_bytes().get(v) {
-        Some(&quote @ (b'"' | b'\'')) => s[v + 1..].find(quote as char).map(|close| vec![v + 1 + close + 1]).unwrap_or_default(),
-        _ => {
-            let mut ends: Vec<usize> = s[v..]
-                .char_indices()
-                .take_while(|&(_, c)| !(js::is_space(c) || matches!(c, '"' | '\'' | '=' | '<' | '>' | '`')))
-                .map(|(n, c)| v + n + c.len_utf8())
-                .collect();
-            ends.reverse();
-            ends
+            _ => return None,
         }
     }
 }
 
-/// `\s*\/?>` from `i`.
-fn tag_stop(s: &str, i: usize) -> Option<usize> {
-    let mut j = i + run_len(s, i, js::is_space);
-    if s.as_bytes().get(j) == Some(&b'/') {
-        j += 1;
+/// A title at `q` (`"…"`, `'…'` or `(…)`) followed by `[ \t\n]*\)` →
+/// (title content range, end after `)`).
+fn match_title(s: &str, q: usize) -> Option<(Range, usize)> {
+    let b = s.as_bytes();
+    let close_after = |p: usize| {
+        let spaces = b[p..].iter().take_while(|&&c| matches!(c, b' ' | b'\t' | b'\n')).count();
+        (b.get(p + spaces) == Some(&b')')).then_some(p + spaces + 1)
+    };
+    match b.get(q)? {
+        b'"' => {
+            // `"((?:\\.|[^"`])*)"`, depth-first like the regex.
+            let start = q + 1;
+            first_match(
+                start,
+                |&p| {
+                    let mut next = Vec::with_capacity(2);
+                    if b.get(p) == Some(&b'\\') {
+                        if let Some(c) = s[p + 1..].chars().next().filter(|&c| js::is_dot(c)) {
+                            next.push(p + 1 + c.len_utf8());
+                        }
+                    }
+                    if let Some(c) = s[p..].chars().next().filter(|&c| c != '"' && c != '`') {
+                        next.push(p + c.len_utf8());
+                    }
+                    next
+                },
+                |&p| if b.get(p) == Some(&b'"') { close_after(p + 1).map(|end| ((start, p), end)) } else { None },
+            )
+        }
+        b'\'' => {
+            let len = s[q + 1..].find('\'')?;
+            close_after(q + 1 + len + 1).map(|end| ((q + 1, q + 1 + len), end))
+        }
+        b'(' => {
+            let len = s[q + 1..].find(')')?;
+            close_after(q + 1 + len + 1).map(|end| ((q + 1, q + 1 + len), end))
+        }
+        _ => None,
     }
-    (s.as_bytes().get(j) == Some(&b'>')).then_some(j + 1)
+}
+
+/// `(?:\\\]|[^\]`<\[])+\]` after the opening bracket → (end, text range).
+fn match_shortcut(s: &str, start: usize) -> Option<(usize, Range)> {
+    let b = s.as_bytes();
+    first_match(
+        (start, false),
+        |&(p, _)| {
+            let mut next = Vec::with_capacity(2);
+            if b.get(p) == Some(&b'\\') && b.get(p + 1) == Some(&b']') {
+                next.push((p + 2, true));
+            }
+            if let Some(c) = s[p..].chars().next().filter(|&c| !matches!(c, ']' | '`' | '<' | '[')) {
+                next.push((p + c.len_utf8(), true));
+            }
+            next
+        },
+        |&(p, any)| (any && b.get(p) == Some(&b']')).then_some((p + 1, (start, p))),
+    )
+}
+
+/// The tag alternative of `inlineHtml` (letters folded by `iu`).
+fn match_html_tag(s: &str, at: usize) -> Option<usize> {
+    match_tag(s, at, letter_iu, true, &|_| true)
 }

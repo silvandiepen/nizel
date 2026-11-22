@@ -6,7 +6,9 @@
 //! comes out byte-identical or is declined — never different.
 
 use crate::ast::{strip_inline, Block};
-use crate::inline::parse_inline;
+use crate::html::{is_interrupting_html_block_start, read_html_block};
+use crate::inline::{parse_inline, Ctx};
+use crate::refs::{self, References};
 use crate::js;
 use crate::slug::{slugify, unique_slug};
 use crate::status::UNSUPPORTED;
@@ -28,11 +30,14 @@ pub fn parse_markdown(markdown: &str, options: &Options) -> Result<Vec<Block>> {
     } else {
         normalized.split('\n').map(str::to_string).collect()
     };
-    if normalized.contains("]:") && has_possible_reference_definition_start(&normalized) {
-        return Err(UNSUPPORTED);
-    }
+    let (lines, references) = if normalized.contains("]:") && has_possible_reference_definition_start(&normalized) {
+        refs::extract(&lines)
+    } else {
+        (lines, References::new())
+    };
+    let ctx = Ctx { options, references: &references };
     let mut seen = HashMap::new();
-    parse_blocks(&lines, options, &mut seen)
+    parse_blocks(&lines, &ctx, &mut seen)
 }
 
 /// `markdown.replace(/\r\n?/g, '\n')`
@@ -90,7 +95,8 @@ fn has_possible_reference_definition_start(markdown: &str) -> bool {
     })
 }
 
-fn parse_blocks(lines: &[String], options: &Options, seen: &mut HashMap<String, usize>) -> Result<Vec<Block>> {
+fn parse_blocks(lines: &[String], ctx: &Ctx, seen: &mut HashMap<String, usize>) -> Result<Vec<Block>> {
+    let options = ctx.options;
     let mut children = Vec::new();
     let mut index = 0;
     while index < lines.len() {
@@ -101,10 +107,14 @@ fn parse_blocks(lines: &[String], options: &Options, seen: &mut HashMap<String, 
             continue;
         }
 
-        // readHtmlBlock (unsafe mode), custom blocks, fences, indented code.
-        if !options.safe && js::trim_start(line).starts_with('<') {
-            return Err(UNSUPPORTED);
+        if !options.safe {
+            if let Some((value, end)) = read_html_block(lines, index) {
+                children.push(Block::Html { value });
+                index = end + 1;
+                continue;
+            }
         }
+        // Custom blocks, fences and indented code are not ported yet.
         if trimmed.starts_with("::") {
             return Err(UNSUPPORTED);
         }
@@ -120,7 +130,7 @@ fn parse_blocks(lines: &[String], options: &Options, seen: &mut HashMap<String, 
 
         if let Some((depth, source)) = atx_heading(line) {
             let source = trim_closing_heading_hashes(source);
-            children.push(heading(depth, &source, options, seen)?);
+            children.push(heading(depth, &source, ctx, seen)?);
             index += 1;
             continue;
         }
@@ -128,7 +138,7 @@ fn parse_blocks(lines: &[String], options: &Options, seen: &mut HashMap<String, 
         let next = lines.get(index + 1).map(String::as_str).filter(|next| !next.is_empty());
         if let Some(depth) = next.and_then(setext_underline) {
             if !is_block_start(line, options, lines, index) {
-                children.push(heading(depth, trimmed, options, seen)?);
+                children.push(heading(depth, trimmed, ctx, seen)?);
                 index += 2;
                 continue;
             }
@@ -146,18 +156,19 @@ fn parse_blocks(lines: &[String], options: &Options, seen: &mut HashMap<String, 
         let source = normalize_paragraph_source(&paragraph);
         let next = lines.get(index + 1).map(String::as_str).filter(|next| !next.is_empty());
         if let Some(depth) = next.and_then(setext_underline) {
-            children.push(heading(depth, &source, options, seen)?);
+            children.push(heading(depth, &source, ctx, seen)?);
             index += 2;
             continue;
         }
-        children.push(Block::Paragraph { children: parse_inline(&source, options)? });
+        children.push(Block::Paragraph { children: parse_inline(&source, ctx)? });
         index += 1;
     }
     Ok(children)
 }
 
-fn heading(depth: u8, source: &str, options: &Options, seen: &mut HashMap<String, usize>) -> Result<Block> {
-    let children = parse_inline(source, options)?;
+fn heading(depth: u8, source: &str, ctx: &Ctx, seen: &mut HashMap<String, usize>) -> Result<Block> {
+    let options = ctx.options;
+    let children = parse_inline(source, ctx)?;
     let text = strip_inline(&children);
     let id = (options.anchors && !text.is_empty()).then(|| unique_slug(slugify(&text, options.slug_classic), seen));
     Ok(Block::Heading { depth, id, children })
@@ -171,10 +182,6 @@ fn can_continue_paragraph(line: &str, lines: &[String], index: usize, options: &
     if !has_paragraph_interrupt_candidate(line, options) {
         return Ok(true);
     }
-    if !options.safe && js::trim_start(line).starts_with('<') {
-        // isInterruptingHtmlBlockStart is not ported yet.
-        return Err(UNSUPPORTED);
-    }
     Ok(setext_underline(line).is_none()
         && !is_thematic_break(line)
         && !atx_at_line_start(line)
@@ -182,6 +189,7 @@ fn can_continue_paragraph(line: &str, lines: &[String], index: usize, options: &
         && !custom_block_start(js::trim(line))
         && !is_paragraph_interrupting_list_marker(line)
         && !blockquote_start(line)
+        && !(!options.safe && is_interrupting_html_block_start(line))
         && !is_table_start(lines, index))
 }
 

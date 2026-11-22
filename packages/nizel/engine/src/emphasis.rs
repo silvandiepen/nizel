@@ -141,6 +141,7 @@ fn first_inline_character(node: &Inline) -> Unit {
         Inline::Text { value, .. } => Unit::first_of(value),
         Inline::LineBreak { .. } => Unit::Char('\n'),
         Inline::InlineCode { code } => Unit::first_of(code),
+        Inline::Image { alt, .. } => Unit::first_of(alt),
         Inline::InlineHtml { .. } => Unit::None,
         other => next_inline_character(other.children().unwrap_or(&[])),
     }
@@ -167,6 +168,7 @@ fn last_inline_character(node: &Inline) -> Unit {
         Inline::Text { value, .. } => Unit::last_of(value),
         Inline::LineBreak { .. } => Unit::Char('\n'),
         Inline::InlineCode { code } => Unit::last_of(code),
+        Inline::Image { alt, .. } => Unit::last_of(alt),
         Inline::InlineHtml { .. } => Unit::None,
         other => other.children().unwrap_or(&[]).iter().rev().map(last_inline_character).find(|u| *u != Unit::None).unwrap_or(Unit::None),
     }
