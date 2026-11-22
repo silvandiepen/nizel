@@ -8,39 +8,39 @@ run); "mismatch" means it produced different bytes, which is a bug.
 
 | Profile | Forward pass | Forward mismatch | Reverse pass | Reverse mismatch | Cases |
 | --- | --- | --- | --- | --- | --- |
-| default | 652 | 0 | 0 | 0 | 652 |
-| bare | 652 | 0 | 0 | 0 | 652 |
+| default | 652 | 0 | 652 | 0 | 652 |
+| bare | 652 | 0 | 652 | 0 | 652 |
 
 ### By section (default profile, forward / reverse passing)
 
 | Section | Cases | Forward | Reverse |
 | --- | --- | --- | --- |
-| Tabs | 11 | 11 | 0 |
-| Backslash escapes | 13 | 13 | 0 |
-| Entity and numeric character references | 17 | 17 | 0 |
-| Precedence | 1 | 1 | 0 |
-| Thematic breaks | 19 | 19 | 0 |
-| ATX headings | 18 | 18 | 0 |
-| Setext headings | 27 | 27 | 0 |
-| Indented code blocks | 12 | 12 | 0 |
-| Fenced code blocks | 29 | 29 | 0 |
-| HTML blocks | 44 | 44 | 0 |
-| Link reference definitions | 27 | 27 | 0 |
-| Paragraphs | 8 | 8 | 0 |
-| Blank lines | 1 | 1 | 0 |
-| Block quotes | 25 | 25 | 0 |
-| List items | 48 | 48 | 0 |
-| Lists | 26 | 26 | 0 |
-| Inlines | 1 | 1 | 0 |
-| Code spans | 22 | 22 | 0 |
-| Emphasis and strong emphasis | 132 | 132 | 0 |
-| Links | 90 | 90 | 0 |
-| Images | 22 | 22 | 0 |
-| Autolinks | 19 | 19 | 0 |
-| Raw HTML | 20 | 20 | 0 |
-| Hard line breaks | 15 | 15 | 0 |
-| Soft line breaks | 2 | 2 | 0 |
-| Textual content | 3 | 3 | 0 |
+| Tabs | 11 | 11 | 11 |
+| Backslash escapes | 13 | 13 | 13 |
+| Entity and numeric character references | 17 | 17 | 17 |
+| Precedence | 1 | 1 | 1 |
+| Thematic breaks | 19 | 19 | 19 |
+| ATX headings | 18 | 18 | 18 |
+| Setext headings | 27 | 27 | 27 |
+| Indented code blocks | 12 | 12 | 12 |
+| Fenced code blocks | 29 | 29 | 29 |
+| HTML blocks | 44 | 44 | 44 |
+| Link reference definitions | 27 | 27 | 27 |
+| Paragraphs | 8 | 8 | 8 |
+| Blank lines | 1 | 1 | 1 |
+| Block quotes | 25 | 25 | 25 |
+| List items | 48 | 48 | 48 |
+| Lists | 26 | 26 | 26 |
+| Inlines | 1 | 1 | 1 |
+| Code spans | 22 | 22 | 22 |
+| Emphasis and strong emphasis | 132 | 132 | 132 |
+| Links | 90 | 90 | 90 |
+| Images | 22 | 22 | 22 |
+| Autolinks | 19 | 19 | 19 |
+| Raw HTML | 20 | 20 | 20 |
+| Hard line breaks | 15 | 15 | 15 |
+| Soft line breaks | 2 | 2 | 2 |
+| Textual content | 3 | 3 | 3 |
 
 ## Other gates
 
@@ -49,7 +49,7 @@ run); "mismatch" means it produced different bytes, which is a bug.
 | 2. GFM cases | not built yet |
 | 3. Nizel suite through Wasm entry points | 28/28 suites, 424 tests passed (features not yet in the engine still fall back to JavaScript; see gate 6) |
 | 4. nizel-kit parity, every profile | not built yet |
-| 5. Differential fuzzer (forward, seed 7) | 200000 generated, 199605 compared, 395 declined, 0 differences |
+| 5. Differential fuzzer (seed 7) | forward: 200000 generated, 199624 compared, 376 declined, 0 differences; reverse: 380461 compared, 18787 deferred to JavaScript, 0 differences |
 | 6. Zero syntax fallbacks | not met (engine declines unported syntax) |
 | 7. Lezin iPhone tests | not run |
 | Speed (≥5x, cold start, size) | forward measured below (raw engine, not yet behind the entry points) |
@@ -58,11 +58,24 @@ run); "mismatch" means it produced different bytes, which is a bug.
 
 | Fixture | Bytes | Identical | JavaScript ms | Engine ms | Speedup |
 | --- | --- | --- | --- | --- | --- |
-| commonmark | 44210 | yes | 25.951 | 7.832 | 3.3x |
-| gfm | 559 | yes | 0.175 | 0.026 | 6.8x |
-| readme | 997 | yes | 0.053 | 0.032 | 1.7x |
-| large | 2093 | yes | 0.261 | 0.124 | 2.1x |
-| code-heavy | 700 | yes | 0.025 | 0.015 | 1.6x |
-| 46 KB GFM | 45838 | yes | 11.025 | 2.099 | 5.3x |
-| emphasis draft | 56800 | yes | 15.369 | 3.537 | 4.3x |
-| plain draft | 54600 | yes | 1.446 | 1.096 | 1.3x |
+| commonmark | 44210 | yes | 21.500 | 3.525 | 6.1x |
+| gfm | 559 | yes | 0.151 | 0.027 | 5.6x |
+| readme | 997 | yes | 0.062 | 0.029 | 2.1x |
+| large | 2093 | yes | 0.601 | 0.099 | 6.1x |
+| code-heavy | 700 | yes | 0.025 | 0.013 | 2.0x |
+| 46 KB GFM | 45838 | yes | 13.003 | 2.695 | 4.8x |
+| emphasis draft | 56800 | yes | 14.735 | 3.771 | 3.9x |
+| plain draft | 54600 | yes | 1.426 | 1.110 | 1.3x |
+
+## Speed: reverse, raw engine vs `htmlToMarkdown` (Node, warm median)
+
+| Fixture (as HTML) | Bytes | Identical | JavaScript ms | Engine ms | Speedup |
+| --- | --- | --- | --- | --- | --- |
+| commonmark | 63766 | yes | 22.734 | 3.837 | 5.9x |
+| gfm | 921 | yes | 0.119 | 0.052 | 2.3x |
+| readme | 1423 | yes | 0.108 | 0.062 | 1.7x |
+| large | 3008 | yes | 0.218 | 0.162 | 1.3x |
+| code-heavy | 992 | yes | 0.046 | 0.029 | 1.6x |
+| 46 KB GFM | 76073 | yes | 10.351 | 5.003 | 2.1x |
+| emphasis draft | 77599 | yes | 13.480 | 4.005 | 3.4x |
+| plain draft | 62999 | yes | 5.525 | 2.747 | 2.0x |

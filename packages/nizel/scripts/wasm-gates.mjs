@@ -139,13 +139,20 @@ if (!onlySection) {
     return samples[samples.length >> 1];
   };
   const speedRows = [];
+  const reverseRows = [];
   for (const [name, source] of Object.entries(speedFixtures)) {
     const identical = engine.render(source, FLAG.anchors | FLAG.autolinks | FLAG.safe).html === await speedNizel.html(source);
     const js = await median((s) => speedNizel.html(s), source);
     const rust = await median((s) => engine.render(s, FLAG.anchors | FLAG.autolinks | FLAG.safe), source);
     speedRows.push(`| ${name} | ${source.length} | ${identical ? 'yes' : '**no**'} | ${js.toFixed(3)} | ${rust.toFixed(3)} | ${(js / rust).toFixed(1)}x |`);
+    const html = await speedNizel.html(source);
+    const sameBack = engine.reverse(html, 0).html === stock.htmlToMarkdown(html);
+    const jsBack = await median((s) => stock.htmlToMarkdown(s), html);
+    const rustBack = await median((s) => engine.reverse(s, 0), html);
+    reverseRows.push(`| ${name} | ${html.length} | ${sameBack ? 'yes' : '**no**'} | ${jsBack.toFixed(3)} | ${rustBack.toFixed(3)} | ${(jsBack / rustBack).toFixed(1)}x |`);
   }
   console.log(speedRows.join('\n'));
+  console.log(reverseRows.join('\n'));
   const lines = [
     '# Wasm engine parity report',
     '',
@@ -173,7 +180,7 @@ if (!onlySection) {
     '| 2. GFM cases | not built yet |',
     `| 3. Nizel suite through Wasm entry points | ${gate3} |`,
     '| 4. nizel-kit parity, every profile | not built yet |',
-    `| 5. Differential fuzzer (forward, seed 7) | ${fuzz.replace(/^fuzz: /, '')} |`,
+    `| 5. Differential fuzzer (seed 7) | ${fuzz.replace(/^fuzz: /, 'forward: ').replace(/\n/g, '; ')} |`,
     '| 6. Zero syntax fallbacks | not met (engine declines unported syntax) |',
     '| 7. Lezin iPhone tests | not run |',
     '| Speed (≥5x, cold start, size) | forward measured below (raw engine, not yet behind the entry points) |',
@@ -183,6 +190,12 @@ if (!onlySection) {
     '| Fixture | Bytes | Identical | JavaScript ms | Engine ms | Speedup |',
     '| --- | --- | --- | --- | --- | --- |',
     ...speedRows,
+    '',
+    '## Speed: reverse, raw engine vs `htmlToMarkdown` (Node, warm median)',
+    '',
+    '| Fixture (as HTML) | Bytes | Identical | JavaScript ms | Engine ms | Speedup |',
+    '| --- | --- | --- | --- | --- | --- |',
+    ...reverseRows,
     '',
   ];
   await writeFile(reportPath, lines.join('\n'));

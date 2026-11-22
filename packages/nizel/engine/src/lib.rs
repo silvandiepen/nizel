@@ -24,6 +24,7 @@ pub mod jsnum;
 pub mod links;
 pub mod refs;
 pub mod render;
+pub mod reverse;
 pub mod slug;
 pub mod status;
 pub mod unicode;
@@ -41,6 +42,8 @@ pub mod flags {
     pub const AUTOLINKS: u32 = 2;
     pub const SAFE: u32 = 4;
     pub const SLUG_CLASSIC: u32 = 8;
+    /// `htmlToMarkdown({ unsupported: 'drop' })`.
+    pub const DROP_UNSUPPORTED: u32 = 16;
 }
 
 #[unsafe(no_mangle)]
@@ -101,6 +104,8 @@ pub fn render_markdown(source: &str, flags: u32, out: &mut String) -> Result<(),
 }
 
 /// HTML → Markdown. Mirrors `htmlToMarkdown(source)`.
-pub fn reverse_html(_source: &str, _flags: u32, _out: &mut String) -> Result<(), i32> {
-    Err(status::UNSUPPORTED)
+pub fn reverse_html(source: &str, flags: u32, out: &mut String) -> Result<(), i32> {
+    let options = reverse::ReverseOptions { preserve: flags & flags::DROP_UNSUPPORTED == 0 };
+    out.push_str(&reverse::html_to_markdown(source, &options)?);
+    Ok(())
 }

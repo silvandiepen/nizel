@@ -22,9 +22,11 @@ test('uses Wasm in both directions and rejects unsupported input', async () => {
   assert.equal(renderWasm('# Repeat\n\n# Repeat', {}), await stock.useNizel().html('# Repeat\n\n# Repeat'));
   assert.equal(renderWasm('<script>hello</script>', {}), await stock.useNizel().html('<script>hello</script>'));
   assert.equal(renderWasm('a'.repeat(1024 * 1024 + 1), {}), undefined);
-  assert.equal(reverseWasm('<h1 id="different">Hello</h1>'), undefined);
-  assert.equal(reverseWasm('<table><tr><td>One</td></tr></table>'), undefined);
+  assert.equal(reverseWasm('<h1 id="different">Hello</h1>'), stock.htmlToMarkdown('<h1 id="different">Hello</h1>'));
+  assert.equal(reverseWasm('<table><tr><td>One</td></tr></table>'), stock.htmlToMarkdown('<table><tr><td>One</td></tr></table>'));
   assert.equal(reverseWasm('<p>'+'a'.repeat(1024 * 1024)+'</p>'), undefined);
+  // JavaScript throws on an out-of-range entity; the engine leaves that to it.
+  assert.equal(reverseWasm('<p>&#99999999;</p>'), undefined);
 });
 
 test('matches forward and reverse HTML on the CommonMark corpus', async () => {

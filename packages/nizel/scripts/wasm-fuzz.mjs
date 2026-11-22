@@ -20,7 +20,7 @@ const declinedSamples = [];
 
 const bytes = await readFile(new URL('../dist/wasm/engine.wasm', import.meta.url));
 const { instance } = await WebAssembly.instantiate(bytes);
-const { memory, input, output, render } = instance.exports;
+const { memory, input, output, render, reverse } = instance.exports;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const engineRender = (source, flags) => {
@@ -32,6 +32,48 @@ const engineRender = (source, flags) => {
   return length < 0 ? undefined : decoder.decode(new Uint8Array(memory.buffer, output(), length));
 };
 let lastStatus = 0;
+const engineReverse = (source, flags) => {
+  const encoded = encoder.encode(source);
+  const at = input(encoded.length);
+  new Uint8Array(memory.buffer, at, encoded.length).set(encoded);
+  const length = reverse(encoded.length, flags);
+  return length < 0 ? length : decoder.decode(new Uint8Array(memory.buffer, output(), length));
+};
+
+// Tag soup for the reverse direction.
+const htmlAtoms = [
+  'text', ' ', '\n', '  ', '\t', 'é', '🚀', '\u00a0', '&amp;', '&lt;', '&nbsp;', '&QUOT;', '&bogus;', '&#65;', '&#x41', '&#X263a;',
+  '&#x26;#66;', '&#0;', '&#xD83D;', '&#1114112;', '<p>', '</p>', '<P>', '<br>', '<br/>', '<hr>', '<strong>', '</strong>', '<b>', '</b>',
+  '<em>', '</em>', '<i>', '<del>', '</del>', '<s>', '<code>', '</code>', '<pre>', '</pre>', '<pre><code class="language-js">',
+  '<code class="x language-py y">', '<a href="/u">', '<a href="/a b)" title="T \\ &quot;q&quot;">', '<a href="">', '<a name=x>', '</a>',
+  '<img src="i.png" alt="a]b\\">', '<img src=x title=t>', '<img alt=n>', '<h1>', '</h1>', '<h2 id="heading-text">', '<h3 id="x">',
+  '</h2>', '<blockquote>', '</blockquote>', '<ul>', '</ul>', '<ol>', '<ol start="3">', '<ol start="x">', '<ol start="1.5">', '</ol>',
+  '<li>', '</li>', '<table>', '</table>', '<thead>', '<tbody>', '<tr>', '</tr>', '<th>', '<td>', '<td align="left">', '</td>',
+  '<div>', '</div>', '<section>', '<span class="c">', '</span>', '<kbd>', '</kbd>', '<sub>', '<u>', '<custom-el a=1>', '</custom-el>',
+  '<!-- c -->', '<!-- open', '<![CDATA[x]]>', '<!DOCTYPE html>', '<?pi?>', '</nope>', '</ SPAN >', '<x/>', '<br />', '`', '``',
+  '*', '_', '[', ']', '(', ')', '\\', '"', "'", '<', '>', '<a', '< b>', '<1>', '- ', '1. ',
+];
+const flagsFor = [0, 16];
+let reverseCompared = 0;
+let reverseDeferred = 0;
+const reverseDiffs = [];
+const checkReverse = (html, flags) => {
+  let expected;
+  try {
+    expected = stock.htmlToMarkdown(html, flags & 16 ? { unsupported: 'drop' } : {});
+  } catch {
+    expected = undefined;
+  }
+  const actual = engineReverse(html, flags);
+  if (actual === -3) {
+    reverseDeferred += 1;
+    // The engine hands back exactly the inputs JavaScript throws on or answers with a lone surrogate.
+    if (expected !== undefined && expected.isWellFormed()) reverseDiffs.push({ html, flags, expected, actual: 'deferred to JavaScript' });
+    return;
+  }
+  reverseCompared += 1;
+  if (actual !== expected) reverseDiffs.push({ html, flags, expected, actual });
+};
 
 const random = (n) => {
   seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
@@ -85,13 +127,24 @@ for (let i = 0; i < count; i += 1) {
   compared += 1;
   const expected = await stock.useNizel(profile.options).html(markdown);
   if (actual !== expected) diffs.push({ markdown, flags: profile.flags, expected, actual });
+  checkReverse(expected, flagsFor[i % 2]);
+  let soup = '';
+  const soupLength = 1 + random(16);
+  for (let j = 0; j < soupLength; j += 1) soup += pick(htmlAtoms);
+  checkReverse(soup, flagsFor[(i >> 1) % 2]);
 }
 
 console.log(`fuzz: ${count} generated, ${compared} compared, ${declined} declined, ${diffs.length} differences`);
+console.log(`reverse: ${reverseCompared} compared, ${reverseDeferred} deferred to JavaScript, ${reverseDiffs.length} differences`);
+for (const diff of reverseDiffs.slice(0, show)) {
+  console.log('\nhtml:    ', JSON.stringify(diff.html), 'flags', diff.flags);
+  console.log('expected:', JSON.stringify(diff.expected));
+  console.log('actual:  ', JSON.stringify(diff.actual));
+}
 for (const sample of declinedSamples) console.log('declined:', sample);
 for (const diff of diffs.slice(0, show)) {
   console.log('\nmarkdown:', JSON.stringify(diff.markdown), 'flags', diff.flags);
   console.log('expected:', JSON.stringify(diff.expected));
   console.log('actual:  ', JSON.stringify(diff.actual));
 }
-process.exitCode = diffs.length === 0 ? 0 : 1;
+process.exitCode = diffs.length === 0 && reverseDiffs.length === 0 ? 0 : 1;
