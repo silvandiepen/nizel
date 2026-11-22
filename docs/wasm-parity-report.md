@@ -52,4 +52,17 @@ run); "mismatch" means it produced different bytes, which is a bug.
 | 5. Differential fuzzer (forward, seed 7) | 200000 generated, 199605 compared, 395 declined, 0 differences |
 | 6. Zero syntax fallbacks | not met (engine declines unported syntax) |
 | 7. Lezin iPhone tests | not run |
-| Speed (≥5x, cold start, size) | not measured |
+| Speed (≥5x, cold start, size) | forward measured below (raw engine, not yet behind the entry points) |
+
+## Speed: forward, raw engine vs `useNizel().html` (Node, warm median)
+
+| Fixture | Bytes | Identical | JavaScript ms | Engine ms | Speedup |
+| --- | --- | --- | --- | --- | --- |
+| commonmark | 44210 | yes | 19.860 | 7.580 | 2.6x |
+| gfm | 559 | yes | 0.097 | 0.026 | 3.8x |
+| readme | 997 | yes | 0.055 | 0.030 | 1.8x |
+| large | 2093 | yes | 0.487 | 0.129 | 3.8x |
+| code-heavy | 700 | yes | 0.025 | 0.015 | 1.6x |
+| 46 KB GFM | 45838 | yes | 9.080 | 2.071 | 4.4x |
+| emphasis draft | 56800 | yes | 13.346 | 3.273 | 4.1x |
+| plain draft | 54600 | yes | 1.576 | 1.110 | 1.4x |

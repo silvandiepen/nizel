@@ -104,6 +104,37 @@ if (!onlySection) {
     fuzz = String(error.stdout ?? error).trim();
   }
   console.log(fuzz);
+
+  // Speed: the raw engine (encode, render, decode) against useNizel().html.
+  const { performance } = await import('node:perf_hooks');
+  const benchmarkFixtures = new URL('../../../apps/benchmarks/fixtures/', import.meta.url);
+  const speedFixtures = {};
+  for (const name of ['commonmark', 'gfm', 'readme', 'large', 'code-heavy']) {
+    speedFixtures[name] = await readFile(new URL(name + '.md', benchmarkFixtures), 'utf8');
+  }
+  speedFixtures['46 KB GFM'] = speedFixtures.gfm.repeat(82);
+  speedFixtures['emphasis draft'] = 'This is a required **bold passage** with *emphasis* in the same line.\n\n'.repeat(800);
+  speedFixtures['plain draft'] = 'First paragraph with simple notes.\n\nSecond paragraph with a useful addition.\n\n'.repeat(700);
+  const speedNizel = stock.useNizel({ plugins: [], frontmatter: false, template: false });
+  const median = async (run, source) => {
+    const repeats = Math.max(1, Math.min(200, Math.ceil(60000 / source.length)));
+    const samples = [];
+    for (let round = 0; round < 25; round += 1) {
+      const start = performance.now();
+      for (let i = 0; i < repeats; i += 1) await run(source);
+      if (round > 4) samples.push((performance.now() - start) / repeats);
+    }
+    samples.sort((a, b) => a - b);
+    return samples[samples.length >> 1];
+  };
+  const speedRows = [];
+  for (const [name, source] of Object.entries(speedFixtures)) {
+    const identical = engine.render(source, FLAG.anchors | FLAG.autolinks | FLAG.safe).html === await speedNizel.html(source);
+    const js = await median((s) => speedNizel.html(s), source);
+    const rust = await median((s) => engine.render(s, FLAG.anchors | FLAG.autolinks | FLAG.safe), source);
+    speedRows.push(`| ${name} | ${source.length} | ${identical ? 'yes' : '**no**'} | ${js.toFixed(3)} | ${rust.toFixed(3)} | ${(js / rust).toFixed(1)}x |`);
+  }
+  console.log(speedRows.join('\n'));
   const lines = [
     '# Wasm engine parity report',
     '',
@@ -134,7 +165,13 @@ if (!onlySection) {
     `| 5. Differential fuzzer (forward, seed 7) | ${fuzz.replace(/^fuzz: /, '')} |`,
     '| 6. Zero syntax fallbacks | not met (engine declines unported syntax) |',
     '| 7. Lezin iPhone tests | not run |',
-    '| Speed (≥5x, cold start, size) | not measured |',
+    '| Speed (≥5x, cold start, size) | forward measured below (raw engine, not yet behind the entry points) |',
+    '',
+    '## Speed: forward, raw engine vs `useNizel().html` (Node, warm median)',
+    '',
+    '| Fixture | Bytes | Identical | JavaScript ms | Engine ms | Speedup |',
+    '| --- | --- | --- | --- | --- | --- |',
+    ...speedRows,
     '',
   ];
   await writeFile(reportPath, lines.join('\n'));
