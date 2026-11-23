@@ -55,15 +55,11 @@ fn render_inner(source: &str, options: &Options, out: &mut String) -> Option<()>
     if crate::scan::find_byte(b, 0, b'\r').is_some() {
         return None;
     }
-    if b.windows(2).any(|w| w == b"]:") && block::has_possible_reference_definition_start(source) {
-        if crate::scan::find_byte(b, 0, b'\t').is_some() {
-            return None;
-        }
-        let (_, references) = crate::refs::extract(&crate::scan::lines(source));
-        if !references.is_empty() {
-            return None;
-        }
-    }
+    // Whether the document defines references is decided lazily (see
+    // `defines_references`): only a stretch handed to the full engine can
+    // hold a definition's line, since tier 1's paragraphs and items start
+    // with letters and its fences are code, which extraction skips too.
+    let mut references_checked = false;
     let references = References::new();
     let ctx = Ctx { options, references: &references };
     let mut seen = crate::slug::Seen::default();
@@ -93,7 +89,13 @@ fn render_inner(source: &str, options: &Options, out: &mut String) -> Option<()>
                 // Tier 1 cannot render this block: the full engine renders the
                 // stretch up to the next point where it starts afresh.
                 out.truncate(block_start);
-                let end = segment_end(b, pos, options.safe);
+                let end = segment_end(source, pos, options.safe).min(b.len());
+                if !references_checked && block::has_possible_reference_definition_start(&source[pos..end]) {
+                    if defines_references(source) {
+                        return None;
+                    }
+                    references_checked = true;
+                }
                 let blocks = block::parse_markdown_with_seen(&source[pos..end], options, &mut seen, false).ok()?;
                 if blocks.is_empty() {
                     out.truncate(before_separator);
@@ -107,6 +109,22 @@ fn render_inner(source: &str, options: &Options, out: &mut String) -> Option<()>
         first_block = false;
     }
     Some(())
+}
+
+/// Does the whole document define references, by the full engine's own
+/// extraction (which skips fenced code and HTML blocks)? With none, it
+/// leaves every line unchanged, so tier 1 and the stretches see what the
+/// full engine sees. Tabs change how it reads indentation: a document with
+/// tabs counts as defining them.
+fn defines_references(source: &str) -> bool {
+    let b = source.as_bytes();
+    if !b.windows(2).any(|w| w == b"]:") {
+        return false;
+    }
+    if crate::scan::find_byte(b, 0, b'\t').is_some() {
+        return true;
+    }
+    !crate::refs::extract(&crate::scan::lines(source)).1.is_empty()
 }
 
 /// One block at `pos` (not blank) in tier 1; the position after it, or None
@@ -133,22 +151,36 @@ fn block(source: &str, pos: usize, options: &Options, ctx: &Ctx, seen: &mut crat
 }
 
 /// Where a stretch handed to the full engine can end: the first line, after
-/// at least one line, that follows a blank line and starts with an ASCII
-/// letter. There the full engine starts a new top-level block whatever came
-/// before: a blank line ends paragraphs, quotes, tables and setext
-/// candidates, and a column-0 letter ends any list item and indented code.
-/// Constructs that can span blank lines past such a line (fenced code, which
-/// also keeps a list item open across blank lines; custom blocks; HTML blocks
-/// when HTML is allowed) send the rest of the document instead.
-fn segment_end(b: &[u8], from: usize, safe: bool) -> usize {
+/// at least one line, that follows a blank line and starts at column 0 with
+/// an ASCII letter, `#` or a fence. There the full engine starts a new
+/// top-level block whatever came before: a blank line ends paragraphs,
+/// quotes, tables and setext candidates, and a column-0 line that is not a
+/// list marker ends any list item and indented code.
+///
+/// A fence at column 0 is always top-level (list item content is indented
+/// at least two columns, quote lines start with `>`), so the scan steps over
+/// it exactly, by the full engine's own fence rules. Constructs that can
+/// span blank lines past a boundary send the rest of the document instead:
+/// any other fence-like text (an indented fence keeps a list item open
+/// across blank lines), custom blocks, and HTML blocks when HTML is allowed.
+fn segment_end(source: &str, from: usize, safe: bool) -> usize {
+    let b = source.as_bytes();
     let mut pos = from;
     let mut previous_blank = false;
     let mut first = true;
     while pos < b.len() {
         let eol = line_end(b, pos);
         let line = &b[pos..eol];
-        if !first && previous_blank && line.first().is_some_and(u8::is_ascii_alphabetic) {
+        if !first && previous_blank && line.first().is_some_and(|&c| c.is_ascii_alphabetic() || c == b'#' || c == b'`' || c == b'~') {
             return pos;
+        }
+        first = false;
+        if matches!(line.first(), Some(b'`' | b'~')) {
+            if let Some(after) = column_zero_fence_end(source, pos, eol) {
+                pos = after;
+                previous_blank = false;
+                continue;
+            }
         }
         let indent = line.iter().take_while(|&&c| c == b' ').count();
         let hazard = line.windows(3).any(|w| w == b"```" || w == b"~~~")
@@ -158,10 +190,27 @@ fn segment_end(b: &[u8], from: usize, safe: bool) -> usize {
             return b.len();
         }
         previous_blank = line.iter().all(|&c| c == b' ');
-        first = false;
         pos = eol + 1;
     }
     b.len()
+}
+
+/// A fenced code block opening at column 0 on `start..eol`, read by the full
+/// engine's rules: the position after its closing fence (or the end of the
+/// input when it never closes). None when the line does not open one.
+fn column_zero_fence_end(source: &str, start: usize, eol: usize) -> Option<usize> {
+    let b = source.as_bytes();
+    let fence = block::opening_fence(&source[start..eol])?;
+    block::parse_fence_info(fence.info, fence.marker)?;
+    let mut pos = eol + 1;
+    while pos < b.len() {
+        let end = line_end(b, pos);
+        if block::closes_fence(&source[pos..end], fence.marker, fence.length) {
+            return Some(end + 1);
+        }
+        pos = end + 1;
+    }
+    Some(b.len())
 }
 
 /// A paragraph starting at `start` (an ASCII letter); the position after it.
