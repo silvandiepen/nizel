@@ -11,7 +11,6 @@ use crate::inline::{parse_inline, parse_inline_owned, Ctx};
 use crate::refs::{self, References};
 use crate::js;
 use crate::slug::{slugify, unique_slug};
-use std::collections::HashMap;
 
 pub struct Options {
     pub anchors: bool,
@@ -88,7 +87,7 @@ pub fn parse_markdown(markdown: &str, options: &Options) -> Result<Vec<Block>> {
     };
     let lines: &[&str] = content.as_deref().unwrap_or(&base);
     let ctx = Ctx { options, references: &references };
-    let mut seen = HashMap::new();
+    let mut seen = crate::slug::Seen::default();
     parse_blocks(lines, &ctx, &mut seen)
 }
 
@@ -151,7 +150,7 @@ fn as_strs(lines: &[String]) -> Vec<&str> {
     lines.iter().map(String::as_str).collect()
 }
 
-fn parse_blocks(lines: &[&str], ctx: &Ctx, seen: &mut HashMap<String, usize>) -> Result<Vec<Block>> {
+fn parse_blocks(lines: &[&str], ctx: &Ctx, seen: &mut crate::slug::Seen) -> Result<Vec<Block>> {
     let options = ctx.options;
     let mut children = Vec::new();
     let mut index = 0;
@@ -351,7 +350,7 @@ fn parse_blocks(lines: &[&str], ctx: &Ctx, seen: &mut HashMap<String, usize>) ->
     Ok(children)
 }
 
-pub(crate) fn heading(depth: u8, source: &str, ctx: &Ctx, seen: &mut HashMap<String, usize>) -> Result<Block> {
+pub(crate) fn heading(depth: u8, source: &str, ctx: &Ctx, seen: &mut crate::slug::Seen) -> Result<Block> {
     let options = ctx.options;
     let children = parse_inline(source, ctx)?;
     let text = strip_inline(&children);
@@ -999,7 +998,7 @@ fn parse_list_item_blocks(
     opening: &ListMarker,
     content_indent: usize,
     ctx: &Ctx,
-    seen: &mut HashMap<String, usize>,
+    seen: &mut crate::slug::Seen,
 ) -> Result<(Vec<Block>, usize, bool)> {
     let options = ctx.options;
     let mut item_lines: Vec<String> = vec![first_line.to_string()];

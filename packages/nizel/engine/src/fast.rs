@@ -21,7 +21,6 @@ use crate::block::{self, Options};
 use crate::inline::Ctx;
 use crate::js::escape_html_into;
 use crate::refs::References;
-use std::collections::HashMap;
 
 /// Renders `source` into `out` when every construct is in the subset.
 /// Returns false (with `out` restored) when it declines.
@@ -45,7 +44,9 @@ fn render_inner(source: &str, options: &Options, out: &mut String) -> Option<()>
     // declines on its own lines when it meets one.
     let references = References::new();
     let ctx = Ctx { options, references: &references };
-    let mut seen = HashMap::new();
+    let mut seen = crate::slug::Seen::default();
+    // Heading text for IDs, reused across headings.
+    let mut text = String::new();
     let mut first_block = true;
     let mut pos = 0;
     while pos < b.len() {
@@ -78,7 +79,7 @@ fn render_inner(source: &str, options: &Options, out: &mut String) -> Option<()>
             return None;
         }
         match lead {
-            b'#' => heading(line, options, &ctx, &mut seen, out)?,
+            b'#' => heading(line, options, &ctx, &mut seen, &mut text, out)?,
             b'`' => {
                 pos = fenced_code(source, pos, eol, out)?;
                 continue;
@@ -331,7 +332,7 @@ fn code_span(value: &str, out: &mut String, text: Option<&mut String>) {
 /// An ATX heading line. The common shape (ASCII, `#` run, a space, content
 /// with no closing hashes) is read here; anything else, and content outside
 /// the inline subset, goes through the full engine's own functions.
-fn heading(line: &str, options: &Options, ctx: &Ctx, seen: &mut HashMap<String, usize>, out: &mut String) -> Option<()> {
+fn heading(line: &str, options: &Options, ctx: &Ctx, seen: &mut crate::slug::Seen, text: &mut String, out: &mut String) -> Option<()> {
     let b = line.as_bytes();
     let hashes = b.iter().take_while(|&&c| c == b'#').count();
     let simple = (1..=6).contains(&hashes)
@@ -352,17 +353,20 @@ fn heading(line: &str, options: &Options, ctx: &Ctx, seen: &mut HashMap<String, 
                 return Some(());
             }
         } else {
-            let mut body = String::with_capacity(content.len() + 8);
-            let mut text = String::with_capacity(content.len());
-            if inline(content, &mut body, Some(&mut text)).is_some() {
+            // The body goes straight into the output; the ID, which comes
+            // first, is inserted once the text is known.
+            out.push('>');
+            let body_start = out.len();
+            text.clear();
+            if inline(content, out, Some(text)).is_some() {
                 if !text.is_empty() {
-                    let id = crate::slug::unique_slug(crate::slug::slugify(&text, options.slug_classic), seen);
-                    out.push_str(" id=\"");
-                    escape_html_into(out, &id);
-                    out.push('"');
+                    let id = crate::slug::unique_slug(crate::slug::slugify(text, options.slug_classic), seen);
+                    let mut attribute = String::with_capacity(id.len() + 6);
+                    attribute.push_str(" id=\"");
+                    escape_html_into(&mut attribute, &id);
+                    attribute.push('"');
+                    out.insert_str(body_start - 1, &attribute);
                 }
-                out.push('>');
-                out.push_str(&body);
                 close_heading(hashes as u8, out);
                 return Some(());
             }
