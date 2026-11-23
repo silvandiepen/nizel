@@ -944,6 +944,7 @@ fn paragraph(source: &str, start: usize, out: &mut String) -> Option<(usize, boo
                 run = pair.end;
             }
             UNDERSCORE => i = literal_underscores(b, start, i)?,
+            TILDE => i = lone_tilde(b, start, i)?,
             BRACKET => {
                 bracket = true;
                 let link = inline_link(b, start, i)?;
@@ -1273,6 +1274,7 @@ const NEWLINE: u8 = 6;
 const STAR: u8 = 7;
 const UNDERSCORE: u8 = 8;
 const BRACKET: u8 = 9;
+const TILDE: u8 = 10;
 
 /// What each byte means inside a paragraph. Outside the subset: escapes,
 /// HTML and autolinks, entities, links and images, emphasis,
@@ -1287,7 +1289,8 @@ static CLASS: [u8; 256] = {
     table[b'*' as usize] = STAR;
     table[b'_' as usize] = UNDERSCORE;
     table[b'[' as usize] = BRACKET;
-    let outside = b"\\<&~|@\t\r";
+    table[b'~' as usize] = TILDE;
+    let outside = b"\\<&|@\t\r";
     let mut i = 0;
     while i < outside.len() {
         table[outside[i] as usize] = OUTSIDE;
@@ -1353,6 +1356,7 @@ fn inline(source: &str, out: &mut String, mut text: Option<&mut String>) -> Opti
                 run = pair.end;
             }
             UNDERSCORE => i = literal_underscores(b, 0, i)?,
+            TILDE => i = lone_tilde(b, 0, i)?,
             BRACKET => {
                 let link = inline_link(b, 0, i)?;
                 out.push_str(&source[run..i]);
@@ -1373,6 +1377,13 @@ fn inline(source: &str, out: &mut String, mut text: Option<&mut String>) -> Opti
     Some(())
 }
 
+/// A `~` with no `~` next to it: `matchDelete` needs `~~` to start and stops
+/// a deletion at any `~`, so it is text. The position after it, or None.
+fn lone_tilde(b: &[u8], floor: usize, at: usize) -> Option<usize> {
+    let before = at > floor && b[at - 1] == b'~';
+    (!before && b.get(at + 1) != Some(&b'~')).then_some(at + 1)
+}
+
 /// An emphasis or strong pair in the subset: the run at `opener` and its
 /// closer, with the content between them.
 struct EmphasisPair {
@@ -1386,7 +1397,8 @@ struct EmphasisPair {
 /// or two `*` after a space, a newline or the start (`floor`), followed by an
 /// ASCII letter or digit, so it can only open; plain text up to a run of the
 /// same length after an ASCII letter or digit, followed by a space, a
-/// newline, the end (`limit`) or `.,;:!?)`, so it can only close. With every
+/// newline, the end (`limit`) or `.,;:!?)`, or after one of `.,;:!?)` and
+/// followed by a space, a newline or the end, so it can only close. With every
 /// `*` in such disjoint pairs, each closer pairs with its own opener. Content
 /// may hold soft breaks but no other delimiter, code or syntax.
 fn emphasis_pair(b: &[u8], floor: usize, opener: usize, limit: usize) -> Option<EmphasisPair> {
@@ -1404,9 +1416,17 @@ fn emphasis_pair(b: &[u8], floor: usize, opener: usize, limit: usize) -> Option<
             b'*' => {
                 let run = b[j..limit].iter().take_while(|&&c| c == b'*').count();
                 let after = j + run;
+                // After a letter or digit, it closes before a space, a newline,
+                // the end or `.,;:!?)`; after `.,;:!?)` (right-flanking for
+                // punctuation only when what follows is whitespace), before a
+                // space, a newline or the end.
+                let followed_by_space = after == limit || matches!(b[after], b' ' | b'\n');
                 let closes = run == length
-                    && b[j - 1].is_ascii_alphanumeric()
-                    && (after == limit || matches!(b[after], b' ' | b'\n' | b'.' | b',' | b';' | b':' | b'!' | b'?' | b')'));
+                    && if b[j - 1].is_ascii_alphanumeric() {
+                        followed_by_space || matches!(b[after], b'.' | b',' | b';' | b':' | b'!' | b'?' | b')')
+                    } else {
+                        matches!(b[j - 1], b'.' | b',' | b';' | b':' | b'!' | b'?' | b')') && followed_by_space
+                    };
                 return closes.then_some(EmphasisPair { strong: length == 2, content_start, content_end: j, end: after });
             }
             b':' if b[j + 1..limit].starts_with(b"//") => return None,

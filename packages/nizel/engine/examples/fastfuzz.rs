@@ -52,6 +52,8 @@ const ATOMS: &[&str] = &[
     "\n ```\n aaa\naaa\n```", "\n  ```\naaa\n  aaa\n  ```", "\n   ~~~ js\nx\n   ~~~", "\n~~~\n[f]: /g\n~~~", "\n ```a`b\nx", "\n  ~~~\nunclosed", "\n ````\n```\n ````", "\n ```\n\t```\n ```", "\n- a\n\n  ```\n  b\n  ```",
     "\n aaa\n   bbb", "\n   three", "\n  two | x\n|---|---|", "\ntext\n     deep", "\ntext\n  [l](u)", "\ntext\n    - x", "\ntext\n   # h", "\n  a\n  ===", "\ntext\n \u{a0}x", "\n  [r]: /x",
     "\ntext\n  ```\ncode\n  ```", "\ntext\n  - item", "\ntext\n   > q", "\ntext\n  ***", "\ntext\n  ---", "\ntext\n  -x", "\ntext\n  2. two", "\ntext\n  ::x", "\ntext\n   ```a`b",
+    " **Verdict:** go", " *Minor:* x", " **a.**", " *b?*\n", " **c)** d", " **d:**,", " *e!*.", " **f,**x", " *(g)* h", " **h;**", " **i:**\n**j**",
+    " ~2%", " a~b", " ~~s~~", " ~~", " a~ ~b", " ~x~", "~", " ~`c`~", " *a~b*", " [a~](b)", " ~~a~b~~",
     // Just outside: the tier must decline, never differ.
     "*em*", "**strong**", "_u_", "[link](x)", "<b>", "&amp;", "\\*", "~~d~~", "| a | b |", "a@b.co", "http://e.com",
     "> quote", "- item", "1. one", "+ plus", "===", "--", "\t", "\r\n", ":: note", "[r]: /url", "![i](s)",
