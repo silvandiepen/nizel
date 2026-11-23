@@ -17,6 +17,11 @@
 //!   space after the marker, content starting with a letter, ended by a blank
 //!   line or the input's end that nothing could continue
 //!
+//! A block tier 1 cannot render is not the end of it: the full engine
+//! renders the stretch up to the next point where it provably starts a new
+//! top-level block (`segment_end`), with the same heading-ID map, and tier 1
+//! goes on from there.
+//!
 //! Paragraphs are read in place from the source and classified one byte at a
 //! time against a table, copying runs of plain bytes at once.
 
@@ -42,9 +47,12 @@ fn line_end(b: &[u8], from: usize) -> usize {
 
 fn render_inner(source: &str, options: &Options, out: &mut String) -> Option<()> {
     let b = source.as_bytes();
-    // Tabs and CR change line handling (tab expansion, line-ending
-    // normalization) before any block is seen: every construct below
-    // declines on its own lines when it meets one.
+    // Document-wide: reference definitions are extracted from the whole
+    // document before any block is parsed, and CR changes how lines split.
+    // Either leaves the whole document to the full engine.
+    if b.windows(2).any(|w| w == b"]:") || crate::scan::find_byte(b, 0, b'\r').is_some() {
+        return None;
+    }
     let references = References::new();
     let ctx = Ctx { options, references: &references };
     let mut seen = crate::slug::Seen::default();
@@ -58,45 +66,91 @@ fn render_inner(source: &str, options: &Options, out: &mut String) -> Option<()>
             pos += 1;
             continue;
         }
-        if lead == b' ' {
-            // Blank (JavaScript's trim would see only ASCII spaces here); an
-            // indented line is outside the subset.
-            if is_blank_from(b, pos) {
-                pos = line_end(b, pos) + 1;
-                continue;
-            }
-            return None;
+        if lead == b' ' && is_blank_from(b, pos) {
+            // Blank (JavaScript's trim would see only ASCII spaces here).
+            pos = line_end(b, pos) + 1;
+            continue;
         }
+        let before_separator = out.len();
         if !first_block {
             out.push('\n');
         }
+        let block_start = out.len();
+        match block(source, pos, options, &ctx, &mut seen, &mut text, out) {
+            Some(next) => pos = next,
+            None => {
+                // Tier 1 cannot render this block: the full engine renders the
+                // stretch up to the next point where it starts afresh.
+                out.truncate(block_start);
+                let end = segment_end(b, pos, options.safe);
+                let blocks = block::parse_markdown_with_seen(&source[pos..end], options, &mut seen).ok()?;
+                if blocks.is_empty() {
+                    out.truncate(before_separator);
+                    pos = end;
+                    continue;
+                }
+                crate::render::render_blocks(&blocks, out);
+                pos = end;
+            }
+        }
         first_block = false;
-
-        if lead.is_ascii_alphabetic() {
-            pos = paragraph(source, pos, out)?;
-            continue;
-        }
-        let eol = line_end(b, pos);
-        let line = &source[pos..eol];
-        if lead != b'`' && line.bytes().any(|c| c == b'\t' || c == b'\r') {
-            return None;
-        }
-        match lead {
-            b'#' => heading(line, options, &ctx, &mut seen, &mut text, out)?,
-            b'`' => {
-                pos = fenced_code(source, pos, eol, out)?;
-                continue;
-            }
-            b'-' | b'*' | b'_' if block::is_thematic_break(line) => out.push_str("<hr />"),
-            b'-' | b'*' | b'+' | b'0'..=b'9' => {
-                pos = list(source, pos, out)?;
-                continue;
-            }
-            _ => return None,
-        }
-        pos = eol + 1;
     }
     Some(())
+}
+
+/// One block at `pos` (not blank) in tier 1; the position after it, or None
+/// when it is outside the subset (`out` may hold a partial block then).
+fn block(source: &str, pos: usize, options: &Options, ctx: &Ctx, seen: &mut crate::slug::Seen, text: &mut String, out: &mut String) -> Option<usize> {
+    let b = source.as_bytes();
+    let lead = b[pos];
+    if lead.is_ascii_alphabetic() {
+        return paragraph(source, pos, out);
+    }
+    let eol = line_end(b, pos);
+    let line = &source[pos..eol];
+    if lead != b'`' && line.bytes().any(|c| c == b'\t' || c == b'\r') {
+        return None;
+    }
+    match lead {
+        b'#' => heading(line, options, ctx, seen, text, out)?,
+        b'`' => return fenced_code(source, pos, eol, out),
+        b'-' | b'*' | b'_' if block::is_thematic_break(line) => out.push_str("<hr />"),
+        b'-' | b'*' | b'+' | b'0'..=b'9' => return list(source, pos, out),
+        _ => return None,
+    }
+    Some(eol + 1)
+}
+
+/// Where a stretch handed to the full engine can end: the first line, after
+/// at least one line, that follows a blank line and starts with an ASCII
+/// letter. There the full engine starts a new top-level block whatever came
+/// before: a blank line ends paragraphs, quotes, tables and setext
+/// candidates, and a column-0 letter ends any list item and indented code.
+/// Constructs that can span blank lines past such a line (fenced code, which
+/// also keeps a list item open across blank lines; custom blocks; HTML blocks
+/// when HTML is allowed) send the rest of the document instead.
+fn segment_end(b: &[u8], from: usize, safe: bool) -> usize {
+    let mut pos = from;
+    let mut previous_blank = false;
+    let mut first = true;
+    while pos < b.len() {
+        let eol = line_end(b, pos);
+        let line = &b[pos..eol];
+        if !first && previous_blank && line.first().is_some_and(u8::is_ascii_alphabetic) {
+            return pos;
+        }
+        let indent = line.iter().take_while(|&&c| c == b' ').count();
+        let hazard = line.windows(3).any(|w| w == b"```" || w == b"~~~")
+            || line[indent..].starts_with(b"::")
+            || (!safe && indent <= 3 && line.get(indent) == Some(&b'<'));
+        if hazard {
+            return b.len();
+        }
+        previous_blank = line.iter().all(|&c| c == b' ');
+        first = false;
+        pos = eol + 1;
+    }
+    b.len()
 }
 
 /// A paragraph starting at `start` (an ASCII letter); the position after it.
@@ -290,13 +344,16 @@ fn list(source: &str, start: usize, out: &mut String) -> Option<usize> {
         }
         let next = eol + 1;
         if is_blank_from(b, next) {
-            // After a blank line, an indented line could continue the item and
-            // a marker could continue the list (loose): outside the subset.
             let mut after = next;
             while after < b.len() && is_blank_from(b, after) {
                 after = line_end(b, after) + 1;
             }
-            if after < b.len() && (b[after] == b' ' || matches!(b[after], b'-' | b'*' | b'+' | b'0'..=b'9')) {
+            // Only a line that provably cannot continue it may follow: an ASCII
+            // letter, `#` or a backtick at column 0. (Spaces and tabs indent a
+            // continuation, markers continue the list loosely, and a line that
+            // only looks non-blank here, such as NBSP alone, is blank to
+            // JavaScript's trim.)
+            if after < b.len() && !(b[after].is_ascii_alphabetic() || matches!(b[after], b'#' | b'`')) {
                 return None;
             }
             pos = next;

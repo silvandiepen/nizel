@@ -18,6 +18,8 @@ const ATOMS: &[&str] = &[
     "\n- item one", "\n- item two", "\n* star item", "\n+ plus item", "\n1. first", "\n2. second", "\n3) paren", "\n0. zero", "\n007. bond",
     "\n10. ten", "\n1234567890. big", "\n-  two spaces", "\n- ", "\n-x", "\n- [ ] task", "\n- [x] done", "\n  continued", "\n   - nested",
     "\n- `code` item", "\n- item > q", "\n- a  ", "\n1.x", "\n- - -", "\n* * *",
+    "\n- ```\n\n  code\n", "\n  ```", "\n- a\n\n  b", "\n> quoted\nlazy", "\n<div>\n\nx\n</div>", "\n<!--\n\ncomment -->", "\n<script>\n\n",
+    "\n::note\n\nbody\n::", "\n    code\n\n    more", "\n| a | b |\n| - | - |", "\nTitle\n===", "\n[ref]: /u", "\n- *em* item", "\n**bold** para",
     // Just outside: the tier must decline, never differ.
     "*em*", "**strong**", "_u_", "[link](x)", "<b>", "&amp;", "\\*", "~~d~~", "| a | b |", "a@b.co", "http://e.com",
     "> quote", "- item", "1. one", "+ plus", "===", "--", "\t", "\r\n", ":: note", "[r]: /url", "![i](s)",

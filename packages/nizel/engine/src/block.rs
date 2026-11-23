@@ -67,6 +67,12 @@ fn scan_source(markdown: &str) -> (bool, bool, bool, bool) {
 }
 
 pub fn parse_markdown(markdown: &str, options: &Options) -> Result<Vec<Block>> {
+    parse_markdown_with_seen(markdown, options, &mut crate::slug::Seen::default())
+}
+
+/// `parseMarkdown` with the heading IDs already taken in the document, for a
+/// stretch of a document that tier 1 hands over (see `fast`).
+pub fn parse_markdown_with_seen(markdown: &str, options: &Options, seen: &mut crate::slug::Seen) -> Result<Vec<Block>> {
     let (has_cr, has_tab, has_pipe, has_reference) = scan_source(markdown);
     DOC_HAS_PIPE.with(|flag| flag.set(has_pipe));
     DOC_HAS_TAB.with(|flag| flag.set(has_tab));
@@ -87,8 +93,7 @@ pub fn parse_markdown(markdown: &str, options: &Options) -> Result<Vec<Block>> {
     };
     let lines: &[&str] = content.as_deref().unwrap_or(&base);
     let ctx = Ctx { options, references: &references };
-    let mut seen = crate::slug::Seen::default();
-    parse_blocks(lines, &ctx, &mut seen)
+    parse_blocks(lines, &ctx, seen)
 }
 
 /// `markdown.replace(/\r\n?/g, '\n')`
