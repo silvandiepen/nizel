@@ -27,9 +27,9 @@ impl Claim {
 }
 
 /// Offers `element` to the JavaScript handlers; their Markdown if one claims it.
-fn offer(element: &Element) -> Result<Option<String>> {
-    let mut bytes = Vec::with_capacity(element.raw.len() + 64);
-    encode_element(element, &mut bytes);
+fn offer(element: &Element, doc: &Doc) -> Result<Option<String>> {
+    let mut bytes = Vec::with_capacity(element.raw.1 - element.raw.0 + 64);
+    encode_element(element, doc, &mut bytes);
     crate::host::claim(&bytes)
 }
 
@@ -39,7 +39,7 @@ fn encode_str(out: &mut Vec<u8>, value: &str) {
 }
 
 /// The subtree as `src/wasm/html-codec.ts` reads it.
-fn encode_element(element: &Element, out: &mut Vec<u8>) {
+fn encode_element(element: &Element, doc: &Doc, out: &mut Vec<u8>) {
     out.push(1);
     encode_str(out, &element.tag);
     out.extend_from_slice(&(element.attrs.len() as u32).to_le_bytes());
@@ -47,28 +47,45 @@ fn encode_element(element: &Element, out: &mut Vec<u8>) {
         encode_str(out, name);
         encode_str(out, value);
     }
-    encode_str(out, &element.raw);
+    encode_str(out, doc.at(element.raw));
     out.extend_from_slice(&(element.children.len() as u32).to_le_bytes());
     for child in &element.children {
         match child {
-            Node::Element(e) => encode_element(e, out),
+            Node::Element(e) => encode_element(e, doc, out),
             Node::Text(v) => {
                 out.push(2);
-                encode_str(out, v);
+                encode_str(out, doc.at(*v));
             }
             Node::Comment(v) => {
                 out.push(3);
-                encode_str(out, v);
+                encode_str(out, doc.at(*v));
             }
         }
     }
 }
 
+/// Text, comments and raw element source are spans of the input.
+#[derive(Debug, Clone, Copy)]
+struct Span(usize, usize);
+
 #[derive(Debug)]
 enum Node {
-    Text(String),
-    Comment(String),
+    Text(Span),
+    Comment(Span),
     Element(Element),
+}
+
+/// The input and options every render step needs.
+struct Doc<'a> {
+    html: &'a str,
+    preserve: bool,
+    claim: Option<&'a Claim>,
+}
+
+impl Doc<'_> {
+    fn at(&self, span: Span) -> &str {
+        &self.html[span.0..span.1]
+    }
 }
 
 #[derive(Debug)]
@@ -77,7 +94,7 @@ struct Element {
     /// In first-seen order; a repeated name keeps its first position and last value.
     attrs: Vec<(String, String)>,
     children: Vec<Node>,
-    raw: String,
+    raw: Span,
 }
 
 impl Element {
@@ -108,24 +125,30 @@ fn is_surrogate_marker(c: char) -> bool {
     (SURROGATE_BASE..SURROGATE_END).contains(&(c as u32))
 }
 
+/// U+E000–U+E7FF in UTF-8 is `EE 80..=9F xx`.
+fn has_surrogate_marker(text: &str) -> bool {
+    text.as_bytes().windows(2).any(|w| w[0] == 0xee && (0x80..=0x9f).contains(&w[1]))
+}
+
 pub fn html_to_markdown(html: &str, options: &ReverseOptions) -> Result<String> {
-    if html.chars().any(is_surrogate_marker) {
+    if has_surrogate_marker(html) {
         // The markers would be ambiguous.
         return Err(status::NEEDS_JAVASCRIPT);
     }
     let root = parse_html(html)?;
+    let doc = Doc { html, preserve: options.preserve, claim: options.claim.as_ref() };
     let mut out = String::with_capacity(html.len());
     for node in &root {
-        render_node(node, options, &mut out)?;
+        render_node(node, &doc, &mut out)?;
     }
-    join_surrogates(&normalize_document(&out))
+    join_surrogates(normalize_document(&out))
 }
 
 /// Joins adjacent high/low markers into characters; a marker left alone is
 /// a lone surrogate in the JavaScript's output.
-fn join_surrogates(text: &str) -> Result<String> {
-    if !text.chars().any(is_surrogate_marker) {
-        return Ok(text.to_string());
+fn join_surrogates(text: String) -> Result<String> {
+    if !has_surrogate_marker(&text) {
+        return Ok(text);
     }
     let mut out = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
@@ -198,45 +221,45 @@ fn parse_html(html: &str) -> Result<Vec<Node>> {
             None => root,
         }
     }
-    fn append_text(root: &mut Vec<Node>, stack: &mut [Open], value: &str) {
-        if !value.is_empty() {
-            children(root, stack).push(Node::Text(value.to_string()));
+    fn append_text(root: &mut Vec<Node>, stack: &mut [Open], start: usize, end: usize) {
+        if end > start {
+            children(root, stack).push(Node::Text(Span(start, end)));
         }
     }
 
     let mut cursor = 0;
     while let Some((start, end)) = next_token(html, cursor) {
-        append_text(&mut root, &mut stack, &html[last..start]);
+        append_text(&mut root, &mut stack, last, start);
         let token = &html[start..end];
         last = end;
         cursor = end;
 
         if token.starts_with("<!--") {
-            children(&mut root, &mut stack).push(Node::Comment(token.to_string()));
+            children(&mut root, &mut stack).push(Node::Comment(Span(start, end)));
             continue;
         }
         if let Some(inner) = token.strip_prefix("</") {
-            let tag = js::trim(&inner[..inner.len() - 1]).to_lowercase();
+            let tag = lower(js::trim(&inner[..inner.len() - 1]));
             close_tag(html, &mut root, &mut stack, &tag, end)?;
             continue;
         }
         let Some((name, attributes)) = open_tag(token) else {
-            append_text(&mut root, &mut stack, token);
+            append_text(&mut root, &mut stack, start, end);
             continue;
         };
-        let tag = name.to_lowercase();
-        let element = Element { attrs: parse_attrs(attributes)?, tag, children: Vec::new(), raw: token.to_string() };
+        let tag = lower(name);
+        let element = Element { attrs: parse_attrs(attributes)?, tag, children: Vec::new(), raw: Span(start, end) };
         if !is_void(&element.tag) && !token.ends_with("/>") {
             stack.push(Open { element, start });
         } else {
             children(&mut root, &mut stack).push(Node::Element(element));
         }
     }
-    append_text(&mut root, &mut stack, &html[last..]);
+    append_text(&mut root, &mut stack, last, html.len());
 
     // Unclosed elements: raw runs to the end of the input.
     while let Some(mut open) = stack.pop() {
-        open.element.raw = html[open.start..].to_string();
+        open.element.raw = Span(open.start, html.len());
         children(&mut root, &mut stack).push(Node::Element(open.element));
     }
     Ok(root)
@@ -252,7 +275,7 @@ fn close_tag(html: &str, root: &mut Vec<Node>, stack: &mut Vec<Open>, tag: &str,
             stack.last_mut().expect("parent").element.children.push(Node::Element(inner.element));
         }
         let mut open = stack.pop().expect("matched element");
-        open.element.raw = html[open.start..end].to_string();
+        open.element.raw = Span(open.start, end);
         let target = match stack.last_mut() {
             Some(parent) => &mut parent.element.children,
             None => root,
@@ -280,7 +303,7 @@ fn close_tag(html: &str, root: &mut Vec<Node>, stack: &mut Vec<Open>, tag: &str,
         Some(parent) => &mut parent.element.children,
         None => root,
     };
-    target.push(Node::Text(html[start..end].to_string()));
+    target.push(Node::Text(Span(start, end)));
     Ok(())
 }
 
@@ -294,6 +317,11 @@ fn open_tag(token: &str) -> Option<(&str, &str)> {
     let body = rest[name_len..].strip_suffix('>')?;
     let attributes = body.strip_suffix('/').unwrap_or(body);
     Some((&rest[..name_len], attributes))
+}
+
+/// `toLowerCase`, with the common all-ASCII case done without Unicode tables.
+fn lower(text: &str) -> String {
+    if text.is_ascii() { text.to_ascii_lowercase() } else { text.to_lowercase() }
 }
 
 fn is_void(tag: &str) -> bool {
@@ -315,9 +343,9 @@ fn parse_attrs(input: &str) -> Result<Vec<(String, String)>> {
             continue;
         }
         let name_end = i + input[i..].char_indices().find(|&(_, c)| !is_attr_name_char(c)).map_or(input.len() - i, |(n, _)| n);
-        let name = input[i..name_end].to_lowercase();
+        let name = lower(&input[i..name_end]);
         let (value, end) = attr_value(input, name_end).unwrap_or(("", name_end));
-        let decoded = decode_entities(value)?;
+        let decoded = decode_entities(value)?.into_owned();
         match attrs.iter_mut().find(|(key, _)| *key == name) {
             Some(existing) => existing.1 = decoded,
             None => attrs.push((name, decoded)),
@@ -347,9 +375,9 @@ fn attr_value(input: &str, from: usize) -> Option<(&str, usize)> {
 }
 
 /// `decodeEntities` (the converter's own, three passes).
-fn decode_entities(value: &str) -> Result<String> {
+fn decode_entities(value: &str) -> Result<std::borrow::Cow<'_, str>> {
     if !value.contains('&') {
-        return Ok(value.to_string());
+        return Ok(std::borrow::Cow::Borrowed(value));
     }
     // `/&#x([0-9a-f]+);?/gi`
     let pass = |text: &str, prefix: &str, radix: u32| -> Result<String> {
@@ -412,7 +440,7 @@ fn decode_entities(value: &str) -> Result<String> {
         i += 1;
     }
     out.push_str(&decimal[last..]);
-    Ok(out)
+    Ok(std::borrow::Cow::Owned(out))
 }
 
 /// `String.fromCodePoint`: throws above U+10FFFF (left to JavaScript); a
@@ -428,12 +456,12 @@ fn from_code_point(value: f64) -> Result<char> {
     char::from_u32(code).ok_or(status::NEEDS_JAVASCRIPT)
 }
 
-fn text_content(node: &Node, out: &mut String) -> Result<()> {
+fn text_content(node: &Node, doc: &Doc, out: &mut String) -> Result<()> {
     match node {
-        Node::Text(value) => out.push_str(&decode_entities(value)?),
+        Node::Text(value) => out.push_str(&decode_entities(doc.at(*value))?),
         Node::Element(element) => {
             for child in &element.children {
-                text_content(child, out)?;
+                text_content(child, doc, out)?;
             }
         }
         Node::Comment(_) => {}
@@ -441,16 +469,16 @@ fn text_content(node: &Node, out: &mut String) -> Result<()> {
     Ok(())
 }
 
-fn text_of(node: &Node) -> Result<String> {
+fn text_of(node: &Node, doc: &Doc) -> Result<String> {
     let mut out = String::new();
-    text_content(node, &mut out)?;
+    text_content(node, doc, &mut out)?;
     Ok(out)
 }
 
 // ---------------------------------------------------------------------------
 // renderNode
 
-fn render_children(nodes: &[Node], options: &ReverseOptions) -> Result<String> {
+fn render_children(nodes: &[Node], options: &Doc) -> Result<String> {
     let mut out = String::new();
     for node in nodes {
         render_node(node, options, &mut out)?;
@@ -458,22 +486,22 @@ fn render_children(nodes: &[Node], options: &ReverseOptions) -> Result<String> {
     Ok(out)
 }
 
-fn render_node(node: &Node, options: &ReverseOptions, out: &mut String) -> Result<()> {
+fn render_node(node: &Node, options: &Doc, out: &mut String) -> Result<()> {
     let element = match node {
         Node::Text(value) => {
-            collapse_text(&decode_entities(value)?, out);
+            collapse_text(&decode_entities(options.at(*value))?, out);
             return Ok(());
         }
         Node::Comment(value) => {
-            out.push_str(if options.preserve { value } else { " " });
+            out.push_str(if options.preserve { options.at(*value) } else { " " });
             return Ok(());
         }
         Node::Element(element) => element,
     };
     let tag = element.tag.as_str();
-    if let Some(claim) = &options.claim {
+    if let Some(claim) = options.claim {
         if claim.wants(tag) {
-            if let Some(claimed) = offer(element)? {
+            if let Some(claimed) = offer(element, options)? {
                 out.push_str(&claimed);
                 return Ok(());
             }
@@ -483,8 +511,9 @@ fn render_node(node: &Node, options: &ReverseOptions, out: &mut String) -> Resul
     let block = || -> Result<String> { Ok(normalize_document(&render_children(&element.children, options)?)) };
     let wrap = |out: &mut String, value: &str| block_wrap(value, out);
 
-    if options.preserve && has_unsupported_attrs(element)? {
-        if is_block(tag) { wrap(out, &element.raw) } else { out.push_str(&element.raw) }
+    if options.preserve && has_unsupported_attrs(element, options)? {
+        let raw = options.at(element.raw);
+        if is_block(tag) { wrap(out, raw) } else { out.push_str(raw) }
         return Ok(());
     }
     match tag {
@@ -498,35 +527,35 @@ fn render_node(node: &Node, options: &ReverseOptions, out: &mut String) -> Resul
         "strong" | "b" => inline_wrap("**", &inline()?, out),
         "em" | "i" => inline_wrap("*", &inline()?, out),
         "del" | "s" | "strike" => inline_wrap("~~", &inline()?, out),
-        "code" => render_inline_code(&text_of(node)?, out),
-        "pre" => wrap(out, &render_code_block(element)?),
+        "code" => render_inline_code(&text_of(node, options)?, out),
+        "pre" => wrap(out, &render_code_block(element, options)?),
         "a" => render_link(element, &inline()?, out),
         "img" => render_image(element, out),
         "blockquote" => wrap(out, &prefix_lines(&block()?, "> ")),
         "ul" | "ol" => wrap(out, &render_list(element, options)?),
-        "li" => out.push_str(&inline()?),
+        "li" => normalize_inline_into(&render_children(&element.children, options)?, out),
         "table" => {
             if options.preserve && table_has_unsupported_structure(element) {
-                wrap(out, &element.raw);
+                wrap(out, options.at(element.raw));
             } else {
                 wrap(out, &render_table(element, options)?);
             }
         }
-        "thead" | "tbody" | "tr" | "th" | "td" => out.push_str(&inline()?),
+        "thead" | "tbody" | "tr" | "th" | "td" => normalize_inline_into(&render_children(&element.children, options)?, out),
         "div" | "section" | "article" | "main" | "header" | "footer" | "nav" => wrap(out, &block()?),
-        "span" => out.push_str(&inline()?),
+        "span" => normalize_inline_into(&render_children(&element.children, options)?, out),
         _ if PASSTHROUGH_INLINE.contains(&tag) || is_block(tag) => {
-            if options.preserve { out.push_str(&element.raw) } else { out.push_str(&block()?) }
+            if options.preserve { out.push_str(options.at(element.raw)) } else { out.push_str(&block()?) }
         }
         _ => {
-            if options.preserve { out.push_str(&element.raw) } else { out.push_str(&inline()?) }
+            if options.preserve { out.push_str(options.at(element.raw)) } else { out.push_str(&inline()?) }
         }
     }
     Ok(())
 }
 
 /// `hasUnsupportedAttrs`.
-fn has_unsupported_attrs(element: &Element) -> Result<bool> {
+fn has_unsupported_attrs(element: &Element, doc: &Doc) -> Result<bool> {
     if element.attrs.is_empty() {
         return Ok(false);
     }
@@ -539,7 +568,7 @@ fn has_unsupported_attrs(element: &Element) -> Result<bool> {
         "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => {
             let mut text = String::new();
             for child in &element.children {
-                text_content(child, &mut text)?;
+                text_content(child, doc, &mut text)?;
             }
             let slug = slugify(&text, true);
             names().any(|n| n != "id") || element.attr("id") != Some(slug.as_str())
@@ -645,7 +674,7 @@ fn render_inline_code(value: &str, out: &mut String) {
 }
 
 /// `renderCodeBlock`.
-fn render_code_block(element: &Element) -> Result<String> {
+fn render_code_block(element: &Element, doc: &Doc) -> Result<String> {
     let code_element = element.children.iter().find_map(|child| match child {
         Node::Element(e) if e.tag == "code" => Some(e),
         _ => None,
@@ -656,12 +685,12 @@ fn render_code_block(element: &Element) -> Result<String> {
     match code_element {
         Some(e) => {
             for child in &e.children {
-                text_content(child, &mut code)?;
+                text_content(child, doc, &mut code)?;
             }
         }
         None => {
             for child in &element.children {
-                text_content(child, &mut code)?;
+                text_content(child, doc, &mut code)?;
             }
         }
     }
@@ -673,7 +702,7 @@ fn render_code_block(element: &Element) -> Result<String> {
 }
 
 /// `renderList`.
-fn render_list(element: &Element, options: &ReverseOptions) -> Result<String> {
+fn render_list(element: &Element, options: &Doc) -> Result<String> {
     let start = if element.tag == "ol" { Some(jsnum::number(element.attr("start").unwrap_or("1"))) } else { None };
     let mut items = Vec::new();
     let mut index = 0usize;
@@ -722,7 +751,7 @@ fn table_has_unsupported_structure(element: &Element) -> bool {
 }
 
 /// `renderTable`.
-fn render_table(element: &Element, options: &ReverseOptions) -> Result<String> {
+fn render_table(element: &Element, options: &Doc) -> Result<String> {
     let mut all = Vec::new();
     collect_rows(element, &mut all);
     let rows: Vec<Vec<&Element>> = all.iter().map(|row| row_cells(row)).filter(|cells| !cells.is_empty()).collect();
@@ -770,70 +799,113 @@ fn block_wrap(value: &str, out: &mut String) {
     }
 }
 
-/// `normalizeDocument`: `[ \t]+\n` → `\n`, `\n{3,}` → `\n\n`, trim.
+/// `normalizeDocument`: `[ \t]+\n` → `\n`, `\n{3,}` → `\n\n`, trim — one byte pass.
 fn normalize_document(value: &str) -> String {
-    let mut first = String::with_capacity(value.len());
+    let mut out = String::with_capacity(value.len());
+    normalize_document_into(value, &mut out);
+    out
+}
+
+fn normalize_document_into(value: &str, out: &mut String) {
+    let start_len = out.len();
     let b = value.as_bytes();
     let mut i = 0;
+    let mut copied = 0;
     while i < b.len() {
-        if b[i] == b' ' || b[i] == b'\t' {
-            let run = b[i..].iter().take_while(|c| **c == b' ' || **c == b'\t').count();
-            if b.get(i + run) == Some(&b'\n') {
-                i += run;
-                continue;
+        match b[i] {
+            b' ' | b'\t' => {
+                let run = i + b[i..].iter().take_while(|c| **c == b' ' || **c == b'\t').count();
+                if b.get(run) == Some(&b'\n') {
+                    out.push_str(&value[copied..i]);
+                    copied = run;
+                }
+                i = run;
             }
-            first.push_str(&value[i..i + run]);
-            i += run;
-            continue;
+            b'\n' => {
+                out.push_str(&value[copied..i]);
+                // Newlines, and whitespace runs between them (removed by the first replacement).
+                let mut count = 0;
+                let mut j = i;
+                loop {
+                    match b.get(j) {
+                        Some(b'\n') => {
+                            count += 1;
+                            j += 1;
+                        }
+                        Some(b' ' | b'\t') => {
+                            let run = j + b[j..].iter().take_while(|c| **c == b' ' || **c == b'\t').count();
+                            if b.get(run) == Some(&b'\n') { j = run } else { break }
+                        }
+                        _ => break,
+                    }
+                }
+                out.push_str(if count >= 2 { "\n\n" } else { "\n" });
+                copied = j;
+                i = j;
+            }
+            _ => i += 1,
         }
-        let len = value[i..].chars().next().map_or(1, char::len_utf8);
-        first.push_str(&value[i..i + len]);
-        i += len;
     }
-    let mut second = String::with_capacity(first.len());
-    let mut newlines = 0;
-    for c in first.chars() {
-        if c == '\n' {
-            newlines += 1;
-            continue;
-        }
-        if newlines > 0 {
-            second.push_str(if newlines >= 3 { "\n\n" } else if newlines == 2 { "\n\n" } else { "\n" });
-            newlines = 0;
-        }
-        second.push(c);
-    }
-    if newlines > 0 {
-        second.push_str(if newlines >= 2 { "\n\n" } else { "\n" });
-    }
-    js::trim(&second).to_string()
+    out.push_str(&value[copied..]);
+    trim_from(out, start_len);
 }
 
-/// `normalizeInline`: `[ \t\r\n]+` → ` `, trim.
+/// Trims (JavaScript `trim`) the part of `out` from `start` on, in place.
+fn trim_from(out: &mut String, start: usize) {
+    let kept_end = start + js::trim_end(&out[start..]).len();
+    out.truncate(kept_end);
+    let leading = out[start..].len() - js::trim_start(&out[start..]).len();
+    if leading > 0 {
+        out.drain(start..start + leading);
+    }
+}
+
+/// `normalizeInline`: `[ \t\r\n]+` → ` `, trim — one byte pass.
 fn normalize_inline(value: &str) -> String {
     let mut out = String::with_capacity(value.len());
-    let mut in_run = false;
-    for c in value.chars() {
-        if matches!(c, ' ' | '\t' | '\r' | '\n') {
-            if !in_run {
-                out.push(' ');
-                in_run = true;
-            }
-        } else {
-            out.push(c);
-            in_run = false;
-        }
-    }
-    js::trim(&out).to_string()
+    normalize_inline_into(value, &mut out);
+    out
 }
 
-/// `normalizeParagraph`.
+fn normalize_inline_into(value: &str, out: &mut String) {
+    let start_len = out.len();
+    let b = value.as_bytes();
+    let mut i = 0;
+    let mut copied = 0;
+    while i < b.len() {
+        if matches!(b[i], b' ' | b'\t' | b'\r' | b'\n') {
+            let run = i + b[i..].iter().take_while(|c| matches!(**c, b' ' | b'\t' | b'\r' | b'\n')).count();
+            if !(run - i == 1 && b[i] == b' ') {
+                out.push_str(&value[copied..i]);
+                out.push(' ');
+                copied = run;
+            }
+            i = run;
+        } else {
+            i += 1;
+        }
+    }
+    out.push_str(&value[copied..]);
+    trim_from(out, start_len);
+}
+
+/// `normalizeParagraph`: per line `normalizeInline`, joined, `/ *  \n */g` → `  \n`, trim.
 fn normalize_paragraph(value: &str) -> String {
-    let lines: Vec<String> = value.split('\n').map(normalize_inline).collect();
-    let joined = lines.join("\n");
-    // `/ *  \n */g` → `  \n`: every line is already trimmed, so a match needs
-    // two spaces before a newline, which trimmed lines cannot end with —
-    // except through non-ASCII whitespace that trim kept out of `[ \t\r\n]`.
+    let mut joined = String::with_capacity(value.len());
+    for (index, line) in value.split('\n').enumerate() {
+        if index > 0 {
+            joined.push('\n');
+        }
+        normalize_inline_into(line, &mut joined);
+    }
+    // A match needs two spaces before a newline, which a trimmed line can only
+    // end with when JavaScript's `trim` kept them (it never does for spaces),
+    // so this only ever applies through the rare cases below.
+    if !joined.contains("  \n") {
+        let start = 0;
+        trim_from(&mut joined, start);
+        return joined;
+    }
     let b = joined.as_bytes();
     let mut out = String::with_capacity(joined.len());
     let mut i = 0;
@@ -854,7 +926,8 @@ fn normalize_paragraph(value: &str) -> String {
         out.push_str(&joined[i..i + len]);
         i += len;
     }
-    js::trim(&out).to_string()
+    trim_from(&mut out, 0);
+    out
 }
 
 /// `normalizeListItemBody`: `\n\n` before a list marker line becomes `\n`.
@@ -885,20 +958,29 @@ fn starts_list_marker(b: &[u8]) -> bool {
     digits > 0 && matches!(b.get(digits), Some(b'.' | b')')) && b.get(digits + 1) == Some(&b' ')
 }
 
-/// `collapseText`: `\s+` → ` `.
+/// `collapseText`: `\s+` → ` ` (JavaScript whitespace).
 fn collapse_text(value: &str, out: &mut String) {
-    let mut in_run = false;
-    for c in value.chars() {
-        if js::is_space(c) {
-            if !in_run {
-                out.push(' ');
-                in_run = true;
+    let mut copied = 0;
+    let mut chars = value.char_indices().peekable();
+    while let Some((i, c)) = chars.next() {
+        if !js::is_space(c) {
+            continue;
+        }
+        let mut end = i + c.len_utf8();
+        while let Some(&(j, d)) = chars.peek() {
+            if !js::is_space(d) {
+                break;
             }
-        } else {
-            out.push(c);
-            in_run = false;
+            end = j + d.len_utf8();
+            chars.next();
+        }
+        if !(end - i == 1 && c == ' ') {
+            out.push_str(&value[copied..i]);
+            out.push(' ');
+            copied = end;
         }
     }
+    out.push_str(&value[copied..]);
 }
 
 /// `prefixLines`.
