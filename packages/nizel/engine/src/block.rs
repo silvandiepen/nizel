@@ -560,22 +560,25 @@ fn is_table_delimiter_row(line: &str) -> bool {
 }
 
 /// `parseListMarker` from `parse/list.ts`.
-pub struct ListMarker {
-    pub body: String,
+pub struct ListMarker<'a> {
+    /// Borrowed from the line unless the padding rule or tab expansion changed it.
+    pub body: std::borrow::Cow<'a, str>,
     pub content_indent: usize,
     pub marker: u8,
     pub ordered: bool,
     pub start: Option<u64>,
 }
 
-pub fn parse_list_marker(line: &str) -> Option<ListMarker> {
-    let expanded;
-    let line = if doc_has_tab() && line.contains('\t') {
-        expanded = expand_list_marker_tabs(line);
-        expanded.as_str()
-    } else {
-        line
-    };
+pub fn parse_list_marker(line: &str) -> Option<ListMarker<'_>> {
+    if doc_has_tab() && line.contains('\t') {
+        let expanded = expand_list_marker_tabs(line);
+        return parse_expanded_list_marker(&expanded).map(|marker| ListMarker { body: std::borrow::Cow::Owned(marker.body.into_owned()), ..marker });
+    }
+    parse_expanded_list_marker(line)
+}
+
+/// `parseListMarker` on a line whose marker tabs are already expanded.
+fn parse_expanded_list_marker(line: &str) -> Option<ListMarker<'_>> {
     let indent = js::up_to_three_spaces(line);
     let rest = &line[indent..];
     let first = *rest.as_bytes().first()?;
@@ -584,7 +587,7 @@ pub fn parse_list_marker(line: &str) -> Option<ListMarker> {
         let padding = after.bytes().take_while(|b| *b == b' ' || *b == b'\t').count();
         let body = &after[padding..];
         // `(.*)$` without the `m` flag: a line terminator in the body fails the whole match.
-        if (padding > 0 || body.is_empty()) && body.chars().all(js::is_dot) {
+        if (padding > 0 || body.is_empty()) && !js::has_line_terminator(body) {
             return Some(ListMarker {
                 body: list_marker_body(&after[..padding], body),
                 content_indent: list_content_indent(indent, 1, padding),
@@ -601,7 +604,7 @@ pub fn parse_list_marker(line: &str) -> Option<ListMarker> {
             let after = &rest[digits + 1..];
             let padding = after.bytes().take_while(|b| *b == b' ' || *b == b'\t').count();
             let body = &after[padding..];
-            if (padding > 0 || body.is_empty()) && body.chars().all(js::is_dot) {
+            if (padding > 0 || body.is_empty()) && !js::has_line_terminator(body) {
                 return Some(ListMarker {
                     body: list_marker_body(&after[..padding], body),
                     content_indent: list_content_indent(indent, digits + 1, padding),
@@ -616,8 +619,8 @@ pub fn parse_list_marker(line: &str) -> Option<ListMarker> {
 }
 
 /// `listMarkerBody`: padding beyond four columns stays in the body.
-fn list_marker_body(padding: &str, body: &str) -> String {
-    if padding.len() > 4 { format!("{}{body}", &padding[1..]) } else { body.to_string() }
+fn list_marker_body<'a>(padding: &'a str, body: &'a str) -> std::borrow::Cow<'a, str> {
+    if padding.len() > 4 { std::borrow::Cow::Owned(format!("{}{body}", &padding[1..])) } else { std::borrow::Cow::Borrowed(body) }
 }
 
 /// `listContentIndent`.
@@ -945,7 +948,7 @@ fn lazy_continuation_candidate(line: &str) -> String {
         }
         if let Some(marker) = parse_list_marker(&candidate) {
             if blockquote_start(&marker.body) {
-                candidate = marker.body;
+                candidate = marker.body.into_owned();
                 continue;
             }
         }

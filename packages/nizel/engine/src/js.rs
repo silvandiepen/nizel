@@ -27,6 +27,28 @@ pub fn is_dot(c: char) -> bool {
     !matches!(c, '\n' | '\r' | '\u{2028}' | '\u{2029}')
 }
 
+static LINE_TERMINATOR_START: [bool; 256] = {
+    let mut table = [false; 256];
+    table[b'\n' as usize] = true;
+    table[b'\r' as usize] = true;
+    table[0xe2] = true;
+    table
+};
+
+/// Does `text` hold a JavaScript line terminator (`.` fails on it)? One byte scan;
+/// U+2028 and U+2029 are `E2 80 A8` and `E2 80 A9`.
+pub fn has_line_terminator(text: &str) -> bool {
+    let b = text.as_bytes();
+    let mut at = 0;
+    while let Some(i) = crate::scan::find_in_table(b, at, &LINE_TERMINATOR_START, b"\n\r\xe2") {
+        if b[i] != 0xe2 || (b.get(i + 1) == Some(&0x80) && matches!(b.get(i + 2), Some(0xa8 | 0xa9))) {
+            return true;
+        }
+        at = i + 1;
+    }
+    false
+}
+
 pub fn trim(s: &str) -> &str {
     s.trim_matches(is_space)
 }
