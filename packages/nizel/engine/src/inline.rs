@@ -270,10 +270,10 @@ fn normalize_inline_destination(destination: &str) -> &str {
 
 /// `hasNonEmphasisSyntax`: ``/[`<&\n[~\\]|https?:\/\//i``.
 fn has_non_emphasis_syntax(source: &str) -> bool {
-    if source.bytes().any(|b| matches!(b, b'`' | b'<' | b'&' | b'\n' | b'[' | b'~' | b'\\')) {
-        return true;
-    }
-    source.char_indices().any(|(i, _)| match_http_prefix(source, i).is_some())
+    let b = source.as_bytes();
+    b.iter().enumerate().any(|(i, &c)| {
+        matches!(c, b'`' | b'<' | b'&' | b'\n' | b'[' | b'~' | b'\\') || ((c == b'h' || c == b'H') && match_http_prefix(source, i).is_some())
+    })
 }
 
 /// `trimTrailingSoftBreakSpace`: drop one trailing space not preceded by a space.
@@ -326,6 +326,35 @@ enum Token {
     BareEmail,
 }
 
+/// Bytes an alternative can start with: inline HTML and angle links (`<`),
+/// hard breaks (` `, `\\`), soft breaks, code spans, escapes, entities,
+/// images and links (`!`, `[`), strikethrough and bare URLs (`h`/`H`).
+static TOKEN_START: [bool; 256] = {
+    let mut table = [false; 256];
+    let starts = b"< \\\n`&![~hH";
+    let mut i = 0;
+    while i < starts.len() {
+        table[starts[i] as usize] = true;
+        i += 1;
+    }
+    table
+};
+
+/// With an `@`, a bare email can start at any local-part character too:
+/// ASCII letters, digits, `._%+-`, and the lead bytes of ſ (C5) and K (E2).
+static TOKEN_START_WITH_AT: [bool; 256] = {
+    let mut table = TOKEN_START;
+    let mut b = 0;
+    while b < 256 {
+        let c = b as u8;
+        if c.is_ascii_alphanumeric() || c == b'.' || c == b'_' || c == b'%' || c == b'+' || c == b'-' || c == 0xc5 || c == 0xe2 {
+            table[b] = true;
+        }
+        b += 1;
+    }
+    table
+};
+
 struct Scanner<'a> {
     source: &'a str,
     has_at: bool,
@@ -339,11 +368,14 @@ impl<'a> Scanner<'a> {
         Scanner { source, has_at, email_fails_until: 0 }
     }
 
-    /// The leftmost match at or after `from`.
+    /// The leftmost match at or after `from`. Only a few bytes can start an
+    /// alternative; every other position is skipped without trying them.
     fn next_token(&mut self, from: usize) -> Option<(usize, usize, Token)> {
+        let bytes = self.source.as_bytes();
+        let table = if self.has_at { &TOKEN_START_WITH_AT } else { &TOKEN_START };
         let mut position = from;
-        while position < self.source.len() {
-            if self.source.is_char_boundary(position) {
+        while position < bytes.len() {
+            if table[bytes[position] as usize] && self.source.is_char_boundary(position) {
                 if let Some((end, token)) = self.match_at(position) {
                     return Some((position, end, token));
                 }
