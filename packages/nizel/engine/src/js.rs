@@ -81,14 +81,14 @@ const fn byte_table(bytes: &[u8]) -> [bool; 256] {
     table
 }
 
-static HTML_SPECIAL: [bool; 256] = byte_table(b"&<>\"");
 
-/// `escapeHtml` from `utils.ts`: jumps from one special byte to the next.
+/// `escapeHtml` from `utils.ts`: jumps from one special byte to the next,
+/// eight bytes at a time.
 pub fn escape_html_into(out: &mut String, text: &str) {
     let bytes = text.as_bytes();
     out.reserve(bytes.len());
     let mut start = 0;
-    while let Some(special) = crate::scan::find_in_table(bytes, start, &HTML_SPECIAL) {
+    while let Some(special) = crate::scan::find_any4(bytes, start, *b"&<>\"") {
         out.push_str(&text[start..special]);
         out.push_str(match bytes[special] {
             b'&' => "&amp;",
