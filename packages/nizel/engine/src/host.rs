@@ -25,10 +25,11 @@ unsafe fn host_claim(_ptr: *const u8, _len: usize) -> i32 {
 /// Reserves `len` bytes for a handler's result and returns where JavaScript writes it.
 #[unsafe(no_mangle)]
 pub extern "C" fn callback(len: usize) -> *mut u8 {
+    // Called during a conversion, so this is arena memory: a fresh buffer
+    // each time, never one kept from an earlier call (the arena has reused that).
     CALLBACK.with(|buffer| {
         let mut buffer = buffer.borrow_mut();
-        buffer.clear();
-        buffer.resize(len, 0);
+        *buffer = vec![0; len];
         buffer.as_mut_ptr()
     })
 }

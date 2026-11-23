@@ -9,7 +9,7 @@ use crate::ast::{strip_inline, Block, ListItem};
 use crate::common::decode_string_content;
 use crate::jsnum;
 use crate::html::{is_interrupting_html_block_start, read_html_block};
-use crate::inline::{parse_inline, Ctx};
+use crate::inline::{parse_inline, parse_inline_owned, Ctx};
 use crate::refs::{self, References};
 use crate::js;
 use crate::slug::{slugify, unique_slug};
@@ -27,19 +27,31 @@ type Result<T> = std::result::Result<T, i32>;
 
 pub fn parse_markdown(markdown: &str, options: &Options) -> Result<Vec<Block>> {
     let normalized = if markdown.contains('\r') { normalize_line_endings(markdown) } else { markdown.to_string() };
-    let lines: Vec<String> = if normalized.contains('\t') {
-        normalized.split('\n').map(expand_leading_tabs_in_line).collect()
+    // Lines borrow the source unless tabs had to be expanded.
+    let expanded: Vec<String>;
+    let base: Vec<&str> = if normalized.contains('\t') {
+        expanded = normalized.split('\n').map(expand_leading_tabs_in_line).collect();
+        as_strs(&expanded)
     } else {
-        normalized.split('\n').map(str::to_string).collect()
+        normalized.split('\n').collect()
     };
-    let (lines, references) = if normalized.contains("]:") && has_possible_reference_definition_start(&normalized) {
-        refs::extract(&lines)
+    let (content, references) = if normalized.contains("]:") && has_possible_reference_definition_start(&normalized) {
+        let (content, references) = refs::extract(&base);
+        (Some(content), references)
     } else {
-        (lines, References::new())
+        (None, References::new())
+    };
+    let content_lines: Vec<&str>;
+    let lines: &[&str] = match &content {
+        Some(content) => {
+            content_lines = as_strs(content);
+            &content_lines
+        }
+        None => &base,
     };
     let ctx = Ctx { options, references: &references };
     let mut seen = HashMap::new();
-    parse_blocks(&lines, &ctx, &mut seen)
+    parse_blocks(lines, &ctx, &mut seen)
 }
 
 /// `markdown.replace(/\r\n?/g, '\n')`
@@ -97,12 +109,16 @@ fn has_possible_reference_definition_start(markdown: &str) -> bool {
     })
 }
 
-fn parse_blocks(lines: &[String], ctx: &Ctx, seen: &mut HashMap<String, usize>) -> Result<Vec<Block>> {
+fn as_strs(lines: &[String]) -> Vec<&str> {
+    lines.iter().map(String::as_str).collect()
+}
+
+fn parse_blocks(lines: &[&str], ctx: &Ctx, seen: &mut HashMap<String, usize>) -> Result<Vec<Block>> {
     let options = ctx.options;
     let mut children = Vec::new();
     let mut index = 0;
     while index < lines.len() {
-        let line = lines[index].as_str();
+        let line = lines[index];
         let trimmed = js::trim(line);
         if trimmed.is_empty() {
             index += 1;
@@ -119,7 +135,7 @@ fn parse_blocks(lines: &[String], ctx: &Ctx, seen: &mut HashMap<String, usize>) 
         if let Some((name, args)) = custom_block_name(trimmed) {
             let (content, end, props) = read_custom_block(lines, index);
             let content_lines: Vec<String> = content.split('\n').map(str::to_string).collect();
-            let children_blocks = parse_blocks(&content_lines, ctx, seen)?;
+            let children_blocks = parse_blocks(&as_strs(&content_lines), ctx, seen)?;
             children.push(Block::CustomBlock { name: name.to_string(), args: split_words(args), props, content, children: children_blocks });
             index = end + 1;
             continue;
@@ -153,7 +169,7 @@ fn parse_blocks(lines: &[String], ctx: &Ctx, seen: &mut HashMap<String, usize>) 
         if line.starts_with("    ") {
             let mut code: Vec<&str> = Vec::new();
             while index < lines.len() && (lines[index].starts_with("    ") || js::trim(&lines[index]).is_empty()) {
-                let l = lines[index].as_str();
+                let l = lines[index];
                 code.push(&l[l.bytes().take(4).take_while(|&b| b == b' ').count()..]);
                 index += 1;
             }
@@ -184,7 +200,7 @@ fn parse_blocks(lines: &[String], ctx: &Ctx, seen: &mut HashMap<String, usize>) 
             continue;
         }
 
-        let next = lines.get(index + 1).map(String::as_str).filter(|next| !next.is_empty());
+        let next = lines.get(index + 1).copied().filter(|next| !next.is_empty());
         if let Some(depth) = next.and_then(setext_underline) {
             if !is_block_start(line, options, lines, index) {
                 children.push(heading(depth, trimmed, ctx, seen)?);
@@ -217,13 +233,15 @@ fn parse_blocks(lines: &[String], ctx: &Ctx, seen: &mut HashMap<String, usize>) 
                     let column = if marker_ends_space { marker_len } else { marker_len + 1 };
                     let quote_line = expand_leading_tabs_from_column(rest, column);
                     quote_lines.push(quote_line);
-                    allow_lazy = can_start_lazy_continuation(&quote_lines[quote_lines.len() - 1], options, &quote_lines, quote_lines.len() - 1);
+                    // Only the last quoted line matters to the table check there (it looks one line ahead).
+                    let last = quote_lines[quote_lines.len() - 1].as_str();
+                    allow_lazy = can_start_lazy_continuation(last, options, &[last], 0);
                     index += 1;
                     continue;
                 }
                 if allow_lazy && can_continue_lazily(&lines[index], options, lines, index) {
                     let l = &lines[index];
-                    quote_lines.push(if setext_underline(l).is_some() { format!("\\{l}") } else { l.clone() });
+                    quote_lines.push(if setext_underline(l).is_some() { format!("\\{l}") } else { l.to_string() });
                     allow_lazy = true;
                     index += 1;
                     continue;
@@ -242,7 +260,7 @@ fn parse_blocks(lines: &[String], ctx: &Ctx, seen: &mut HashMap<String, usize>) 
             } else {
                 index += 2;
             }
-            children.push(Block::Blockquote { children: parse_blocks(&quote_lines, ctx, seen)? });
+            children.push(Block::Blockquote { children: parse_blocks(&as_strs(&quote_lines), ctx, seen)? });
             continue;
         }
 
@@ -269,19 +287,23 @@ fn parse_blocks(lines: &[String], ctx: &Ctx, seen: &mut HashMap<String, usize>) 
             continue;
         }
 
-        let mut paragraph = vec![normalize_paragraph_line(line)];
-        while index + 1 < lines.len() && can_continue_paragraph(&lines[index + 1], lines, index + 1, options)? {
+        // `normalizeParagraphSource(lines.map(normalizeParagraphLine))` in one buffer.
+        let mut source = String::with_capacity(line.len() + 1);
+        source.push_str(normalize_paragraph_line(line));
+        while index + 1 < lines.len() && can_continue_paragraph(lines[index + 1], lines, index + 1, options)? {
             index += 1;
-            paragraph.push(normalize_paragraph_line(&lines[index]));
+            source.push('\n');
+            source.push_str(normalize_paragraph_line(lines[index]));
         }
-        let source = normalize_paragraph_source(&paragraph);
-        let next = lines.get(index + 1).map(String::as_str).filter(|next| !next.is_empty());
+        let kept = source.trim_end_matches([' ', '\t']).len();
+        source.truncate(kept);
+        let next = lines.get(index + 1).copied().filter(|next| !next.is_empty());
         if let Some(depth) = next.and_then(setext_underline) {
             children.push(heading(depth, &source, ctx, seen)?);
             index += 2;
             continue;
         }
-        children.push(Block::Paragraph { children: parse_inline(&source, ctx)? });
+        children.push(Block::Paragraph { children: parse_inline_owned(source, ctx)? });
         index += 1;
     }
     Ok(children)
@@ -296,7 +318,7 @@ fn heading(depth: u8, source: &str, ctx: &Ctx, seen: &mut HashMap<String, usize>
 }
 
 /// `canContinueParagraph`.
-fn can_continue_paragraph(line: &str, lines: &[String], index: usize, options: &Options) -> Result<bool> {
+fn can_continue_paragraph(line: &str, lines: &[&str], index: usize, options: &Options) -> Result<bool> {
     if js::trim(line).is_empty() {
         return Ok(false);
     }
@@ -327,7 +349,7 @@ fn has_paragraph_interrupt_candidate(line: &str, options: &Options) -> bool {
 }
 
 /// `isBlockStart`.
-fn is_block_start(line: &str, options: &Options, lines: &[String], index: usize) -> bool {
+fn is_block_start(line: &str, options: &Options, lines: &[&str], index: usize) -> bool {
     atx_start(line)
         || fence_start(line)
         || is_thematic_break(line)
@@ -453,7 +475,7 @@ fn is_raw_html_block_line(line: &str) -> bool {
 }
 
 /// `isTableStart`.
-fn is_table_start(lines: &[String], index: usize) -> bool {
+fn is_table_start(lines: &[&str], index: usize) -> bool {
     lines[index].contains('|') && lines.get(index + 1).is_some_and(|next| !next.is_empty() && is_table_delimiter_row(next))
 }
 
@@ -579,15 +601,10 @@ fn is_bare_list_marker(text: &str) -> bool {
 }
 
 /// `normalizeParagraphLine`: `line.replace(/^ {0,3}/, '').trimStart()`.
-fn normalize_paragraph_line(line: &str) -> String {
-    js::trim_start(&line[js::up_to_three_spaces(line)..]).to_string()
+fn normalize_paragraph_line(line: &str) -> &str {
+    js::trim_start(&line[js::up_to_three_spaces(line)..])
 }
 
-/// `normalizeParagraphSource`: `lines.join('\n').replace(/[ \t]+$/, '')`.
-fn normalize_paragraph_source(lines: &[String]) -> String {
-    let joined = lines.join("\n");
-    joined.trim_end_matches([' ', '\t']).to_string()
-}
 
 /// `/^::([A-Za-z][\w-]*)(?:\s+(.*))?$/` on the trimmed line → (name, args source).
 fn custom_block_name(trimmed: &str) -> Option<(&str, &str)> {
@@ -612,7 +629,7 @@ fn split_words(source: &str) -> Vec<String> {
 }
 
 /// `parseProps`: `/^([A-Za-z0-9_-]+):\s*(.*)$/` per trimmed line; later keys overwrite.
-fn parse_props(lines: &[String]) -> Vec<(String, crate::ast::Prop)> {
+fn parse_props(lines: &[&str]) -> Vec<(String, crate::ast::Prop)> {
     let mut props: Vec<(String, crate::ast::Prop)> = Vec::new();
     for line in lines {
         let trimmed = js::trim(line);
@@ -658,7 +675,7 @@ fn parse_primitive(value: &str) -> crate::ast::Prop {
 }
 
 /// `readCustomBlock` → (content, end index, props).
-fn read_custom_block(lines: &[String], start: usize) -> (String, usize, Vec<(String, crate::ast::Prop)>) {
+fn read_custom_block(lines: &[&str], start: usize) -> (String, usize, Vec<(String, crate::ast::Prop)>) {
     let find = |from: usize| (from..lines.len()).find(|&i| js::trim(&lines[i]) == "::");
     let Some(first) = find(start + 1) else {
         return (lines[start + 1..].join("\n"), lines.len() - 1, Vec::new());
@@ -872,7 +889,7 @@ fn lazy_continuation_candidate(line: &str) -> String {
 }
 
 /// `canStartLazyBlockquoteContinuation`.
-fn can_start_lazy_continuation(line: &str, options: &Options, lines: &[String], index: usize) -> bool {
+fn can_start_lazy_continuation(line: &str, options: &Options, lines: &[&str], index: usize) -> bool {
     let candidate = lazy_continuation_candidate(line);
     !js::trim(&candidate).is_empty()
         && !fence_start(&candidate)
@@ -881,7 +898,7 @@ fn can_start_lazy_continuation(line: &str, options: &Options, lines: &[String], 
 }
 
 /// `canContinueBlockquoteLazily`.
-fn can_continue_lazily(line: &str, options: &Options, lines: &[String], index: usize) -> bool {
+fn can_continue_lazily(line: &str, options: &Options, lines: &[&str], index: usize) -> bool {
     !js::trim(line).is_empty()
         && !blockquote_start(line)
         && !fence_start(line)
@@ -927,7 +944,7 @@ fn same_list(opening: &ListMarker, marker: &ListMarker) -> bool {
 /// `parseListItemBlocks` → (children, end index, loose).
 fn parse_list_item_blocks(
     first_line: &str,
-    lines: &[String],
+    lines: &[&str],
     index: usize,
     opening: &ListMarker,
     content_indent: usize,
@@ -985,7 +1002,7 @@ fn parse_list_item_blocks(
         }
         if !saw_blank && !is_block_start(line, options, lines, cursor) {
             open_fence = update_open_fence(open_fence, line);
-            item_lines.push(line.clone());
+            item_lines.push(line.to_string());
             cursor += 1;
             continue;
         }
@@ -994,7 +1011,7 @@ fn parse_list_item_blocks(
     while item_lines.last().is_some_and(String::is_empty) {
         item_lines.pop();
     }
-    Ok((parse_blocks(&item_lines, ctx, seen)?, cursor - 1, loose))
+    Ok((parse_blocks(&as_strs(&item_lines), ctx, seen)?, cursor - 1, loose))
 }
 
 /// `hasNestedListMarkerBeforeBlank`.

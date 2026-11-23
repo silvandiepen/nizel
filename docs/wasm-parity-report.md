@@ -54,28 +54,28 @@ run); "mismatch" means it produced different bytes, which is a bug.
 | 7. Lezin iPhone tests | not run |
 | Speed (≥5x, cold start, size) | forward measured below (raw engine, not yet behind the entry points) |
 
-## Speed: forward, raw engine vs `useNizel().html` (Node, warm median)
+## Speed: forward, raw engine vs `useNizel().html` (Node, CPU time, warm median)
 
-| Fixture | Bytes | Identical | JavaScript ms | Engine ms | Speedup |
+| Fixture | Bytes | Identical | JavaScript CPU ms | Engine CPU ms | Speedup |
 | --- | --- | --- | --- | --- | --- |
-| commonmark | 44210 | yes | 13.902 | 4.346 | 3.2x |
-| gfm | 559 | yes | 0.114 | 0.026 | 4.4x |
-| readme | 997 | yes | 0.057 | 0.024 | 2.4x |
-| large | 2093 | yes | 0.436 | 0.179 | 2.4x |
-| code-heavy | 700 | yes | 0.021 | 0.015 | 1.4x |
-| 46 KB GFM | 45838 | yes | 8.627 | 2.152 | 4.0x |
-| emphasis draft | 56800 | yes | 10.479 | 2.833 | 3.7x |
-| plain draft | 54600 | yes | 1.612 | 1.077 | 1.5x |
+| commonmark | 44210 | yes | 10.774 | 3.007 | 3.6x |
+| gfm | 559 | yes | 0.055 | 0.017 | 3.2x |
+| readme | 997 | yes | 0.054 | 0.019 | 2.8x |
+| large | 2093 | yes | 0.225 | 0.083 | 2.7x |
+| code-heavy | 700 | yes | 0.021 | 0.010 | 2.0x |
+| 46 KB GFM | 45838 | yes | 5.252 | 1.394 | 3.8x |
+| emphasis draft | 56800 | yes | 6.198 | 1.597 | 3.9x |
+| plain draft | 54600 | yes | 1.416 | 0.557 | 2.5x |
 
-## Speed: reverse, raw engine vs `htmlToMarkdown` (Node, warm median)
+## Speed: reverse, raw engine vs `htmlToMarkdown` (Node, CPU time, warm median)
 
-| Fixture (as HTML) | Bytes | Identical | JavaScript ms | Engine ms | Speedup |
+| Fixture (as HTML) | Bytes | Identical | JavaScript CPU ms | Engine CPU ms | Speedup |
 | --- | --- | --- | --- | --- | --- |
-| commonmark | 63766 | yes | 7.332 | 3.564 | 2.1x |
-| gfm | 921 | yes | 0.154 | 0.054 | 2.9x |
-| readme | 1423 | yes | 0.125 | 0.058 | 2.2x |
-| large | 3008 | yes | 0.258 | 0.182 | 1.4x |
-| code-heavy | 992 | yes | 0.047 | 0.029 | 1.6x |
-| 46 KB GFM | 76073 | yes | 8.277 | 4.469 | 1.9x |
-| emphasis draft | 77599 | yes | 14.836 | 4.131 | 3.6x |
-| plain draft | 62999 | yes | 5.659 | 2.469 | 2.3x |
+| commonmark | 63766 | yes | 7.517 | 3.049 | 2.5x |
+| gfm | 921 | yes | 0.086 | 0.041 | 2.1x |
+| readme | 1423 | yes | 0.103 | 0.061 | 1.7x |
+| large | 3008 | yes | 0.190 | 0.136 | 1.4x |
+| code-heavy | 992 | yes | 0.045 | 0.031 | 1.5x |
+| 46 KB GFM | 76073 | yes | 9.576 | 3.764 | 2.5x |
+| emphasis draft | 77599 | yes | 7.828 | 3.078 | 2.5x |
+| plain draft | 62999 | yes | 4.698 | 2.839 | 1.7x |

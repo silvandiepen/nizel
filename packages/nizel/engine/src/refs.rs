@@ -11,14 +11,14 @@ use std::collections::HashMap;
 pub type References = HashMap<String, Reference>;
 
 /// `extractReferenceDefinitions` → (content lines, references).
-pub fn extract(lines: &[String]) -> (Vec<String>, References) {
+pub fn extract(lines: &[&str]) -> (Vec<String>, References) {
     let mut references = References::new();
     let mut content: Vec<String> = Vec::with_capacity(lines.len());
     let mut previous_was_reference = false;
     let mut index = 0;
     while index < lines.len() {
         if let Some((_, end)) = read_html_block(lines, index) {
-            content.extend_from_slice(&lines[index..(end + 1).min(lines.len())]);
+            content.extend(lines[index..(end + 1).min(lines.len())].iter().map(|l| l.to_string()));
             index = end + 1;
             previous_was_reference = false;
             continue;
@@ -29,10 +29,10 @@ pub fn extract(lines: &[String]) -> (Vec<String>, References) {
         let fence_marker = after_indent.bytes().next().filter(|b| *b == b'`' || *b == b'~');
         if let Some(marker) = fence_marker.filter(|&m| js::run_of(after_indent, m) >= 3) {
             let length = js::run_of(after_indent, marker);
-            content.push(line.clone());
+            content.push(line.to_string());
             index += 1;
             while index < lines.len() {
-                content.push(lines[index].clone());
+                content.push(lines[index].to_string());
                 if closes_fence(&lines[index], marker, length) {
                     break;
                 }
@@ -44,14 +44,14 @@ pub fn extract(lines: &[String]) -> (Vec<String>, References) {
         }
 
         if line.starts_with("    ") {
-            content.push(line.clone());
+            content.push(line.to_string());
             index += 1;
             previous_was_reference = false;
             continue;
         }
 
         if let Some(quoted) = blockquote_reference_line(line) {
-            if let Some((label, reference, _)) = read_reference_definition(&[quoted.to_string()], 0) {
+            if let Some((label, reference, _)) = read_reference_definition(&[quoted], 0) {
                 references.entry(normalize_reference(&label)).or_insert(reference);
                 content.push(">".to_string());
                 previous_was_reference = true;
@@ -65,7 +65,7 @@ pub fn extract(lines: &[String]) -> (Vec<String>, References) {
             || previous_was_reference
             || is_reference_start_after_block(&lines[index - 1]);
         if !can_start {
-            content.push(line.clone());
+            content.push(line.to_string());
             previous_was_reference = false;
             index += 1;
             continue;
@@ -78,7 +78,7 @@ pub fn extract(lines: &[String]) -> (Vec<String>, References) {
                 previous_was_reference = true;
             }
             None => {
-                content.push(line.clone());
+                content.push(line.to_string());
                 previous_was_reference = false;
                 index += 1;
             }
@@ -117,7 +117,7 @@ fn is_reference_start_after_block(line: &str) -> bool {
 type Definition = (String, Reference, usize);
 
 /// `readReferenceDefinition`.
-pub fn read_reference_definition(lines: &[String], start: usize) -> Option<Definition> {
+pub fn read_reference_definition(lines: &[&str], start: usize) -> Option<Definition> {
     if let Some(found) = read_multiline_reference_definition(lines, start) {
         return Some(found);
     }
@@ -130,7 +130,7 @@ pub fn read_reference_definition(lines: &[String], start: usize) -> Option<Defin
     let mut parts = vec![rest.to_string()];
     let mut cursor = start + 1;
     while cursor < lines.len() && !js::trim(&lines[cursor]).is_empty() && can_continue_reference_definition(&parts, &lines[cursor]) {
-        parts.push(lines[cursor].clone());
+        parts.push(lines[cursor].to_string());
         cursor += 1;
     }
     let reference = parse_reference_definition_content(&parts.join("\n"))?;
@@ -181,7 +181,7 @@ fn single_line_label(line: &str, start: usize) -> Option<(usize, &str)> {
 }
 
 /// `readMultilineReferenceDefinition`.
-fn read_multiline_reference_definition(lines: &[String], start: usize) -> Option<Definition> {
+fn read_multiline_reference_definition(lines: &[&str], start: usize) -> Option<Definition> {
     let line = &lines[start];
     let open = js::up_to_three_spaces(line);
     if line.as_bytes().get(open) != Some(&b'[') {
@@ -197,7 +197,7 @@ fn read_multiline_reference_definition(lines: &[String], start: usize) -> Option
             if js::trim(candidate).is_empty() {
                 return None;
             }
-            label_parts.push(candidate.clone());
+            label_parts.push(candidate.to_string());
             continue;
         };
         let indent = js::up_to_three_spaces(candidate);
@@ -212,7 +212,7 @@ fn read_multiline_reference_definition(lines: &[String], start: usize) -> Option
             && !js::trim(&lines[content_cursor]).is_empty()
             && can_continue_reference_definition(&parts, &lines[content_cursor])
         {
-            parts.push(lines[content_cursor].clone());
+            parts.push(lines[content_cursor].to_string());
             content_cursor += 1;
         }
         let reference = parse_reference_definition_content(&parts.join("\n"))?;

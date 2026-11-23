@@ -32,6 +32,14 @@ pub fn parse_inline(source: &str, ctx: &Ctx) -> Result<Vec<Inline>> {
     parse_inline_with_state(source, ctx, true)
 }
 
+/// `parseInline` for a source the caller owns: plain text is moved, not copied.
+pub fn parse_inline_owned(source: String, ctx: &Ctx) -> Result<Vec<Inline>> {
+    if !js::has_inline_syntax(&source, ctx.options.autolinks) {
+        return Ok(if source.is_empty() { Vec::new() } else { vec![Inline::Text { value: source, escaped: false }] });
+    }
+    parse_inline_with_state(&source, ctx, true)
+}
+
 /// `stripInlineMarkdown`: parsed with the same options but no references.
 fn strip_inline_markdown(source: &str, ctx: &Ctx) -> Result<String> {
     let empty = References::new();
@@ -42,7 +50,7 @@ fn strip_inline_markdown(source: &str, ctx: &Ctx) -> Result<String> {
 /// `parseInlineWithState`.
 fn parse_inline_with_state(source: &str, ctx: &Ctx, extract_nested_links: bool) -> Result<Vec<Inline>> {
     let options = ctx.options;
-    if !has_inline_syntax(source, options.autolinks) {
+    if !js::has_inline_syntax(source, options.autolinks) {
         return Ok(if source.is_empty() { Vec::new() } else { vec![Inline::text(source)] });
     }
     let has_at = source.contains('@');
@@ -258,17 +266,6 @@ fn normalize_inline_destination(destination: &str) -> &str {
     } else {
         destination
     }
-}
-
-/// `hasInlineSyntax` (its URL checks are case-sensitive).
-fn has_inline_syntax(source: &str, autolinks: bool) -> bool {
-    if source.is_empty() {
-        return false;
-    }
-    if source.bytes().any(|b| matches!(b, b'\\' | b'`' | b'<' | b'&' | b'\n' | b'[' | b']' | b'*' | b'_' | b'~')) {
-        return true;
-    }
-    autolinks && (source.contains("http://") || source.contains("https://") || source.contains('@'))
 }
 
 /// `hasNonEmphasisSyntax`: ``/[`<&\n[~\\]|https?:\/\//i``.

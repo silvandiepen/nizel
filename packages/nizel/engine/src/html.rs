@@ -231,7 +231,7 @@ fn html_line_start(line: &str) -> bool {
 }
 
 /// `readHtmlBlock` → (value, end index).
-pub fn read_html_block(lines: &[String], start: usize) -> Option<(String, usize)> {
+pub fn read_html_block(lines: &[&str], start: usize) -> Option<(String, usize)> {
     let line = &lines[start];
     if !html_line_start(line) {
         return None;

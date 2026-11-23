@@ -46,6 +46,12 @@ enum Token {
 }
 
 pub fn resolve_remaining_emphasis(nodes: Vec<Inline>) -> Vec<Inline> {
+    // Without a delimiter in unescaped text, resolving only merges adjacent
+    // text (dropping `escaped`), exactly as `inlineTokensToNodes` does.
+    let has_delimiter = nodes.iter().any(|node| matches!(node, Inline::Text { value, escaped: false } if value.bytes().any(|b| b == b'*' || b == b'_')));
+    if !has_delimiter {
+        return merge_text(nodes);
+    }
     let mut tokens = tokenize(nodes);
     let mut close_index = 0;
     'closers: while close_index < tokens.len() {
@@ -96,14 +102,17 @@ fn is_forbidden_match(opener_close: bool, opener_length: usize, closer_open: boo
     (opener_length + closer_length) % 3 == 0 && opener_length % 3 != 0 && closer_length % 3 != 0
 }
 
-/// `tokenizeEmphasisDelimiters`.
+/// `tokenizeEmphasisDelimiters`. Nodes are moved into the tokens; the
+/// lookahead past a node's end reads the nodes not yet moved.
 fn tokenize(nodes: Vec<Inline>) -> Vec<Token> {
-    let mut tokens = Vec::with_capacity(nodes.len() * 2);
-    for node_index in 0..nodes.len() {
-        let value = match &nodes[node_index] {
-            Inline::Text { value, escaped: false } => value.clone(),
+    let mut slots: Vec<Option<Inline>> = nodes.into_iter().map(Some).collect();
+    let mut tokens = Vec::with_capacity(slots.len() * 2);
+    for node_index in 0..slots.len() {
+        let node = slots[node_index].take().expect("each node is taken once");
+        let value = match node {
+            Inline::Text { value, escaped: false } if value.bytes().any(|b| b == b'*' || b == b'_') => value,
             other => {
-                tokens.push(Token::Node(other.clone()));
+                tokens.push(Token::Node(other));
                 continue;
             }
         };
@@ -113,8 +122,6 @@ fn tokenize(nodes: Vec<Inline>) -> Vec<Token> {
             let ch = bytes[cursor];
             if ch != b'*' && ch != b'_' {
                 let next = bytes[cursor + 1..].iter().position(|&b| b == b'*' || b == b'_').map_or(bytes.len(), |p| cursor + 1 + p);
-                // cursor + 1 may land inside a multi-byte character; the
-                // next delimiter is ASCII, so `next` is always a boundary.
                 tokens.push(Token::Node(Inline::text(&value[cursor..next])));
                 cursor = next;
                 continue;
@@ -124,7 +131,11 @@ fn tokenize(nodes: Vec<Inline>) -> Vec<Token> {
                 cursor += 1;
             }
             let before = previous_character(&tokens);
-            let after = if cursor < bytes.len() { Unit::first_of(&value[cursor..]) } else { next_inline_character(&nodes[node_index + 1..]) };
+            let after = if cursor < bytes.len() {
+                Unit::first_of(&value[cursor..])
+            } else {
+                slots[node_index + 1..].iter().flatten().map(first_inline_character).find(|u| *u != Unit::None).unwrap_or(Unit::None)
+            };
             let (open, close) = classify(ch, before, after);
             tokens.push(Token::Delimiter { ch, open, close, length: cursor - run_start });
         }
@@ -195,22 +206,39 @@ fn tokens_to_nodes(tokens: Vec<Token>) -> Vec<Inline> {
     let mut nodes: Vec<Inline> = Vec::with_capacity(tokens.len());
     for token in tokens {
         match token {
-            Token::Delimiter { ch, length, .. } => append_text(&mut nodes, &(ch as char).to_string().repeat(length)),
-            Token::Node(Inline::Text { value, .. }) => append_text(&mut nodes, &value),
+            Token::Delimiter { length: 0, .. } => {}
+            Token::Delimiter { ch, length, .. } => match nodes.last_mut() {
+                Some(Inline::Text { value, .. }) => value.extend(std::iter::repeat_n(ch as char, length)),
+                _ => nodes.push(Inline::text((ch as char).to_string().repeat(length))),
+            },
+            Token::Node(Inline::Text { value, .. }) => append_owned_text(&mut nodes, value),
             Token::Node(node) => nodes.push(node),
         }
     }
     nodes
 }
 
-/// `appendTextNode`.
-fn append_text(nodes: &mut Vec<Inline>, value: &str) {
+/// `inlineTokensToNodes` over nodes alone: adjacent text merges, `escaped` drops.
+fn merge_text(nodes: Vec<Inline>) -> Vec<Inline> {
+    let mut merged: Vec<Inline> = Vec::with_capacity(nodes.len());
+    for node in nodes {
+        match node {
+            Inline::Text { value, .. } => append_owned_text(&mut merged, value),
+            other => merged.push(other),
+        }
+    }
+    merged
+}
+
+/// `appendTextNode` for an owned value: reuse it when it starts a new node.
+fn append_owned_text(nodes: &mut Vec<Inline>, value: String) {
     if value.is_empty() {
         return;
     }
     if let Some(Inline::Text { value: previous, .. }) = nodes.last_mut() {
-        previous.push_str(value);
+        previous.push_str(&value);
         return;
     }
-    nodes.push(Inline::text(value));
+    nodes.push(Inline::Text { value, escaped: false });
 }
+

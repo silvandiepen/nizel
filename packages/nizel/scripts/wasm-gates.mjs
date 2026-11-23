@@ -127,13 +127,19 @@ if (!onlySection) {
   speedFixtures['emphasis draft'] = 'This is a required **bold passage** with *emphasis* in the same line.\n\n'.repeat(800);
   speedFixtures['plain draft'] = 'First paragraph with simple notes.\n\nSecond paragraph with a useful addition.\n\n'.repeat(700);
   const speedNizel = stock.useNizel({ plugins: [], frontmatter: false, template: false });
+  // Process CPU time, not wall time: on a loaded machine wall time measures
+  // the scheduler. Both engines are measured the same way, interleaved.
+  const cpu = () => {
+    const usage = process.cpuUsage();
+    return (usage.user + usage.system) / 1000;
+  };
   const median = async (run, source) => {
-    const repeats = Math.max(1, Math.min(200, Math.ceil(60000 / source.length)));
+    const repeats = Math.max(5, Math.min(400, Math.ceil(200000 / source.length)));
     const samples = [];
     for (let round = 0; round < 25; round += 1) {
-      const start = performance.now();
+      const start = cpu();
       for (let i = 0; i < repeats; i += 1) await run(source);
-      if (round > 4) samples.push((performance.now() - start) / repeats);
+      if (round > 4) samples.push((cpu() - start) / repeats);
     }
     samples.sort((a, b) => a - b);
     return samples[samples.length >> 1];
@@ -185,15 +191,15 @@ if (!onlySection) {
     '| 7. Lezin iPhone tests | not run |',
     '| Speed (≥5x, cold start, size) | forward measured below (raw engine, not yet behind the entry points) |',
     '',
-    '## Speed: forward, raw engine vs `useNizel().html` (Node, warm median)',
+    '## Speed: forward, raw engine vs `useNizel().html` (Node, CPU time, warm median)',
     '',
-    '| Fixture | Bytes | Identical | JavaScript ms | Engine ms | Speedup |',
+    '| Fixture | Bytes | Identical | JavaScript CPU ms | Engine CPU ms | Speedup |',
     '| --- | --- | --- | --- | --- | --- |',
     ...speedRows,
     '',
-    '## Speed: reverse, raw engine vs `htmlToMarkdown` (Node, warm median)',
+    '## Speed: reverse, raw engine vs `htmlToMarkdown` (Node, CPU time, warm median)',
     '',
-    '| Fixture (as HTML) | Bytes | Identical | JavaScript ms | Engine ms | Speedup |',
+    '| Fixture (as HTML) | Bytes | Identical | JavaScript CPU ms | Engine CPU ms | Speedup |',
     '| --- | --- | --- | --- | --- | --- |',
     ...reverseRows,
     '',

@@ -12,6 +12,7 @@
 //!   produce JavaScript's exact output for it yet.
 //! - `output()` returns where the output bytes start.
 
+pub mod arena;
 pub mod ast;
 pub mod backtrack;
 pub mod block;
@@ -32,6 +33,32 @@ pub mod status;
 pub mod unicode;
 
 use std::cell::RefCell;
+
+#[cfg(target_arch = "wasm32")]
+#[global_allocator]
+static ALLOCATOR: arena::Arena = arena::Arena::new();
+
+/// Starts a conversion: its allocations come from the per-call arena.
+fn arena_begin() {
+    #[cfg(target_arch = "wasm32")]
+    ALLOCATOR.begin();
+}
+
+/// Ends a conversion: what is allocated next outlives the call.
+fn arena_end() {
+    #[cfg(target_arch = "wasm32")]
+    ALLOCATOR.end();
+}
+
+/// Copies a finished result into the output buffer, which outlives the call.
+fn publish(bytes: &[u8]) -> i32 {
+    OUTPUT.with(|output| {
+        let mut output = output.borrow_mut();
+        output.clear();
+        output.extend_from_slice(bytes);
+        output.len() as i32
+    })
+}
 
 thread_local! {
     static INPUT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
@@ -55,6 +82,7 @@ pub mod flags {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn input(len: usize) -> *mut u8 {
+    arena_end();
     INPUT.with(|buffer| {
         let mut buffer = buffer.borrow_mut();
         buffer.clear();
@@ -77,21 +105,17 @@ pub extern "C" fn render(len: usize, flags: u32) -> i32 {
 /// transforms, element rules or block definitions run in JavaScript.
 #[unsafe(no_mangle)]
 pub extern "C" fn parse(len: usize, flags: u32) -> i32 {
-    INPUT.with(|input| {
+    arena_begin();
+    let result = INPUT.with(|input| {
         let input = input.borrow();
-        let Ok(source) = std::str::from_utf8(&input[..len.min(input.len())]) else {
-            return status::INVALID_UTF8;
-        };
-        let options = parse_options(flags);
-        match block::parse_markdown(source, &options) {
-            Ok(blocks) => OUTPUT.with(|output| {
-                let mut output = output.borrow_mut();
-                *output = codec::encode(&blocks);
-                output.len() as i32
-            }),
-            Err(code) => code,
-        }
-    })
+        let source = std::str::from_utf8(&input[..len.min(input.len())]).map_err(|_| status::INVALID_UTF8)?;
+        block::parse_markdown(source, &parse_options(flags)).map(|blocks| codec::encode(&blocks))
+    });
+    arena_end();
+    match result {
+        Ok(bytes) => publish(&bytes),
+        Err(code) => code,
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -112,22 +136,18 @@ pub extern "C" fn reverse(len: usize, flags: u32) -> i32 {
 }
 
 fn convert(len: usize, run: impl FnOnce(&str, &mut String) -> Result<(), i32>) -> i32 {
-    INPUT.with(|input| {
+    arena_begin();
+    let result = INPUT.with(|input| {
         let input = input.borrow();
-        let Ok(source) = std::str::from_utf8(&input[..len.min(input.len())]) else {
-            return status::INVALID_UTF8;
-        };
+        let source = std::str::from_utf8(&input[..len.min(input.len())]).map_err(|_| status::INVALID_UTF8)?;
         let mut out = String::with_capacity(source.len() + source.len() / 4 + 16);
-        if let Err(code) = run(source, &mut out) {
-            return code;
-        }
-        OUTPUT.with(|output| {
-            let mut output = output.borrow_mut();
-            output.clear();
-            output.extend_from_slice(out.as_bytes());
-            output.len() as i32
-        })
-    })
+        run(source, &mut out).map(|()| out)
+    });
+    arena_end();
+    match result {
+        Ok(out) => publish(out.as_bytes()),
+        Err(code) => code,
+    }
 }
 
 fn parse_options(flags: u32) -> block::Options {
