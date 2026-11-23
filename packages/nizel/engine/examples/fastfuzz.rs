@@ -46,6 +46,8 @@ const ATOMS: &[&str] = &[
     "\n>\t[qa]: /u", "\n>  [qb]: /u", "\n>\u{a0}[qc]: /u", "\n>\u{3000} [qd]: /u", "\n> \t[qe]: /u", "\n````\n[qf]: <a b>\n````",
     "\n| `a\\|b` | <div class=\"x\">y</div> |\n|---|:-:|\n| \\`x\\` | ~~s~~ |", "\n| a | b |\n|--|--|\n| <https://e.com> | x@y.z |", "\n| &amp; | &#65; |\n|---|---|\n| [r] | ![i](s) |",
     "\n| h |\n|---|\n| [^1] | x\\ |", "\n| <b>a</b> | `[x]` |\n|---|---|", "\n| a | b |\n|---|---|\n| www.e.com | https://e.com/x |", "\n| *a | b* |\n|---|---|",
+    "\nTitle\n===", "\nTwo\nlines\n---", "\nTrail  \n---", "\nNbsp\u{a0}\n---", "\nTwo \u{a0}\nlines\u{a0}\n===", "\n*Em* &amp; <b>x</b>\n---", "\n[r] text\n-", "\nSame\n---\nSame\n---", "\na\\\nb", "\na <https://e.com> b",
+    "\n:::details More\nHidden **x**.\n:::", "\n:: x", "\ntext\n::note\nbody\n::", "\ntext\n:::y", "\n::bad!\n", "\n:x: y", "\n  ::indented\n\n::", "\n\u{a0}::nbsp\n::",
     // Just outside: the tier must decline, never differ.
     "*em*", "**strong**", "_u_", "[link](x)", "<b>", "&amp;", "\\*", "~~d~~", "| a | b |", "a@b.co", "http://e.com",
     "> quote", "- item", "1. one", "+ plus", "===", "--", "\t", "\r\n", ":: note", "[r]: /url", "![i](s)",

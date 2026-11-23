@@ -514,7 +514,7 @@ pub(crate) fn blockquote_start(line: &str) -> bool {
 }
 
 /// `/^::[A-Za-z][\w-]*/` on the trimmed line.
-fn custom_block_start(trimmed: &str) -> bool {
+pub(crate) fn custom_block_start(trimmed: &str) -> bool {
     trimmed.strip_prefix("::").is_some_and(|rest| rest.bytes().next().is_some_and(|b| b.is_ascii_alphabetic()))
 }
 
@@ -662,7 +662,7 @@ fn is_bare_list_marker(text: &str) -> bool {
 }
 
 /// `normalizeParagraphLine`: `line.replace(/^ {0,3}/, '').trimStart()`.
-fn normalize_paragraph_line(line: &str) -> &str {
+pub(crate) fn normalize_paragraph_line(line: &str) -> &str {
     js::trim_start(&line[js::up_to_three_spaces(line)..])
 }
 

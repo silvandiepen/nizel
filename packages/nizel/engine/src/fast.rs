@@ -332,7 +332,7 @@ fn block<'a>(source: &'a str, pos: usize, state: &mut Walk, lines: &mut Option<L
         return Some((checked_table(source, pos, state, out)?, false));
     }
     if lead.is_ascii_alphabetic() {
-        return Some((checked_paragraph(source, pos, state, out)?, true));
+        return checked_paragraph(source, pos, state, out);
     }
     let eol = line_end(b, pos);
     let line = &source[pos..eol];
@@ -344,10 +344,13 @@ fn block<'a>(source: &'a str, pos: usize, state: &mut Walk, lines: &mut Option<L
         b'*' | b'_' => !block::is_thematic_break(line) && block::parse_list_marker(line).is_none(),
         // Three backticks that are not a fence: extraction would open one.
         b'`' => !block::fence_start(line) && !line.starts_with("```"),
+        // `::name` opens a custom block (or interrupts); `:::x` and the like
+        // are text.
+        b':' => !block::custom_block_start(crate::js::trim(line)),
         _ => false,
     };
     if paragraph_lead && !line.contains(['\t', '|']) {
-        return Some((checked_paragraph(source, pos, state, out)?, true));
+        return checked_paragraph(source, pos, state, out);
     }
     if lead != b'`' && line.bytes().any(|c| c == b'\t' || c == b'\r') {
         return None;
@@ -388,16 +391,31 @@ fn block<'a>(source: &'a str, pos: usize, state: &mut Walk, lines: &mut Option<L
     Some((eol + 1, false))
 }
 
-/// A paragraph, after checking a line of it that starts with `[` (one at the
+/// A paragraph (by tier 1, or by the full engine when its inline content is
+/// outside the subset), after checking a line of it that starts with `[` (one at the
 /// start, or a continuation) for a reference definition.
-fn checked_paragraph(source: &str, pos: usize, state: &mut Walk, out: &mut String) -> Option<usize> {
+fn checked_paragraph(source: &str, pos: usize, state: &mut Walk, out: &mut String) -> Option<(usize, bool)> {
     let mark = out.len();
-    let (end, bracket) = paragraph(source, pos, out)?;
+    let (end, bracket, paragraph) = match paragraph(source, pos, out) {
+        Some((end, bracket)) => (end, bracket, true),
+        None => {
+            // Outside the inline subset (or not certain where it ends):
+            // the full engine renders the paragraph when its extent is.
+            out.truncate(mark);
+            let b = source.as_bytes();
+            let (last, setext) = paragraph_extent(b, pos)?;
+            full_paragraph(source, pos, last, setext, state, out)?;
+            // After the last line, and the underline of a setext heading.
+            let after = if setext.is_some() { line_end(b, last + 1) } else { last };
+            let end = if after < b.len() { after + 1 } else { b.len() };
+            (end, source[pos..after].contains('['), setext.is_none())
+        }
+    };
     if bracket && state.check_definitions(&source[pos..end.min(source.len())]).is_none() {
         out.truncate(mark);
         return None;
     }
-    Some(end)
+    Some((end, paragraph))
 }
 
 /// A table, after checking its rows for lines that could start a reference
@@ -600,7 +618,7 @@ fn segment_end(source: &str, from: usize, safe: bool) -> usize {
         }
         let indent = line.iter().take_while(|&&c| c == b' ').count();
         let hazard = may_open_fence(line)
-            || line[indent..].starts_with(b"::")
+            || std::str::from_utf8(line).map_or(true, |line| block::custom_block_start(crate::js::trim(line)))
             || (!safe && indent <= 3 && line.get(indent) == Some(&b'<') && std::str::from_utf8(line).map_or(true, crate::html::starts_html_block));
         if hazard {
             return b.len();
@@ -794,23 +812,40 @@ fn paragraph(source: &str, start: usize, out: &mut String) -> Option<(usize, boo
 /// interrupt the paragraph or underline it), and a space before the newline
 /// makes a hard or trimmed soft break.
 fn continues_after(b: &[u8], i: usize) -> Option<bool> {
+    // A trailing space before a continuation is a hard break: outside the
+    // inline subset.
+    match line_continues(b, i, false)? {
+        true if b[i - 1] == b' ' => None,
+        continues => Some(continues),
+    }
+}
+
+/// `canContinueParagraph` for the line after the newline at `i`: whether it
+/// continues the paragraph, or None when that is not certain here. With
+/// `pipes`, a line holding `|` declines too (it could start a table that
+/// interrupts); without, the caller declines any `|` itself.
+fn line_continues(b: &[u8], i: usize, pipes: bool) -> Option<bool> {
     let next = i + 1;
     if is_blank_from(b, next) {
         return Some(false);
     }
+    let end = line_end(b, next);
+    if pipes && b[next..end].contains(&b'|') {
+        return None;
+    }
     // Leads `hasParagraphInterruptCandidate` never looks at: the line
-    // continues the paragraph (a `|` is declined by the paragraph itself).
+    // continues the paragraph.
     if b[next].is_ascii_alphabetic() || matches!(b[next], b'[' | b'!' | b'(' | b'"' | b'_') {
-        return (b[i - 1] != b' ').then_some(true);
+        return Some(true);
     }
     // `canContinueParagraph` on a column-0 line that certainly interrupts:
     // the paragraph ends and the line starts a block of its own. A setext
     // underline (it would make the paragraph a heading) and every other
     // line decline.
-    if !matches!(b[next], b'#' | b'`' | b'-' | b'*' | b'+' | b'>' | b'0'..=b'9') {
+    if !matches!(b[next], b'#' | b'`' | b'-' | b'*' | b'+' | b'>' | b':' | b'0'..=b'9') {
         return None;
     }
-    let line = std::str::from_utf8(&b[next..line_end(b, next)]).ok()?;
+    let line = std::str::from_utf8(&b[next..end]).ok()?;
     // A continuation opening with three backticks would be a fence to
     // extraction (see `Walk::in_step`).
     if line.starts_with("```") && !block::fence_start(line) {
@@ -823,13 +858,58 @@ fn continues_after(b: &[u8], i: usize) -> Option<bool> {
         || block::atx_at_line_start(line)
         || block::fence_start(line)
         || block::is_paragraph_interrupting_list_marker(line)
-        || block::blockquote_start(line);
+        || block::blockquote_start(line)
+        || block::custom_block_start(crate::js::trim(line));
     // A candidate that does not interrupt continues the paragraph.
-    if interrupts {
-        Some(false)
-    } else {
-        (b[i - 1] != b' ').then_some(true)
+    Some(!interrupts)
+}
+
+/// The end of the paragraph starting at `start` (its last line's end), by
+/// `line_continues` with pipes checked: exact, or None.
+fn paragraph_extent(b: &[u8], start: usize) -> Option<(usize, Option<u8>)> {
+    let mut eol = line_end(b, start);
+    while eol < b.len() {
+        // A setext underline ends the lines and makes them a heading.
+        if matches!(b.get(eol + 1), Some(b'=' | b'-')) {
+            let underline = std::str::from_utf8(&b[eol + 1..line_end(b, eol + 1)]).ok()?;
+            if let Some(depth) = block::setext_underline(underline) {
+                return Some((eol, Some(depth)));
+            }
+        }
+        if !line_continues(b, eol, true)? {
+            break;
+        }
+        eol = line_end(b, eol + 1);
     }
+    Some((eol, None))
+}
+
+/// The paragraph `source[start..end]` by the full engine (a heading with a
+/// setext underline): its lines normalized and joined as `parseBlocks` does,
+/// then `parseInline` and the block's rendering.
+fn full_paragraph(source: &str, start: usize, end: usize, setext: Option<u8>, state: &mut Walk, out: &mut String) -> Option<()> {
+    let lines = &source[start..end];
+    // `parseBlocks` trims a one-line setext heading's text whole.
+    if let (Some(depth), false) = (setext, lines.contains('\n')) {
+        let heading = block::heading(depth, crate::js::trim(lines), state.ctx, &mut state.seen).ok()?;
+        crate::render::render_block(&heading, out);
+        return Some(());
+    }
+    let mut text = String::with_capacity(end - start);
+    for (index, line) in source[start..end].split('\n').enumerate() {
+        if index > 0 {
+            text.push('\n');
+        }
+        text.push_str(block::normalize_paragraph_line(line));
+    }
+    let kept = text.trim_end_matches([' ', '\t']).len();
+    text.truncate(kept);
+    let block = match setext {
+        Some(depth) => block::heading(depth, &text, state.ctx, &mut state.seen).ok()?,
+        None => crate::ast::Block::Paragraph { children: crate::inline::parse_inline_owned(text, state.ctx).ok()? },
+    };
+    crate::render::render_block(&block, out);
+    Some(())
 }
 
 /// Is the line starting at `at` blank (empty or ASCII spaces only)? Steps
