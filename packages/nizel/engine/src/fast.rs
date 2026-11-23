@@ -40,6 +40,9 @@ thread_local! {
     /// Bytes of the last document that tier 1 handed to the full engine
     /// (coverage reporting; see examples/coverage.rs).
     static HANDED_OVER: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Bytes of paragraphs and table cells whose inline content the full
+    /// engine parsed (tier 1 still read their extent).
+    static INLINE_FALLBACK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// When set, each handed-over stretch's length and first line (see
     /// `trace_handed_over`).
     static TRACE: std::cell::RefCell<Option<Vec<(usize, String)>>> = const { std::cell::RefCell::new(None) };
@@ -49,6 +52,12 @@ thread_local! {
 /// returns what was recorded since the last call (examples/coverage.rs).
 pub fn trace_handed_over(on: bool) -> Vec<(usize, String)> {
     TRACE.with(|trace| std::mem::replace(&mut *trace.borrow_mut(), on.then(Vec::new)).unwrap_or_default())
+}
+
+/// Bytes of the last rendered document whose inline content (a paragraph or
+/// a table cell) the full engine parsed.
+pub fn inline_fallback_bytes() -> usize {
+    INLINE_FALLBACK.with(std::cell::Cell::get)
 }
 
 /// Bytes of the last rendered document that tier 1 handed to the full engine.
@@ -74,6 +83,7 @@ fn line_end(b: &[u8], from: usize) -> usize {
 fn render_inner(source: &str, options: &Options, out: &mut String) -> Option<()> {
     let b = source.as_bytes();
     HANDED_OVER.with(|handed| handed.set(0));
+    INLINE_FALLBACK.with(|bytes| bytes.set(0));
     // Document-wide: CR changes how lines split, and reference definitions
     // are extracted from the whole document before any block is parsed.
     // A document with either stays whole with the full engine. Whether it
@@ -98,6 +108,7 @@ fn render_inner(source: &str, options: &Options, out: &mut String) -> Option<()>
         references_checked: false,
         in_step: true,
         depth: 0,
+        root_lines: None,
     };
     walk(source, &mut state, out, None)
 }
@@ -133,15 +144,28 @@ struct Walk<'a> {
     in_step: bool,
     /// List-item nesting of the current walk (0 is the document itself).
     depth: usize,
+    /// The document's lines, built once for whichever needs them first: a
+    /// root list or HTML block, or the definition check.
+    root_lines: Option<std::rc::Rc<Lines<'a>>>,
 }
 
-impl Walk<'_> {
+impl<'a> Walk<'a> {
+    /// The document's lines (see `root_lines`).
+    fn root_lines(&mut self) -> std::rc::Rc<Lines<'a>> {
+        let root = self.root;
+        self.root_lines.get_or_insert_with(|| std::rc::Rc::new(Lines::new(root))).clone()
+    }
+
     /// Tier 1 renders `text` itself: if it holds a line that could start a
     /// reference definition, check (once) that the whole document defines
     /// none. None when it does (the document then goes to the full engine).
     fn check_definitions(&mut self, text: &str) -> Option<()> {
         if !self.references_checked && may_start_definition(text.as_bytes()) {
-            if defines_references(self.root) {
+            let defines = match may_define_references(self.root) {
+                Some(answer) => answer,
+                None => crate::refs::defines_any(&self.root_lines().lines),
+            };
+            if defines {
                 return None;
             }
             self.references_checked = true;
@@ -187,7 +211,26 @@ impl Walk<'_> {
 /// superset of the lines its readers take: `[` after up to three spaces, or
 /// a column-0 `>` followed by whitespace and then `[` (the quoted reader takes
 /// any one whitespace character, then up to three spaces; non-ASCII bytes
-/// count as whitespace here). Lines without `[` are never looked at.
+/// count as whitespace here), where the rest of the line can hold a label
+/// (`may_hold_label`). Lines without `[` are never looked at.
+/// After a definition's `[`: a one-line label ends at `]:`, and a label
+/// that goes on to the next line holds `]` only escaped (label items are
+/// `\` with punctuation, or any character but brackets and newline). So a
+/// line with neither `]:` nor only escaped `]`s starts no definition: a link
+/// (`[a](b)`), a task box (`[ ]`).
+fn may_hold_label(rest: &[u8]) -> bool {
+    let mut from = 0;
+    let mut bare_close = false;
+    while let Some(at) = crate::scan::find_byte(rest, from, b']') {
+        if rest.get(at + 1) == Some(&b':') {
+            return true;
+        }
+        bare_close |= at == 0 || rest[at - 1] != b'\\';
+        from = at + 1;
+    }
+    !bare_close
+}
+
 fn may_start_definition(b: &[u8]) -> bool {
     let mut from = 0;
     while let Some(at) = crate::scan::find_byte(b, from, b'[') {
@@ -195,11 +238,12 @@ fn may_start_definition(b: &[u8]) -> bool {
         let prefix = &b[line_start..at];
         let spaces = prefix.iter().take_while(|&&c| c == b' ').count().min(3);
         let quoted = prefix.first() == Some(&b'>') && prefix[1..].iter().all(|&c| matches!(c, b' ' | b'\t' | 0x0b | 0x0c) || c >= 0x80);
-        if spaces == prefix.len() || quoted {
+        let line_end = crate::scan::find_byte(b, at, b'\n').unwrap_or(b.len());
+        if (spaces == prefix.len() || quoted) && may_hold_label(&b[at + 1..line_end]) {
             return true;
         }
         // Later `[`s on this line have this one in their prefix.
-        from = crate::scan::find_byte(b, at, b'\n').map_or(b.len(), |n| n + 1);
+        from = line_end + 1;
     }
     false
 }
@@ -212,7 +256,7 @@ type Span = (usize, usize, bool);
 /// joined by newlines; with `spans`, also each block's span and kind.
 fn walk(source: &str, state: &mut Walk, out: &mut String, mut spans: Option<&mut Vec<Span>>) -> Option<()> {
     let b = source.as_bytes();
-    let mut lines: Option<Lines> = None;
+    let mut lines: Option<std::rc::Rc<Lines>> = None;
     let mut first_block = true;
     let mut pos = 0;
     while pos < b.len() {
@@ -303,27 +347,33 @@ impl<'a> Lines<'a> {
 /// extraction (which skips fenced code and HTML blocks)? With none, it
 /// leaves every line unchanged, so tier 1 and the stretches see what the
 /// full engine sees. Tabs change how it reads indentation: a document with
-/// tabs counts as defining them.
-fn defines_references(source: &str) -> bool {
+/// tabs counts as defining them. None when only extraction itself can tell
+/// (the caller runs it over the document's shared lines).
+fn may_define_references(source: &str) -> Option<bool> {
     let b = source.as_bytes();
+    // No line that could start a definition: extraction finds none.
+    if !may_start_definition(b) {
+        return Some(false);
+    }
     let mut from = 0;
     loop {
         match crate::scan::find_byte(b, from, b']') {
             Some(at) if b.get(at + 1) == Some(&b':') => break,
             Some(at) => from = at + 1,
-            None => return false,
+            None => return Some(false),
         }
     }
     if crate::scan::find_byte(b, 0, b'\t').is_some() {
-        return true;
+        return Some(true);
     }
-    crate::refs::defines_any(&crate::scan::lines(source))
+    // Extraction decides (`refs::defines_any` over the document's lines).
+    None
 }
 
 /// One block at `pos` (not blank) in tier 1: the position after it and
 /// whether it is a paragraph, or None when it is outside the subset (`out`
 /// may hold a partial block then).
-fn block<'a>(source: &'a str, pos: usize, state: &mut Walk, lines: &mut Option<Lines<'a>>, out: &mut String) -> Option<(usize, bool)> {
+fn block<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, lines: &mut Option<std::rc::Rc<Lines<'a>>>, out: &mut String) -> Option<(usize, bool)> {
     let b = source.as_bytes();
     let lead = b[pos];
     // `isTableStart` comes before paragraphs and lists (and after every
@@ -405,6 +455,7 @@ fn checked_paragraph(source: &str, pos: usize, state: &mut Walk, out: &mut Strin
             let b = source.as_bytes();
             let (last, setext) = paragraph_extent(b, pos)?;
             full_paragraph(source, pos, last, setext, state, out)?;
+            INLINE_FALLBACK.with(|bytes| bytes.set(bytes.get() + last - pos));
             // After the last line, and the underline of a setext heading.
             let after = if setext.is_some() { line_end(b, last + 1) } else { last };
             let end = if after < b.len() { after + 1 } else { b.len() };
@@ -435,8 +486,8 @@ fn checked_table(source: &str, pos: usize, state: &mut Walk, out: &mut String) -
 /// `readHtmlBlock` at this line, as `parseBlocks` tries it first. Its lines
 /// get the reference-definition check (extraction skips HTML blocks by a
 /// rule of its own).
-fn html_block<'a>(source: &'a str, pos: usize, state: &mut Walk, lines: &mut Option<Lines<'a>>, out: &mut String) -> Option<usize> {
-    let lines = lines.get_or_insert_with(|| Lines::new(source));
+fn html_block<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, lines: &mut Option<std::rc::Rc<Lines<'a>>>, out: &mut String) -> Option<usize> {
+    let lines = lines.get_or_insert_with(|| if state.depth == 0 { state.root_lines() } else { std::rc::Rc::new(Lines::new(source)) }).clone();
     let index = lines.index_of(pos);
     let (value, end) = crate::html::read_html_block(&lines.lines, index)?;
     // The full engine reads the block from tab-expanded lines.
@@ -467,11 +518,11 @@ fn table_starts(source: &str, pos: usize) -> bool {
 /// markers, looseness). Tier 1 then renders every item's lines as a document
 /// of their own, and assembles tight items as `renderListItemChildrenFast`
 /// does. Tabs anywhere leave it to the full engine (it expands them first).
-fn nested_list<'a>(source: &'a str, pos: usize, state: &mut Walk, lines: &mut Option<Lines<'a>>, out: &mut String) -> Option<usize> {
+fn nested_list<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, lines: &mut Option<std::rc::Rc<Lines<'a>>>, out: &mut String) -> Option<usize> {
     if state.has_tab {
         return None;
     }
-    let lines = lines.get_or_insert_with(|| Lines::new(source));
+    let lines = lines.get_or_insert_with(|| if state.depth == 0 { state.root_lines() } else { std::rc::Rc::new(Lines::new(source)) }).clone();
     let start_index = lines.index_of(pos);
     // The item rules read the document's flags; a stretch rendered earlier
     // left its own there.
@@ -984,6 +1035,7 @@ fn table(source: &str, start: usize, ctx: &Ctx, out: &mut String) -> Option<usiz
                 let empty = References::new();
                 let cell_ctx = Ctx { options: ctx.options, references: &empty };
                 crate::render::render_inline(&crate::inline::parse_inline(cell, &cell_ctx).ok()?, out);
+                INLINE_FALLBACK.with(|bytes| bytes.set(bytes.get() + cell.len()));
             }
             out.push_str("</");
             out.push_str(tag);
