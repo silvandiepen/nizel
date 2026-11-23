@@ -67,6 +67,14 @@ pub fn escape_html_into(out: &mut String, text: &str) {
     let mut start = 0;
     let mut index = 0;
     while index < bytes.len() {
+        // Eight bytes at a time while none of them needs escaping.
+        if index + 8 <= bytes.len() {
+            let word = u64::from_le_bytes(bytes[index..index + 8].try_into().expect("eight bytes"));
+            if !has_html_special(word) {
+                index += 8;
+                continue;
+            }
+        }
         let byte = bytes[index];
         if HTML_SPECIAL[byte as usize] {
             out.push_str(&text[start..index]);
@@ -83,17 +91,26 @@ pub fn escape_html_into(out: &mut String, text: &str) {
     out.push_str(&text[start..]);
 }
 
+/// Whether any byte of `word` is `&`, `<`, `>` or `"` (SWAR zero-byte test).
+#[inline]
+fn has_html_special(word: u64) -> bool {
+    const ONES: u64 = 0x0101_0101_0101_0101;
+    const HIGHS: u64 = 0x8080_8080_8080_8080;
+    let zero = |x: u64| x.wrapping_sub(ONES) & !x & HIGHS;
+    (zero(word ^ (ONES * b'&' as u64)) | zero(word ^ (ONES * b'<' as u64)) | zero(word ^ (ONES * b'>' as u64)) | zero(word ^ (ONES * b'"' as u64))) != 0
+}
+
 static INLINE_SYNTAX: [bool; 256] = byte_table(b"\\`<&\n[]*_~");
+/// With autolinks, `@` is syntax and `h` may start `http://`.
+static INLINE_SYNTAX_AUTOLINKS: [bool; 256] = byte_table(b"\\`<&\n[]*_~@h");
 
 /// `hasInlineSyntax` in one pass: a syntax byte, or (with autolinks) `@`,
 /// `http://` or `https://` (case-sensitive, as the JavaScript checks them).
 pub fn has_inline_syntax(source: &str, autolinks: bool) -> bool {
     let b = source.as_bytes();
+    let table = if autolinks { &INLINE_SYNTAX_AUTOLINKS } else { &INLINE_SYNTAX };
     for (i, &byte) in b.iter().enumerate() {
-        if INLINE_SYNTAX[byte as usize] {
-            return true;
-        }
-        if autolinks && (byte == b'@' || (byte == b'h' && (b[i..].starts_with(b"http://") || b[i..].starts_with(b"https://")))) {
+        if table[byte as usize] && (byte != b'h' || b[i..].starts_with(b"http://") || b[i..].starts_with(b"https://")) {
             return true;
         }
     }

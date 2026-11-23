@@ -52,6 +52,14 @@ impl Arena {
 
     fn contains(&self, ptr: usize) -> bool {
         let state = self.state();
+        if state.count == 0 {
+            return false;
+        }
+        // Nearly every pointer is in the chunk being bumped.
+        let current = &state.chunks[state.current];
+        if ptr >= current.start && ptr < current.start + current.size {
+            return true;
+        }
         state.chunks[..state.count].iter().any(|c| ptr >= c.start && ptr < c.start + c.size)
     }
 

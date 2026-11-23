@@ -26,7 +26,7 @@ pub struct Options {
 type Result<T> = std::result::Result<T, i32>;
 
 pub fn parse_markdown(markdown: &str, options: &Options) -> Result<Vec<Block>> {
-    let normalized = if markdown.contains('\r') { normalize_line_endings(markdown) } else { markdown.to_string() };
+    let normalized: std::borrow::Cow<str> = if markdown.contains('\r') { normalize_line_endings(markdown).into() } else { markdown.into() };
     // Lines borrow the source unless tabs had to be expanded.
     let expanded: Vec<String>;
     let base: Vec<&str> = if normalized.contains('\t') {
@@ -124,15 +124,20 @@ fn parse_blocks(lines: &[&str], ctx: &Ctx, seen: &mut HashMap<String, usize>) ->
             index += 1;
             continue;
         }
+        // After up to three spaces, an ASCII letter cannot start HTML, a
+        // custom block, a fence, indented code, a break, a heading, a quote or
+        // a list; only setext underlines and tables (decided by other lines)
+        // and paragraphs remain.
+        let letter_start = line.as_bytes().get(js::up_to_three_spaces(line)).is_some_and(u8::is_ascii_alphabetic);
 
-        if !options.safe {
+        if !options.safe && !letter_start {
             if let Some((value, end)) = read_html_block(lines, index) {
                 children.push(Block::Html { value });
                 index = end + 1;
                 continue;
             }
         }
-        if let Some((name, args)) = custom_block_name(trimmed) {
+        if let Some((name, args)) = custom_block_name(trimmed).filter(|_| !letter_start) {
             let (content, end, props) = read_custom_block(lines, index);
             let content_lines: Vec<String> = content.split('\n').map(str::to_string).collect();
             let children_blocks = parse_blocks(&as_strs(&content_lines), ctx, seen)?;
@@ -141,7 +146,7 @@ fn parse_blocks(lines: &[&str], ctx: &Ctx, seen: &mut HashMap<String, usize>) ->
             continue;
         }
 
-        if let Some(fence) = opening_fence(line) {
+        if let Some(fence) = opening_fence(line).filter(|_| !letter_start) {
             if let Some(info) = parse_fence_info(fence.info, fence.marker) {
                 let mut code: Vec<String> = Vec::new();
                 index += 1;
@@ -166,7 +171,7 @@ fn parse_blocks(lines: &[&str], ctx: &Ctx, seen: &mut HashMap<String, usize>) ->
             }
         }
 
-        if line.starts_with("    ") {
+        if !letter_start && line.starts_with("    ") {
             let mut code: Vec<&str> = Vec::new();
             while index < lines.len() && (lines[index].starts_with("    ") || js::trim(&lines[index]).is_empty()) {
                 let l = lines[index];
@@ -187,13 +192,13 @@ fn parse_blocks(lines: &[&str], ctx: &Ctx, seen: &mut HashMap<String, usize>) ->
             continue;
         }
 
-        if is_thematic_break(line) {
+        if !letter_start && is_thematic_break(line) {
             children.push(Block::ThematicBreak);
             index += 1;
             continue;
         }
 
-        if let Some((depth, source)) = atx_heading(line) {
+        if let Some((depth, source)) = atx_heading(line).filter(|_| !letter_start) {
             let source = trim_closing_heading_hashes(source);
             children.push(heading(depth, &source, ctx, seen)?);
             index += 1;
@@ -224,7 +229,7 @@ fn parse_blocks(lines: &[&str], ctx: &Ctx, seen: &mut HashMap<String, usize>) ->
             continue;
         }
 
-        if blockquote_start(line) {
+        if !letter_start && blockquote_start(line) {
             let start = index;
             let mut quote_lines: Vec<String> = Vec::new();
             let mut allow_lazy = false;
@@ -264,7 +269,7 @@ fn parse_blocks(lines: &[&str], ctx: &Ctx, seen: &mut HashMap<String, usize>) ->
             continue;
         }
 
-        if let Some(opening) = parse_list_marker(line) {
+        if let Some(opening) = parse_list_marker(line).filter(|_| !letter_start) {
             let mut items: Vec<ListItem> = Vec::new();
             let mut tight = true;
             while index < lines.len() {

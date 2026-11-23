@@ -86,7 +86,9 @@ fn slug_case(value: &str) -> String {
             continue;
         }
         let units = c.len_utf16();
-        let replacement = if units == 1 { fold_accent(c) } else { '_' };
+        // Every accent-table entry is non-ASCII, so ASCII becomes `_` (its own
+        // upper case, so it stays `_`).
+        let replacement = if c.is_ascii() { '_' } else if units == 1 { fold_accent(c) } else { '_' };
         for _ in 0..units {
             normalized.push(replacement);
         }
