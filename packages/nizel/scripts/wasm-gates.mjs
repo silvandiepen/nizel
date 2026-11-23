@@ -119,6 +119,19 @@ if (!onlySection) {
   const kitLine = suiteLines.find((line) => /\bnizel-kit:/.test(line));
   const gate4 = kitLine ? `${kitLine.startsWith('ok') ? 'pass' : '**failing**'}: every supportedPlugins profile, both option sets (nizel-kit suite: ${/Tests\s+(.*)$/.exec(kitLine)?.[1]?.trim() ?? kitLine})` : '**not run**';
 
+  // Gate 2: test/wasm-spec-corpora.test.mjs (every GFM spec example, four profiles, through nizel/wasm).
+  let gfm;
+  try {
+    gfm = execFileSync('npx', ['vitest', 'run', 'test/wasm-spec-corpora.test.mjs', '--reporter', 'verbose'], { cwd: new URL('..', import.meta.url).pathname, encoding: 'utf8' });
+  } catch (error) {
+    gfm = String(error.stdout ?? error);
+  }
+  const gfmTests = /Tests\s+(.*)$/m.exec(gfm)?.[1]?.trim() ?? 'did not run';
+  // The same file runs the CommonMark corpus through the entry points (gate 1's requirement).
+  const entryPoints = [...gfm.matchAll(/([✓×]) .*?> (CommonMark spec|GFM spec), ([^:]+):/g)].map(([, mark, corpus, profile]) => `${mark === '✓' ? 'pass' : 'FAIL'} ${corpus} ${profile}`);
+  const gfm2 = `${/failed/.test(gfmTests) || gfmTests === 'did not run' ? '**failing**' : 'pass'}: all 672 GFM 0.29 spec examples, forward and reverse (Nizel's HTML and the spec's), identical through nizel/wasm and produced by the engine, with default, bare, GFM-plugin and task-list+autolink options (${gfmTests})`;
+  console.log('gate 2:', gfm2);
+
   let fallbacks;
   try {
     fallbacks = execFileSync(process.execPath, [new URL('wasm-fallbacks.mjs', import.meta.url).pathname, '--count', '20000', '--seed', '5'], { encoding: 'utf8' }).trim();
@@ -182,6 +195,8 @@ if (!onlySection) {
     '',
     '## Gate 1: CommonMark corpus',
     '',
+    `Through the entry points (test/wasm-spec-corpora.test.mjs): ${entryPoints.filter((line) => line.includes('CommonMark')).join('; ') || '**not run**'}. Below: the raw engine, case by case.`,
+    '',
     '| Profile | Forward pass | Forward mismatch | Reverse pass | Reverse mismatch | Cases |',
     '| --- | --- | --- | --- | --- | --- |',
     ...results.map(({ profile, tally, total }) =>
@@ -197,7 +212,7 @@ if (!onlySection) {
     '',
     '| Gate | Status |',
     '| --- | --- |',
-    '| 2. GFM cases | not built yet |',
+    `| 2. GFM spec | ${gfm2} |`,
     `| 3. Nizel suite through Wasm entry points | ${gate3} |`,
     `| 4. nizel-kit parity, every profile | ${gate4} |`,
     `| 5. Differential fuzzer (seed 7) | ${fuzz.replace(/^fuzz: /, 'forward: ').replace(/\n/g, '; ')} |`,

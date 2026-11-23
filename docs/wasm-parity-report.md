@@ -6,6 +6,8 @@ run); "mismatch" means it produced different bytes, which is a bug.
 
 ## Gate 1: CommonMark corpus
 
+Through the entry points (test/wasm-spec-corpora.test.mjs): pass CommonMark spec default; pass CommonMark spec bare. Below: the raw engine, case by case.
+
 | Profile | Forward pass | Forward mismatch | Reverse pass | Reverse mismatch | Cases |
 | --- | --- | --- | --- | --- | --- |
 | default | 652 | 0 | 652 | 0 | 652 |
@@ -46,8 +48,8 @@ run); "mismatch" means it produced different bytes, which is a bug.
 
 | Gate | Status |
 | --- | --- |
-| 2. GFM cases | not built yet |
-| 3. Nizel suite through Wasm entry points | 28/28 suites, 427 tests passed |
+| 2. GFM spec | pass: all 672 GFM 0.29 spec examples, forward and reverse (Nizel's HTML and the spec's), identical through nizel/wasm and produced by the engine, with default, bare, GFM-plugin and task-list+autolink options (6 passed (6)) |
+| 3. Nizel suite through Wasm entry points | 28/28 suites, 433 tests passed |
 | 4. nizel-kit parity, every profile | pass: every supportedPlugins profile, both option sets (nizel-kit suite: 9 passed (9)) |
 | 5. Differential fuzzer (seed 7) | forward: 200000 generated, 199670 compared, 330 declined, 0 differences; reverse: 399340 compared, 0 deferred to JavaScript, 0 differences; ast: 199670 compared, 0 differences; hooks through nizel/wasm: 49922 compared, 0 differences; plugin reverse through nizel/wasm: 99840 compared, 0 differences |
 | 6. Fallbacks (nizel/wasm and every nizel-kit/wasm profile, fixtures + 20k fuzz) | 58 of 91612 conversions left to JavaScript: 58 forward: NIZEL-002: the JavaScript never finishes (2 entry points) — only input the JavaScript never finishes on |
@@ -58,24 +60,24 @@ run); "mismatch" means it produced different bytes, which is a bug.
 
 | Fixture | Bytes | Identical | JavaScript CPU ms | Engine CPU ms | Speedup |
 | --- | --- | --- | --- | --- | --- |
-| commonmark | 44210 | yes | 7.415 | 1.472 | 5.0x |
-| gfm | 559 | yes | 0.048 | 0.013 | 3.8x |
-| readme | 997 | yes | 0.052 | 0.011 | 4.6x |
-| large | 2093 | yes | 0.212 | 0.057 | 3.8x |
-| code-heavy | 700 | yes | 0.020 | 0.006 | 3.5x |
-| 46 KB GFM | 45838 | yes | 4.176 | 0.818 | 5.1x |
-| emphasis draft | 56800 | yes | 5.274 | 1.049 | 5.0x |
-| plain draft | 54600 | yes | 1.420 | 0.287 | 4.9x |
+| commonmark | 44210 | yes | 8.168 | 1.695 | 4.8x |
+| gfm | 559 | yes | 0.050 | 0.014 | 3.5x |
+| readme | 997 | yes | 0.048 | 0.013 | 3.6x |
+| large | 2093 | yes | 0.232 | 0.053 | 4.4x |
+| code-heavy | 700 | yes | 0.023 | 0.005 | 4.3x |
+| 46 KB GFM | 45838 | yes | 4.491 | 1.040 | 4.3x |
+| emphasis draft | 56800 | yes | 5.736 | 1.122 | 5.1x |
+| plain draft | 54600 | yes | 1.446 | 0.388 | 3.7x |
 
 ## Speed: reverse, raw engine vs `htmlToMarkdown` (Node, CPU time, warm median)
 
 | Fixture (as HTML) | Bytes | Identical | JavaScript CPU ms | Engine CPU ms | Speedup |
 | --- | --- | --- | --- | --- | --- |
-| commonmark | 63766 | yes | 6.006 | 1.493 | 4.0x |
-| gfm | 921 | yes | 0.077 | 0.020 | 3.8x |
-| readme | 1423 | yes | 0.100 | 0.027 | 3.7x |
-| large | 3008 | yes | 0.191 | 0.058 | 3.3x |
-| code-heavy | 992 | yes | 0.045 | 0.014 | 3.1x |
-| 46 KB GFM | 76073 | yes | 6.576 | 1.295 | 5.1x |
-| emphasis draft | 77599 | yes | 6.554 | 1.375 | 4.8x |
-| plain draft | 62999 | yes | 4.616 | 0.754 | 6.1x |
+| commonmark | 63766 | yes | 6.390 | 1.558 | 4.1x |
+| gfm | 921 | yes | 0.080 | 0.021 | 3.8x |
+| readme | 1423 | yes | 0.103 | 0.034 | 3.0x |
+| large | 3008 | yes | 0.161 | 0.057 | 2.8x |
+| code-heavy | 992 | yes | 0.047 | 0.017 | 2.8x |
+| 46 KB GFM | 76073 | yes | 6.839 | 1.537 | 4.4x |
+| emphasis draft | 77599 | yes | 7.633 | 1.464 | 5.2x |
+| plain draft | 62999 | yes | 4.857 | 0.879 | 5.5x |
