@@ -127,7 +127,16 @@ fn is_surrogate_marker(c: char) -> bool {
 
 /// U+E000–U+E7FF in UTF-8 is `EE 80..=9F xx`.
 fn has_surrogate_marker(text: &str) -> bool {
-    text.as_bytes().windows(2).any(|w| w[0] == 0xee && (0x80..=0x9f).contains(&w[1]))
+    let b = text.as_bytes();
+    let mut from = 0;
+    while let Some(offset) = b[from..].iter().position(|&c| c == 0xee) {
+        let at = from + offset;
+        if b.get(at + 1).is_some_and(|next| (0x80..=0x9f).contains(next)) {
+            return true;
+        }
+        from = at + 1;
+    }
+    false
 }
 
 pub fn html_to_markdown(html: &str, options: &ReverseOptions) -> Result<String> {
@@ -519,7 +528,11 @@ fn render_node(node: &Node, options: &Doc, out: &mut String) -> Result<()> {
     match tag {
         "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => {
             let level = (tag.as_bytes()[1] - b'0') as usize;
-            wrap(out, &format!("{} {}", "#".repeat(level), inline()?));
+            let mut heading = String::with_capacity(level + 1 + element.raw.1 - element.raw.0);
+            heading.extend(std::iter::repeat_n('#', level));
+            heading.push(' ');
+            normalize_inline_into(&render_children(&element.children, options)?, &mut heading);
+            wrap(out, &heading);
         }
         "p" => wrap(out, &normalize_paragraph(&render_children(&element.children, options)?)),
         "br" => out.push_str("  \n"),
@@ -698,7 +711,14 @@ fn render_code_block(element: &Element, doc: &Doc) -> Result<String> {
         code.pop();
     }
     let fence = "`".repeat((longest_run(&code, '`') + 1).max(3));
-    Ok(format!("{fence}{lang}\n{code}\n{fence}"))
+    let mut block = String::with_capacity(fence.len() * 2 + lang.len() + code.len() + 2);
+    block.push_str(&fence);
+    block.push_str(lang);
+    block.push('\n');
+    block.push_str(&code);
+    block.push('\n');
+    block.push_str(&fence);
+    Ok(block)
 }
 
 /// `renderList`.
@@ -711,12 +731,17 @@ fn render_list(element: &Element, options: &Doc) -> Result<String> {
         if item.tag != "li" {
             continue;
         }
-        let marker = match start {
-            Some(start) => format!("{}. ", jsnum::to_string(start + index as f64)),
-            None => "- ".to_string(),
+        let mut line = match start {
+            Some(start) => {
+                let mut marker = jsnum::to_string(start + index as f64);
+                marker.push_str(". ");
+                marker
+            }
+            None => String::from("- "),
         };
-        let body = normalize_list_item_body(&render_children(&item.children, options)?);
-        items.push(indent_continuation(&format!("{marker}{body}"), marker.encode_utf16().count()));
+        let marker_len = line.encode_utf16().count();
+        line.push_str(&normalize_list_item_body(&render_children(&item.children, options)?));
+        items.push(indent_continuation(&line, marker_len));
         index += 1;
     }
     Ok(items.join("\n"))
@@ -771,11 +796,26 @@ fn render_table(element: &Element, options: &Doc) -> Result<String> {
         values.push(cells);
     }
     let separator = vec!["---".to_string(); width];
-    let mut lines = vec![format!("| {} |", values[0].join(" | ")), format!("| {} |", separator.join(" | "))];
+    let mut table = String::new();
+    let push_row = |table: &mut String, cells: &[String]| {
+        if !table.is_empty() {
+            table.push('\n');
+        }
+        table.push_str("| ");
+        for (index, cell) in cells.iter().enumerate() {
+            if index > 0 {
+                table.push_str(" | ");
+            }
+            table.push_str(cell);
+        }
+        table.push_str(" |");
+    };
+    push_row(&mut table, &values[0]);
+    push_row(&mut table, &separator);
     for row in &values[1..] {
-        lines.push(format!("| {} |", row.join(" | ")));
+        push_row(&mut table, row);
     }
-    Ok(lines.join("\n"))
+    Ok(table)
 }
 
 // ---------------------------------------------------------------------------
@@ -985,20 +1025,34 @@ fn collapse_text(value: &str, out: &mut String) {
 
 /// `prefixLines`.
 fn prefix_lines(value: &str, prefix: &str) -> String {
-    value
-        .split('\n')
-        .map(|line| if line.is_empty() { prefix.trim_end().to_string() } else { format!("{prefix}{line}") })
-        .collect::<Vec<_>>()
-        .join("\n")
+    let bare = prefix.trim_end();
+    let mut out = String::with_capacity(value.len() + value.len() / 8 + prefix.len());
+    for (index, line) in value.split('\n').enumerate() {
+        if index > 0 {
+            out.push('\n');
+        }
+        if line.is_empty() {
+            out.push_str(bare);
+        } else {
+            out.push_str(prefix);
+            out.push_str(line);
+        }
+    }
+    out
 }
 
 /// `indentContinuation`.
 fn indent_continuation(value: &str, size: usize) -> String {
-    let indent = " ".repeat(size);
-    value
-        .split('\n')
-        .enumerate()
-        .map(|(i, line)| if i == 0 { line.to_string() } else { format!("{indent}{line}") })
-        .collect::<Vec<_>>()
-        .join("\n")
+    if !value.contains('\n') {
+        return value.to_string();
+    }
+    let mut out = String::with_capacity(value.len() + size * 4);
+    for (index, line) in value.split('\n').enumerate() {
+        if index > 0 {
+            out.push('\n');
+            out.extend(std::iter::repeat_n(' ', size));
+        }
+        out.push_str(line);
+    }
+    out
 }
