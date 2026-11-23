@@ -17,6 +17,8 @@
 //! - inline links in their unambiguous shape (`inline_link`)
 //! - emphasis and strong in their unambiguous shape (`emphasis_pair`), and
 //!   intraword underscores
+//! - lists of every other shape through the full engine's own item rules
+//!   (`nested_list`), their items rendered by tier 1 as documents of their own
 //! - tight lists of single-line items (`-`, `*`, `+`, or `1.`/`1)`), one
 //!   space after the marker, content starting with a letter, ended by a blank
 //!   line or the input's end that nothing could continue
@@ -71,16 +73,67 @@ fn render_inner(source: &str, options: &Options, out: &mut String) -> Option<()>
     if crate::scan::find_byte(b, 0, b'\r').is_some() {
         return None;
     }
-    // Whether the document defines references is decided lazily (see
-    // `defines_references`): only a stretch handed to the full engine can
-    // hold a definition's line, since tier 1's paragraphs and items start
-    // with letters and its fences are code, which extraction skips too.
-    let mut references_checked = false;
     let references = References::new();
     let ctx = Ctx { options, references: &references };
-    let mut seen = crate::slug::Seen::default();
-    // Heading text for IDs, reused across headings.
-    let mut text = String::new();
+    let mut state = Walk {
+        root: source,
+        options,
+        ctx: &ctx,
+        // The full engine expands tabs in every line before reading lists.
+        has_tab: crate::scan::find_byte(b, 0, b'\t').is_some(),
+        has_pipe: crate::scan::find_byte(b, 0, b'|').is_some(),
+        seen: crate::slug::Seen::default(),
+        text: String::new(),
+        references_checked: false,
+    };
+    walk(source, &mut state, out, None)
+}
+
+/// What one document's walk shares across its blocks and nested items.
+struct Walk<'a> {
+    /// The whole document (for the reference-definition check).
+    root: &'a str,
+    options: &'a Options,
+    ctx: &'a Ctx<'a>,
+    has_tab: bool,
+    /// Whether the whole document holds `|`: the full engine's line rules
+    /// read it from a document-wide flag, which stretches overwrite.
+    has_pipe: bool,
+    seen: crate::slug::Seen,
+    /// Heading text for IDs, reused across headings.
+    text: String,
+    /// Whether the document defines references is decided lazily (see
+    /// `defines_references`), the first time a stretch, a nested list item
+    /// a table or a fence holds a line that could start one. Tier 1's
+    /// paragraphs, headings and single-line items start with letters,
+    /// markers or `#`.
+    references_checked: bool,
+}
+
+impl Walk<'_> {
+    /// Tier 1 renders `text` itself: if it holds a line that could start a
+    /// reference definition, check (once) that the whole document defines
+    /// none. None when it does (the document then goes to the full engine).
+    fn check_definitions(&mut self, text: &str) -> Option<()> {
+        if !self.references_checked && block::has_possible_reference_definition_start(text) {
+            if defines_references(self.root) {
+                return None;
+            }
+            self.references_checked = true;
+        }
+        Some(())
+    }
+}
+
+/// One block's span in the output and whether it is a paragraph (tight list
+/// items render paragraphs without `<p>`).
+type Span = (usize, usize, bool);
+
+/// The blocks of `source` (the document, or a list item's lines) into `out`,
+/// joined by newlines; with `spans`, also each block's span and kind.
+fn walk(source: &str, state: &mut Walk, out: &mut String, mut spans: Option<&mut Vec<Span>>) -> Option<()> {
+    let b = source.as_bytes();
+    let mut lines: Option<Lines> = None;
     let mut first_block = true;
     let mut pos = 0;
     while pos < b.len() {
@@ -99,33 +152,66 @@ fn render_inner(source: &str, options: &Options, out: &mut String) -> Option<()>
             out.push('\n');
         }
         let block_start = out.len();
-        match block(source, pos, options, &ctx, &mut seen, &mut text, out) {
-            Some(next) => pos = next,
+        match block(source, pos, state, &mut lines, out) {
+            Some((next, paragraph)) => {
+                if let Some(spans) = spans.as_deref_mut() {
+                    spans.push((block_start, out.len(), paragraph));
+                }
+                pos = next;
+            }
             None => {
                 // Tier 1 cannot render this block: the full engine renders the
                 // stretch up to the next point where it starts afresh.
                 out.truncate(block_start);
-                let end = segment_end(source, pos, options.safe).min(b.len());
-                if !references_checked && block::has_possible_reference_definition_start(&source[pos..end]) {
-                    if defines_references(source) {
-                        return None;
-                    }
-                    references_checked = true;
-                }
+                let end = segment_end(source, pos, state.options.safe).min(b.len());
+                state.check_definitions(&source[pos..end])?;
                 HANDED_OVER.with(|handed| handed.set(handed.get() + end - pos));
-                let blocks = block::parse_markdown_with_seen(&source[pos..end], options, &mut seen, false).ok()?;
+                let blocks = block::parse_markdown_with_seen(&source[pos..end], state.options, &mut state.seen, false).ok()?;
                 if blocks.is_empty() {
                     out.truncate(before_separator);
                     pos = end;
                     continue;
                 }
-                crate::render::render_blocks(&blocks, out);
+                for (index, block) in blocks.iter().enumerate() {
+                    if index > 0 {
+                        out.push('\n');
+                    }
+                    let start = out.len();
+                    crate::render::render_block(block, out);
+                    if let Some(spans) = spans.as_deref_mut() {
+                        spans.push((start, out.len(), matches!(block, crate::ast::Block::Paragraph { .. })));
+                    }
+                }
                 pos = end;
             }
         }
         first_block = false;
     }
     Some(())
+}
+
+/// A (sub)document's lines and where each starts, built the first time a
+/// list needs the full engine's line-based item rules.
+struct Lines<'a> {
+    lines: Vec<&'a str>,
+    starts: Vec<usize>,
+}
+
+impl<'a> Lines<'a> {
+    fn new(source: &'a str) -> Self {
+        let lines = crate::scan::lines(source);
+        let mut starts = Vec::with_capacity(lines.len());
+        let mut at = 0;
+        for line in &lines {
+            starts.push(at);
+            at += line.len() + 1;
+        }
+        Lines { lines, starts }
+    }
+
+    fn index_of(&self, pos: usize) -> usize {
+        self.starts.partition_point(|&start| start <= pos) - 1
+    }
 }
 
 /// Does the whole document define references, by the full engine's own
@@ -144,25 +230,19 @@ fn defines_references(source: &str) -> bool {
     !crate::refs::extract(&crate::scan::lines(source)).1.is_empty()
 }
 
-/// One block at `pos` (not blank) in tier 1; the position after it, or None
-/// when it is outside the subset (`out` may hold a partial block then).
-fn block(source: &str, pos: usize, options: &Options, ctx: &Ctx, seen: &mut crate::slug::Seen, text: &mut String, out: &mut String) -> Option<usize> {
+/// One block at `pos` (not blank) in tier 1: the position after it and
+/// whether it is a paragraph, or None when it is outside the subset (`out`
+/// may hold a partial block then).
+fn block<'a>(source: &'a str, pos: usize, state: &mut Walk, lines: &mut Option<Lines<'a>>, out: &mut String) -> Option<(usize, bool)> {
     let b = source.as_bytes();
     let lead = b[pos];
-    // `isTableStart` comes before paragraphs (and after every construct
-    // that cannot hold a `|` line at a block start).
-    if lead == b'|' || lead.is_ascii_alphabetic() {
-        let eol = line_end(b, pos);
-        if source[pos..eol].contains('|') && eol < b.len() {
-            let next_eol = line_end(b, eol + 1);
-            let next = &source[eol + 1..next_eol];
-            if !next.is_empty() && block::is_table_delimiter_row(next) {
-                return table(source, pos, out);
-            }
-        }
+    // `isTableStart` comes before paragraphs and lists (and after every
+    // construct that cannot hold a `|` line at a block start).
+    if (lead == b'|' || lead.is_ascii_alphabetic()) && table_starts(source, pos) {
+        return Some((checked_table(source, pos, state, out)?, false));
     }
     if lead.is_ascii_alphabetic() {
-        return paragraph(source, pos, out);
+        return Some((paragraph(source, pos, out)?, true));
     }
     let eol = line_end(b, pos);
     let line = &source[pos..eol];
@@ -170,13 +250,163 @@ fn block(source: &str, pos: usize, options: &Options, ctx: &Ctx, seen: &mut crat
         return None;
     }
     match lead {
-        b'#' => heading(line, options, ctx, seen, text, out)?,
-        b'`' => return fenced_code(source, pos, eol, out),
+        b'#' => heading(line, state.options, state.ctx, &mut state.seen, &mut state.text, out)?,
+        b'`' => {
+            // Extraction tracks fences by its own rule, which can fall out of
+            // step with the blocks (after a list item's fence, say): a fence's
+            // lines get the same check as any other.
+            let mark = out.len();
+            let end = fenced_code(source, pos, eol, out)?;
+            if state.check_definitions(&source[pos..end.min(source.len())]).is_none() {
+                out.truncate(mark);
+                return None;
+            }
+            return Some((end, false));
+        }
         b'-' | b'*' | b'_' if block::is_thematic_break(line) => out.push_str("<hr />"),
-        b'-' | b'*' | b'+' | b'0'..=b'9' => return list(source, pos, out),
+        b'-' | b'*' | b'+' | b'0'..=b'9' if table_starts(source, pos) => return Some((checked_table(source, pos, state, out)?, false)),
+        b'-' | b'*' | b'+' | b'0'..=b'9' => {
+            let mark = out.len();
+            if let Some(next) = list(source, pos, out) {
+                return Some((next, false));
+            }
+            out.truncate(mark);
+            return Some((nested_list(source, pos, state, lines, out)?, false));
+        }
         _ => return None,
     }
-    Some(eol + 1)
+    Some((eol + 1, false))
+}
+
+/// A table, after checking its rows for lines that could start a reference
+/// definition (rows after the header can start with anything).
+fn checked_table(source: &str, pos: usize, state: &mut Walk, out: &mut String) -> Option<usize> {
+    let mark = out.len();
+    let end = table(source, pos, out)?;
+    if state.check_definitions(&source[pos..end]).is_none() {
+        out.truncate(mark);
+        return None;
+    }
+    Some(end)
+}
+
+/// `isTableStart` at `pos`: the line holds `|` and the next is a delimiter row.
+fn table_starts(source: &str, pos: usize) -> bool {
+    let b = source.as_bytes();
+    let eol = line_end(b, pos);
+    if !source[pos..eol].contains('|') || eol >= b.len() {
+        return false;
+    }
+    let next = &source[eol + 1..line_end(b, eol + 1)];
+    !next.is_empty() && block::is_table_delimiter_row(next)
+}
+
+/// A list the single-line shape does not cover, read by the full engine's
+/// own rules: the outer loop of `parseBlocks`' list branch, and each item's
+/// lines from `collect_list_item` (continuations, blank lines, nested
+/// markers, looseness). Tier 1 then renders every item's lines as a document
+/// of their own, and assembles tight items as `renderListItemChildrenFast`
+/// does. Tabs anywhere leave it to the full engine (it expands them first).
+fn nested_list<'a>(source: &'a str, pos: usize, state: &mut Walk, lines: &mut Option<Lines<'a>>, out: &mut String) -> Option<usize> {
+    if state.has_tab {
+        return None;
+    }
+    let lines = lines.get_or_insert_with(|| Lines::new(source));
+    let start_index = lines.index_of(pos);
+    // The item rules read the document's flags; a stretch rendered earlier
+    // left its own there.
+    block::set_document_flags(state.has_pipe, false);
+    let opening = block::parse_list_marker(lines.lines[start_index])?;
+    let mut items: Vec<(Option<bool>, Vec<String>)> = Vec::new();
+    let mut tight = true;
+    let mut index = start_index;
+    while index < lines.lines.len() {
+        if !items.is_empty() && block::is_thematic_break(lines.lines[index]) {
+            break;
+        }
+        let Some(marker) = block::parse_list_marker(lines.lines[index]) else { break };
+        if marker.ordered != opening.ordered || marker.marker != opening.marker {
+            break;
+        }
+        let (checked, body) = block::task_box(&marker.body);
+        let (item_lines, end, loose) = block::collect_list_item(body, &lines.lines, index, &opening, marker.content_indent, state.options);
+        if loose {
+            tight = false;
+        }
+        items.push((checked, item_lines));
+        index = end + 1;
+    }
+    let tag = if opening.ordered { "ol" } else { "ul" };
+    out.push('<');
+    out.push_str(tag);
+    if let Some(start) = opening.start.filter(|&n| n != 1) {
+        out.push_str(" start=\"");
+        out.push_str(&start.to_string());
+        out.push('"');
+    }
+    out.push_str(">\n");
+    for (item_index, (checked, item_lines)) in items.iter().enumerate() {
+        if item_index > 0 {
+            out.push('\n');
+        }
+        out.push_str("<li");
+        if *checked == Some(true) {
+            out.push_str(" data-checked");
+        }
+        out.push('>');
+        let item = item_lines.join("\n");
+        // Item lines can hold anything, so the line-start argument that keeps
+        // tier 1's own blocks clear of definitions does not hold here.
+        state.check_definitions(&item)?;
+        let mut body = String::with_capacity(item.len() + 16);
+        let mut spans = Vec::new();
+        walk(&item, state, &mut body, Some(&mut spans))?;
+        list_item_children(&body, &spans, tight, out);
+        out.push_str("</li>");
+    }
+    out.push_str("\n</");
+    out.push_str(tag);
+    out.push('>');
+    Some(lines.starts.get(index).copied().unwrap_or(source.len()))
+}
+
+/// `renderListItemChildrenFast` over rendered children: loose items keep
+/// them as they are, between newlines; tight items drop paragraphs' `<p>`
+/// and place newlines by whether the first and last child are paragraphs.
+fn list_item_children(body: &str, spans: &[Span], tight: bool, out: &mut String) {
+    if spans.is_empty() {
+        return;
+    }
+    if !tight {
+        out.push('\n');
+        out.push_str(body);
+        out.push('\n');
+        return;
+    }
+    let has_block_child = spans.iter().any(|&(_, _, paragraph)| !paragraph);
+    let first_paragraph = spans[0].2;
+    let last_paragraph = spans[spans.len() - 1].2;
+    let mut joined = String::with_capacity(body.len());
+    for (index, &(start, end, paragraph)) in spans.iter().enumerate() {
+        if index > 0 {
+            joined.push('\n');
+        }
+        // A paragraph renders as `<p>…</p>`: its inline content is inside.
+        joined.push_str(if paragraph { &body[start + 3..end - 4] } else { &body[start..end] });
+    }
+    if !has_block_child {
+        out.push_str(&joined);
+    } else if last_paragraph {
+        out.push('\n');
+        out.push_str(&joined);
+    } else if first_paragraph {
+        out.push_str(&joined);
+        out.push('\n');
+    } else {
+        out.push('\n');
+        out.push_str(&joined);
+        out.push('\n');
+    }
 }
 
 /// Where a stretch handed to the full engine can end: the first line, after

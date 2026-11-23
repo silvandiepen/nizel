@@ -66,6 +66,13 @@ fn scan_source(markdown: &str) -> (bool, bool, bool, bool) {
     (cr, tab, pipe, reference)
 }
 
+/// Sets the document-wide flags the line rules read (`|` and tab present),
+/// for callers that use those rules outside `parse_markdown` (tier 1).
+pub(crate) fn set_document_flags(has_pipe: bool, has_tab: bool) {
+    DOC_HAS_PIPE.with(|flag| flag.set(has_pipe));
+    DOC_HAS_TAB.with(|flag| flag.set(has_tab));
+}
+
 pub fn parse_markdown(markdown: &str, options: &Options) -> Result<Vec<Block>> {
     parse_markdown_with_seen(markdown, options, &mut crate::slug::Seen::default(), true)
 }
@@ -967,7 +974,7 @@ fn can_continue_lazily(line: &str, options: &Options, lines: &[&str], index: usi
 }
 
 /// `/^\[[ xX]\]\s+/` → (checked, body without the box).
-fn task_box(body: &str) -> (Option<bool>, &str) {
+pub(crate) fn task_box(body: &str) -> (Option<bool>, &str) {
     let b = body.as_bytes();
     if b.len() >= 3 && b[0] == b'[' && matches!(b[1], b' ' | b'x' | b'X') && b[2] == b']' {
         let after = &body[3..];
@@ -1009,7 +1016,22 @@ fn parse_list_item_blocks(
     ctx: &Ctx,
     seen: &mut crate::slug::Seen,
 ) -> Result<(Vec<Block>, usize, bool)> {
-    let options = ctx.options;
+    let (item_lines, end, loose) = collect_list_item(first_line, lines, index, opening, content_indent, ctx.options);
+    Ok((parse_blocks(&as_strs(&item_lines), ctx, seen)?, end, loose))
+}
+
+/// The lines of the list item opening at `index` (content de-indented), the
+/// index of its last line, and whether it makes the list loose: the half of
+/// `parseListItemBlocks` before the item's blocks are parsed (tier 1 renders
+/// them itself).
+pub(crate) fn collect_list_item(
+    first_line: &str,
+    lines: &[&str],
+    index: usize,
+    opening: &ListMarker,
+    content_indent: usize,
+    options: &Options,
+) -> (Vec<String>, usize, bool) {
     let mut item_lines: Vec<String> = vec![first_line.to_string()];
     let mut cursor = index + 1;
     let mut loose = false;
@@ -1069,7 +1091,7 @@ fn parse_list_item_blocks(
     while item_lines.last().is_some_and(String::is_empty) {
         item_lines.pop();
     }
-    Ok((parse_blocks(&as_strs(&item_lines), ctx, seen)?, cursor - 1, loose))
+    (item_lines, cursor - 1, loose)
 }
 
 /// `hasNestedListMarkerBeforeBlank`.

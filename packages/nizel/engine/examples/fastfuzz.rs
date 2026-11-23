@@ -30,7 +30,10 @@ const ATOMS: &[&str] = &[
     "\n| > q | \"d\" |\n| --- | --- |", "\n|  |  |\n|---|---|", "\n| a | b |\n|---|---|\nnext",
     " [link](https://example.com/a)", " [two words](/docs/x.md#y)", "[x](y)", " ![img](a.png)", " [js](javascript:alert)", " [js](JavaScript:x)", " [](x)", " [a]()",
     " [a](b c)", " [a](b(c))", " [a](b \"t\")", " [a][ref]", " [a]", " *[a](b)*", " [a](b)*x*", " `[a](b)`", " [`a`](b)", "# [Head](h)", "\n| [a](b) | c |\n|---|---|",
-    " [a](b%20c)", " [a](b&c)", " [a](<b>)", " [a.b](mailto:x)", " [a](b)c", " [a]  (b)", " [[a]](b)", " [a](b)[c](d)",
+    " [a](b%20c)", " [a](b&c)", " [a](<b>)", " [a.b](mailto:x)",  " [a](b)c", " [a]  (b)", " [[a]](b)", " [a](b)[c](d)",
+    "\n- a\n  - b\n    - c", "\n- a\n  continued", "\n- a\nlazy", "\n- a\n\n  para two", "\n- a\n\n- b", "\n1. a\n   1. b\n2. c", "\n- [x] a\n  - [ ] b",
+    "\n- a\n  ```\n  code\n  ```", "\n- a\n  | x | y |\n  |---|---|", "\n- a\n  > q", "\n- # h\n  text", "\n-   wide\n    text", "\n3. three\n4. four", "\n- a\n\n\n- b",
+    "\n  - indented item", "\n- a\n    code-ish", "\n* a\n- b", "\n- **a**\n  *b* [c](d)",
     // Just outside: the tier must decline, never differ.
     "*em*", "**strong**", "_u_", "[link](x)", "<b>", "&amp;", "\\*", "~~d~~", "| a | b |", "a@b.co", "http://e.com",
     "> quote", "- item", "1. one", "+ plus", "===", "--", "\t", "\r\n", ":: note", "[r]: /url", "![i](s)",
