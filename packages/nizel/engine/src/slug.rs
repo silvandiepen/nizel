@@ -99,15 +99,8 @@ fn slug_case(value: &str) -> String {
         }
     }
     if !has_upper {
-        // Neither case-boundary replacement can match: split, join with `-`.
-        let mut slug = String::with_capacity(spaced.len());
-        for word in spaced.split(|b| *b == b' ').filter(|word| !word.is_empty()) {
-            if !slug.is_empty() {
-                slug.push('-');
-            }
-            slug.push_str(std::str::from_utf8(word).expect("ASCII"));
-        }
-        return slug;
+        // Neither case-boundary replacement can match.
+        return join_words(&spaced);
     }
     // `.replace(/([a-z])([A-Z])/g, '$1 $2')`
     let mut first = Vec::with_capacity(spaced.len() + 8);
@@ -146,13 +139,23 @@ fn slug_case(value: &str) -> String {
         }
     }
 
-    let text = String::from_utf8(second).expect("ASCII");
-    let mut slug = String::with_capacity(text.len());
-    for word in text.split(' ').filter(|word| !word.is_empty()) {
-        if !slug.is_empty() {
-            slug.push('-');
+    join_words(&second)
+}
+
+/// `.split(' ').filter(Boolean).map(toLowerCase).join('-')` over ASCII bytes, in one pass.
+fn join_words(bytes: &[u8]) -> String {
+    let mut slug = String::with_capacity(bytes.len());
+    let mut pending = false;
+    for &byte in bytes {
+        if byte == b' ' {
+            pending = !slug.is_empty();
+            continue;
         }
-        slug.push_str(&word.to_ascii_lowercase());
+        if pending {
+            slug.push('-');
+            pending = false;
+        }
+        slug.push(byte.to_ascii_lowercase() as char);
     }
     slug
 }
