@@ -84,33 +84,58 @@ fn render_inner(source: &str, options: &Options, out: &mut String) -> Option<()>
     let b = source.as_bytes();
     HANDED_OVER.with(|handed| handed.set(0));
     INLINE_FALLBACK.with(|bytes| bytes.set(0));
-    // Document-wide: CR changes how lines split, and reference definitions
-    // are extracted from the whole document before any block is parsed.
-    // A document with either stays whole with the full engine. Whether it
-    // has definitions is the full engine's own extraction (which skips
-    // fenced code and HTML blocks); with none, it leaves every line as is.
+    // Document-wide: CR changes how lines split (such a document stays
+    // whole with the full engine), and reference definitions are extracted
+    // from the whole document before any block is parsed. Whether it has
+    // definitions is decided lazily, by the full engine's own extraction
+    // (which skips fenced code and HTML blocks); with none, it leaves every
+    // line as is, and with some, tier 1 starts over on what it leaves.
     if crate::scan::find_byte(b, 0, b'\r').is_some() {
         return None;
     }
-    let references = References::new();
+    let has_pipe = crate::scan::find_byte(b, 0, b'|').is_some();
+    let start = out.len();
+    let none = References::new();
+    let plain = Ctx { options, references: &none };
+    let mut state = Walk::new(source, options, &plain, has_pipe, false);
+    if walk(source, &mut state, out, None).is_some() {
+        return Some(());
+    }
+    if !state.found_definitions {
+        return None;
+    }
+    // The document defines references: render again, as the full engine
+    // does, over the lines left after extraction and with what it extracted
+    // (no further definition checks: extraction is done).
+    out.truncate(start);
+    HANDED_OVER.with(|handed| handed.set(0));
+    INLINE_FALLBACK.with(|bytes| bytes.set(0));
+    let (content, references) = block::extracted_content(source);
     let ctx = Ctx { options, references: &references };
-    let mut state = Walk {
-        root: source,
-        options,
-        ctx: &ctx,
-        // The full engine expands tabs in every line before reading lists.
-        has_tab: crate::scan::find_byte(b, 0, b'\t').is_some(),
-        has_pipe: crate::scan::find_byte(b, 0, b'|').is_some(),
-        seen: crate::slug::Seen::default(),
-        text: String::new(),
-        slug: String::new(),
-        attribute: String::new(),
-        references_checked: false,
-        in_step: true,
-        depth: 0,
-        root_lines: None,
-    };
-    walk(source, &mut state, out, None)
+    let mut state = Walk::new(&content, options, &ctx, has_pipe, true);
+    walk(&content, &mut state, out, None)
+}
+
+impl<'a> Walk<'a> {
+    fn new(root: &'a str, options: &'a Options, ctx: &'a Ctx<'a>, has_pipe: bool, extracted: bool) -> Self {
+        Walk {
+            root,
+            options,
+            ctx,
+            // The full engine expands tabs in every line before reading lists.
+            has_tab: crate::scan::find_byte(root.as_bytes(), 0, b'\t').is_some(),
+            has_pipe,
+            seen: crate::slug::Seen::default(),
+            text: String::new(),
+            slug: String::new(),
+            attribute: String::new(),
+            references_checked: extracted,
+            found_definitions: false,
+            in_step: true,
+            depth: 0,
+            root_lines: None,
+        }
+    }
 }
 
 /// What one document's walk shares across its blocks and nested items.
@@ -135,6 +160,9 @@ struct Walk<'a> {
     /// paragraphs, headings and single-line items start with letters,
     /// markers or `#`.
     references_checked: bool,
+    /// Set when the definition check found the document defines references
+    /// (the walk then stops; `render_inner` renders the extracted content).
+    found_definitions: bool,
     /// Whether extraction, reading the document line by line, is at the same
     /// place as tier 1's root walk: true until a root block that tier 1 did
     /// not read the way extraction does (a table, a list, a handed-over
@@ -166,6 +194,7 @@ impl<'a> Walk<'a> {
                 None => crate::refs::defines_any(&self.root_lines().lines),
             };
             if defines {
+                self.found_definitions = true;
                 return None;
             }
             self.references_checked = true;
@@ -295,7 +324,7 @@ fn walk(source: &str, state: &mut Walk, out: &mut String, mut spans: Option<&mut
                         trace.push((end - pos, source[pos..line_end(b, pos).min(end)].to_string()));
                     }
                 });
-                let blocks = block::parse_markdown_with_seen(&source[pos..end], state.options, &mut state.seen, false).ok()?;
+                let blocks = block::parse_markdown_with_references(&source[pos..end], state.options, &mut state.seen, state.ctx.references).ok()?;
                 if blocks.is_empty() {
                     out.truncate(before_separator);
                     pos = end;

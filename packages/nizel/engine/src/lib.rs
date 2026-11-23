@@ -229,6 +229,11 @@ fn check_forward_markers(flags: u32) -> Result<(), i32> {
 }
 
 pub fn render_markdown(source: &str, flags: u32, out: &mut String) -> Result<(), i32> {
+    // The marker state is this call's before either tier runs: tier 1 hands
+    // stretches to the full engine, whose hrefs read it (a mapped render
+    // before this one must not leave it set).
+    common::DECODED_MARKER_RANGE.with(|flag| flag.set(false));
+    common::MAPPED_SURROGATES.with(|flag| flag.set(flags & flags::MAPPED_SURROGATES != 0));
     // Tier 1 when the document is in its subset (lone-surrogate markers stay with the full engine).
     if flags & flags::MAPPED_SURROGATES == 0 && fast::render(source, &parse_options(flags), out) {
         return Ok(());

@@ -170,3 +170,14 @@ test('a quoted definition after a tab or extra spaces defines its reference', as
     assert.equal(engineRender(source, 1 | 2 | 4), await stock.useNizel().html(source), JSON.stringify(source));
   }
 });
+
+test('a render after one with mapped lone surrogates keeps Private Use characters in hrefs', async () => {
+  // Found by the JS fuzzer: the mapped render left the engine's marker flag
+  // set, and the next document's stretches read U+E000 in a URL as a marker.
+  const backend = await import('../dist/wasm/backend.js');
+  const bare = { anchors: false, autolinks: false, frontmatter: false, safe: false };
+  const mapped = '&#xD800;"<!X**b**\ude80[a [b] c](d)&amp;\n* [X] > ![x][r]HTTP://Up.case';
+  const next = '[r]:\n/u\n2. )&copy;---[t](/u "a\\"b")![x][r]-####### *k**<![CDATA[';
+  assert.equal(backend.renderWasm(mapped, bare), await stock.useNizel(bare).html(mapped));
+  assert.equal(backend.renderWasm(next, bare), await stock.useNizel(bare).html(next));
+});

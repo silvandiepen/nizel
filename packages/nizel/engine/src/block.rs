@@ -84,6 +84,46 @@ pub fn parse_markdown(markdown: &str, options: &Options) -> Result<Vec<Block>> {
 /// definition that the whole document does not (definitions depend on the
 /// line before them).
 pub fn parse_markdown_with_seen(markdown: &str, options: &Options, seen: &mut crate::slug::Seen, extract_references: bool) -> Result<Vec<Block>> {
+    parse_markdown_prepared(markdown, options, seen, extract_references, None)
+}
+
+/// `parseMarkdown` of a stretch of a document whose definitions were already
+/// extracted from the whole (tier 1 renders the extracted content lines):
+/// the stretch resolves them and extracts none of its own.
+pub fn parse_markdown_with_references(markdown: &str, options: &Options, seen: &mut crate::slug::Seen, references: &References) -> Result<Vec<Block>> {
+    parse_markdown_prepared(markdown, options, seen, false, Some(references))
+}
+
+/// The document's lines after `parseMarkdown`'s preparation, joined, and the
+/// references it extracted: line endings normalized, leading tabs expanded,
+/// and definitions extracted when the document-wide gate lets it (`]:` and a
+/// line that could start one), exactly as `parse_markdown` does before
+/// parsing blocks.
+pub(crate) fn extracted_content(markdown: &str) -> (String, References) {
+    let (has_cr, has_tab, _, has_reference) = scan_source(markdown);
+    let normalized: std::borrow::Cow<str> = if has_cr { normalize_line_endings(markdown).into() } else { markdown.into() };
+    let expanded: Vec<String>;
+    let base: Vec<&str> = if has_tab {
+        expanded = normalized.split('\n').map(expand_leading_tabs_in_line).collect();
+        as_strs(&expanded)
+    } else {
+        crate::scan::lines(&normalized)
+    };
+    if has_reference && has_possible_reference_definition_start(&normalized) {
+        let (content, references) = refs::extract(&base);
+        (content.join("\n"), references)
+    } else {
+        (base.join("\n"), References::new())
+    }
+}
+
+fn parse_markdown_prepared(
+    markdown: &str,
+    options: &Options,
+    seen: &mut crate::slug::Seen,
+    extract_references: bool,
+    given: Option<&References>,
+) -> Result<Vec<Block>> {
     let (has_cr, has_tab, has_pipe, has_reference) = scan_source(markdown);
     DOC_HAS_PIPE.with(|flag| flag.set(has_pipe));
     DOC_HAS_TAB.with(|flag| flag.set(has_tab));
@@ -103,7 +143,7 @@ pub fn parse_markdown_with_seen(markdown: &str, options: &Options, seen: &mut cr
         (None, References::new())
     };
     let lines: &[&str] = content.as_deref().unwrap_or(&base);
-    let ctx = Ctx { options, references: &references };
+    let ctx = Ctx { options, references: given.unwrap_or(&references) };
     parse_blocks(lines, &ctx, seen)
 }
 
