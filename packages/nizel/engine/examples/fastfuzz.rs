@@ -20,6 +20,8 @@ const ATOMS: &[&str] = &[
     "\n- `code` item", "\n- item > q", "\n- a  ", "\n1.x", "\n- - -", "\n* * *",
     "\n- ```\n\n  code\n", "\n  ```", "\n- a\n\n  b", "\n> quoted\nlazy", "\n<div>\n\nx\n</div>", "\n<!--\n\ncomment -->", "\n<script>\n\n",
     "\n::note\n\nbody\n::", "\n    code\n\n    more", "\n| a | b |\n| - | - |", "\nTitle\n===", "\n[ref]: /u", "\n- *em* item", "\n**bold** para",
+    " *em*", " **strong**", " *a b*", " **a**b", "a*b*", " *a *b**", " ***x***", " *x*.", " *x*)", "(*x*)", " _x_", " snake_case_name", " *x\ny*",
+    " * x*", " *x *", " **x*", " *x**", " *`c`*", " _a_b", "a_", "_", " *x*`c`", "`c`*x*", " *x*:", " *x*?y", " *1*", "*z*", " **a b c**,",
     // Just outside: the tier must decline, never differ.
     "*em*", "**strong**", "_u_", "[link](x)", "<b>", "&amp;", "\\*", "~~d~~", "| a | b |", "a@b.co", "http://e.com",
     "> quote", "- item", "1. one", "+ plus", "===", "--", "\t", "\r\n", ":: note", "[r]: /url", "![i](s)",

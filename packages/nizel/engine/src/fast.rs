@@ -13,6 +13,8 @@
 //! - ATX headings (content outside the subset goes through the full engine's
 //!   own heading function) and fenced code opening at column 0
 //! - thematic breaks
+//! - emphasis and strong in their unambiguous shape (`emphasis_pair`), and
+//!   intraword underscores
 //! - tight lists of single-line items (`-`, `*`, `+`, or `1.`/`1)`), one
 //!   space after the marker, content starting with a letter, ended by a blank
 //!   line or the input's end that nothing could continue
@@ -284,6 +286,22 @@ fn paragraph(source: &str, start: usize, out: &mut String) -> Option<usize> {
                     None => i += 1,
                 }
             }
+            STAR => {
+                let limit = match text_limit {
+                    Some(limit) => limit,
+                    None => {
+                        let limit = trim_spaces_end(b, i, paragraph_end(b, i)?);
+                        text_limit = Some(limit);
+                        limit
+                    }
+                };
+                let pair = emphasis_pair(b, start, i, limit)?;
+                out.push_str(&source[run..i]);
+                emphasis(source, &pair, out, None);
+                i = pair.end;
+                run = pair.end;
+            }
+            UNDERSCORE => i = literal_underscores(b, start, i)?,
             _ => return None,
         }
     };
@@ -436,6 +454,8 @@ const BACKTICK: u8 = 3;
 const COLON: u8 = 4;
 const OUTSIDE: u8 = 5;
 const NEWLINE: u8 = 6;
+const STAR: u8 = 7;
+const UNDERSCORE: u8 = 8;
 
 /// What each byte means inside a paragraph. Outside the subset: escapes,
 /// HTML and autolinks, entities, links and images, emphasis,
@@ -447,7 +467,9 @@ static CLASS: [u8; 256] = {
     table[b'`' as usize] = BACKTICK;
     table[b':' as usize] = COLON;
     table[b'\n' as usize] = NEWLINE;
-    let outside = b"\\<&[*_~|@\t\r";
+    table[b'*' as usize] = STAR;
+    table[b'_' as usize] = UNDERSCORE;
+    let outside = b"\\<&[~|@\t\r";
     let mut i = 0;
     while i < outside.len() {
         table[outside[i] as usize] = OUTSIDE;
@@ -502,6 +524,17 @@ fn inline(source: &str, out: &mut String, mut text: Option<&mut String>) -> Opti
                 }
                 None => i += 1,
             },
+            STAR => {
+                let pair = emphasis_pair(b, 0, i, b.len())?;
+                out.push_str(&source[run..i]);
+                if let Some(text) = text.as_deref_mut() {
+                    text.push_str(&source[run..i]);
+                }
+                emphasis(source, &pair, out, text.as_deref_mut());
+                i = pair.end;
+                run = pair.end;
+            }
+            UNDERSCORE => i = literal_underscores(b, 0, i)?,
             _ => return None,
         }
     }
@@ -510,6 +543,73 @@ fn inline(source: &str, out: &mut String, mut text: Option<&mut String>) -> Opti
         text.push_str(&source[run..]);
     }
     Some(())
+}
+
+/// An emphasis or strong pair in the subset: the run at `opener` and its
+/// closer, with the content between them.
+struct EmphasisPair {
+    strong: bool,
+    content_start: usize,
+    content_end: usize,
+    end: usize,
+}
+
+/// A `*` pair whose result is provably the emphasis algorithm's: a run of one
+/// or two `*` after a space, a newline or the start (`floor`), followed by an
+/// ASCII letter or digit, so it can only open; plain text up to a run of the
+/// same length after an ASCII letter or digit, followed by a space, a
+/// newline, the end (`limit`) or `.,;:!?)`, so it can only close. With every
+/// `*` in such disjoint pairs, each closer pairs with its own opener. Content
+/// may hold soft breaks but no other delimiter, code or syntax.
+fn emphasis_pair(b: &[u8], floor: usize, opener: usize, limit: usize) -> Option<EmphasisPair> {
+    let length = b[opener..limit].iter().take_while(|&&c| c == b'*').count();
+    if length > 2 || (opener > floor && !matches!(b[opener - 1], b' ' | b'\n')) {
+        return None;
+    }
+    let content_start = opener + length;
+    if !b.get(content_start).is_some_and(u8::is_ascii_alphanumeric) || content_start >= limit {
+        return None;
+    }
+    let mut j = content_start;
+    while j < limit {
+        match b[j] {
+            b'*' => {
+                let run = b[j..limit].iter().take_while(|&&c| c == b'*').count();
+                let after = j + run;
+                let closes = run == length
+                    && b[j - 1].is_ascii_alphanumeric()
+                    && (after == limit || matches!(b[after], b' ' | b'\n' | b'.' | b',' | b';' | b':' | b'!' | b'?' | b')'));
+                return closes.then_some(EmphasisPair { strong: length == 2, content_start, content_end: j, end: after });
+            }
+            b':' if b[j + 1..limit].starts_with(b"//") => return None,
+            c if CLASS[c as usize] != PLAIN && !matches!(c, b'\n' | b'>' | b'"' | b':') => return None,
+            _ => j += 1,
+        }
+    }
+    None
+}
+
+fn emphasis(source: &str, pair: &EmphasisPair, out: &mut String, text: Option<&mut String>) {
+    let content = &source[pair.content_start..pair.content_end];
+    let tag = if pair.strong { "strong" } else { "em" };
+    out.push('<');
+    out.push_str(tag);
+    out.push('>');
+    escape_html_into(out, content);
+    out.push_str("</");
+    out.push_str(tag);
+    out.push('>');
+    if let Some(text) = text {
+        text.push_str(content);
+    }
+}
+
+/// An `_` run between two ASCII letters or digits (`snake_case`) can neither
+/// open nor close emphasis, so it stays text; any other `_` leaves the subset.
+/// The position after the run.
+fn literal_underscores(b: &[u8], floor: usize, at: usize) -> Option<usize> {
+    let end = at + b[at..].iter().take_while(|&&c| c == b'_').count();
+    (at > floor && b[at - 1].is_ascii_alphanumeric() && b.get(end).is_some_and(u8::is_ascii_alphanumeric)).then_some(end)
 }
 
 /// `<code>` with `normalizeCodeSpan` applied: newlines become spaces, and one
