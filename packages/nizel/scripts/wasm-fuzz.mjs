@@ -9,6 +9,9 @@ import * as stock from '../dist/index.js';
 import * as wasmEntry from '../dist/wasm.js';
 import { parseMarkdown } from '../dist/parse.js';
 import { parseWasm } from '../dist/wasm/backend.js';
+import { taskListPlugin } from '../../plugin-task-list/dist/index.js';
+import { hiddenCommentsPlugin } from '../../nizel-plugin-hidden-comments/dist/index.js';
+import { autolinkPlugin } from '../../plugin-autolink/dist/index.js';
 import { extractFrontmatter } from '../dist/frontmatter.js';
 
 const args = process.argv.slice(2);
@@ -23,7 +26,7 @@ const showDeclined = option('--declined', 0);
 const declinedSamples = [];
 
 const bytes = await readFile(new URL('../dist/wasm/engine.wasm', import.meta.url));
-const { instance } = await WebAssembly.instantiate(bytes);
+const { instance } = await WebAssembly.instantiate(bytes, { env: { claim: () => -1 } });
 const { memory, input, output, render, reverse } = instance.exports;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -58,6 +61,12 @@ const htmlAtoms = [
   '*', '_', '[', ']', '(', ')', '\\', '"', "'", '<', '>', '<a', '< b>', '<1>', '- ', '1. ',
 ];
 const flagsFor = [0, 16];
+const pluginAtoms = [
+  ...htmlAtoms, '<ul>', '<li><input type="checkbox" data-nizel-task-checkbox disabled>', '<input type="checkbox" checked data-nizel-task-checkbox>',
+  '<li class="nizel-task-list__item">', '<span class="nizel-task-list__label">', '<span class="nizel-task-list__content">',
+  '<span data-nizel-hidden-comment>note</span>', '<span class="nizel-hidden-comment">x</span>', '<a href="https://e.com">https://e.com</a>',
+  '<a href="https://e.com" target="_blank" rel="noopener">https://e.com</a>', '<kbd>Ctrl</kbd>', '<kbd><b>K</b></kbd>',
+];
 let reverseCompared = 0;
 let reverseDeferred = 0;
 const reverseDiffs = [];
@@ -92,7 +101,7 @@ const atoms = [
   "<img src='y' />", '<!-- c -->', '<?pi?>', '<!DOCTYPE x>', '<https://e.com/a?b>', '<mailto:x@y.z>', '<me@example.com>',
   'https://example.com/path.', 'http://x.y)', 'HTTP://Up.case', 'user@mail.example.org', 'a.b@c', '#', '## ', '###### ',
   '####### ', '---', '***', '===', '- ', '* ', '+ ', '1. ', '2) ', '> ', '    ', '|', ' | ', '|---|---|', 'é', 'Ñ', '🚀', 'ß',
-  'Σ', '.', ',', '!', '?', '(', ')', '"', "'", ':', ';', '-', 'ſ', 'K', ' ', ' ', '　', 'café', 'x_y_z',
+  'Σ', '.', ',', '!', '?', '(', ')', '"', "'", ':', ';', '-', 'ſ', 'K', '\u00a0', '\u2028', '\u3000', 'café', 'x_y_z',
   '*a*', '**b**', '_c_', '__d__', '`e`', '~~f~~', 'g*', '*h', ' *i* ', '**j*', '*k**',
   '[', ']', '![', '](', '[a](b)', '[a](<b c>)', '[t](/u "ti")', "[t](/u 'ti')", '[t](/u (ti))', '[t](/u "a\\"b")',
   '![i](/s.png)', '![*a*](x "y")', '[r]', '[R]', '[x][r]', '[x][]', '![r]', '![x][r]', '[r]: /url', '[r]: /url "T"',
@@ -125,11 +134,31 @@ const hookOptions = {
 };
 const hookStock = stock.useNizel(hookOptions);
 const hookWasm = wasmEntry.useNizel(hookOptions);
+// Lezin's plugins plus a reverse handler that declares no tags.
+const kbdHandler = { name: 'kbd', htmlToMarkdown: (node, ctx) => (node.tag === 'kbd' ? `<kbd>${ctx.inline(node)}</kbd>` : undefined) };
+const pluginProfile = [taskListPlugin({ mode: 'edit' }), hiddenCommentsPlugin({ mode: 'hide' }), autolinkPlugin(), kbdHandler];
+const pluginStock = stock.useNizel({ plugins: pluginProfile });
+let pluginCompared = 0;
+const pluginDiffs = [];
+const checkPluginReverse = (html) => {
+  let expected;
+  try {
+    expected = stock.htmlToMarkdown(html, { plugins: pluginProfile });
+  } catch {
+    return;
+  }
+  pluginCompared += 1;
+  const actual = wasmEntry.htmlToMarkdown(html, { plugins: pluginProfile });
+  if (actual !== expected) pluginDiffs.push({ markdown: html, expected, actual });
+};
 let astCompared = 0;
 const astDiffs = [];
 let hookCompared = 0;
 const hookDiffs = [];
 
+const traceFs = process.env.FUZZ_TRACE ? await import('node:fs') : undefined;
+/** With FUZZ_TRACE set, records the step about to run (to find a crash). */
+const mark = (step, value) => traceFs?.writeFileSync(process.env.FUZZ_TRACE, JSON.stringify({ step, value }));
 let compared = 0;
 let declined = 0;
 const diffs = [];
@@ -138,8 +167,11 @@ for (let i = 0; i < count; i += 1) {
   let markdown = '';
   for (let j = 0; j < length; j += 1) markdown += pick(atoms);
   const profile = profiles[i % profiles.length];
+  if (process.env.FUZZ_TRACE) (await import('node:fs')).writeFileSync(process.env.FUZZ_TRACE, JSON.stringify({ i, markdown }));
+  if (process.env.FUZZ_HEAP && (i % 1000 === 0 || i > 11500)) console.error(i, Math.round(process.memoryUsage().heapUsed / 1e6), 'MB heap', Math.round(process.memoryUsage().external / 1e6), 'MB external');
   const source = profile.options.frontmatter === false ? markdown : extractFrontmatter(markdown).markdown;
   if (source.includes('{{')) continue;
+  mark(`${i} engineRender`, source);
   const actual = engineRender(source, profile.flags);
   if (actual === undefined) {
     declined += 1;
@@ -147,21 +179,41 @@ for (let i = 0; i < count; i += 1) {
     continue;
   }
   compared += 1;
+  mark(`${i} js html`, markdown);
   const expected = await stock.useNizel(profile.options).html(markdown);
   if (actual !== expected) diffs.push({ markdown, flags: profile.flags, expected, actual });
+  mark(`${i} checkReverse`, expected);
   checkReverse(expected, flagsFor[i % 2]);
 
   // The decoded engine AST must be exactly the JavaScript parser's.
   const parseOptions = profile.flags & 4
     ? { anchors: true, autolinks: { enabled: true }, blocks: {}, safe: true, slugStyle: undefined }
     : { anchors: false, autolinks: false, blocks: {}, safe: false, slugStyle: undefined };
+  mark(`${i} parseWasm`, source);
   const decoded = parseWasm(source, profile.flags & 4 ? {} : { anchors: false, autolinks: false, safe: false });
   if (decoded !== undefined) {
     astCompared += 1;
+    mark(`${i} parseMarkdown+compare`, source);
     const reference = parseMarkdown(source, parseOptions);
     if (!isDeepStrictEqual(decoded, reference)) astDiffs.push({ markdown: source, expected: reference, actual: decoded });
   }
-  if (i % 4 === 0) {
+  // The plugin and hook steps run with safe (default) options: compare them
+  // only where the engine accepts the document with those options, as
+  // everywhere else (it declines exactly the input JavaScript never
+  // finishes, NIZEL-002).
+  const acceptedWithDefaults = engineRender(extractFrontmatter(markdown).markdown, 1 | 2 | 4) !== undefined;
+  if (i % 4 === 1 && acceptedWithDefaults) {
+    mark(`${i} plugin html`, markdown);
+    if (process.env.FUZZ_DUMP) traceFs?.appendFileSync(process.env.FUZZ_DUMP, JSON.stringify(markdown) + '\n');
+    const pluginHtml = await pluginStock.html(markdown);
+    mark(`${i} plugin reverse`, pluginHtml);
+    checkPluginReverse(pluginHtml);
+    let soup = '';
+    for (let j = 0, n = 1 + random(12); j < n; j += 1) soup += pick(pluginAtoms);
+    if (process.env.FUZZ_TRACE) (await import('node:fs')).writeFileSync(process.env.FUZZ_TRACE, JSON.stringify({ i, soup }));
+    checkPluginReverse(soup);
+  }
+  if (i % 4 === 0 && acceptedWithDefaults) {
     hookCompared += 1;
     const viaWasm = await hookWasm.html(markdown);
     const viaJs = await hookStock.html(markdown);
@@ -170,13 +222,16 @@ for (let i = 0; i < count; i += 1) {
   let soup = '';
   const soupLength = 1 + random(16);
   for (let j = 0; j < soupLength; j += 1) soup += pick(htmlAtoms);
+  if (process.env.FUZZ_TRACE) (await import('node:fs')).writeFileSync(process.env.FUZZ_TRACE, JSON.stringify({ i, step: 'soup', soup }));
   checkReverse(soup, flagsFor[(i >> 1) % 2]);
+  if (process.env.FUZZ_TRACE) (await import('node:fs')).writeFileSync(process.env.FUZZ_TRACE, JSON.stringify({ i, step: 'ast', source }));
 }
 
 console.log(`fuzz: ${count} generated, ${compared} compared, ${declined} declined, ${diffs.length} differences`);
 console.log(`reverse: ${reverseCompared} compared, ${reverseDeferred} deferred to JavaScript, ${reverseDiffs.length} differences`);
 console.log(`ast: ${astCompared} compared, ${astDiffs.length} differences; hooks through nizel/wasm: ${hookCompared} compared, ${hookDiffs.length} differences`);
-for (const diff of [...astDiffs, ...hookDiffs].slice(0, show)) {
+console.log(`plugin reverse through nizel/wasm: ${pluginCompared} compared, ${pluginDiffs.length} differences`);
+for (const diff of [...astDiffs, ...hookDiffs, ...pluginDiffs].slice(0, show)) {
   console.log('\nmarkdown:', JSON.stringify(diff.markdown));
   console.log('expected:', JSON.stringify(diff.expected).slice(0, 600));
   console.log('actual:  ', JSON.stringify(diff.actual).slice(0, 600));
@@ -192,4 +247,4 @@ for (const diff of diffs.slice(0, show)) {
   console.log('expected:', JSON.stringify(diff.expected));
   console.log('actual:  ', JSON.stringify(diff.actual));
 }
-process.exitCode = diffs.length + reverseDiffs.length + astDiffs.length + hookDiffs.length === 0 ? 0 : 1;
+process.exitCode = diffs.length + reverseDiffs.length + astDiffs.length + hookDiffs.length + pluginDiffs.length === 0 ? 0 : 1;

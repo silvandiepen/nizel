@@ -18,6 +18,7 @@ pub mod block;
 pub mod codec;
 pub mod common;
 pub mod emphasis;
+pub mod host;
 pub mod html;
 pub mod inline;
 pub mod js;
@@ -45,6 +46,11 @@ pub mod flags {
     pub const SLUG_CLASSIC: u32 = 8;
     /// `htmlToMarkdown({ unsupported: 'drop' })`.
     pub const DROP_UNSUPPORTED: u32 = 16;
+    /// Offer elements to JavaScript handlers: the input holds the tags to
+    /// offer separated by newlines, then a NUL, then the source.
+    pub const HANDLERS: u32 = 32;
+    /// A handler without declared tags: offer every element.
+    pub const HANDLERS_ALL: u32 = 64;
 }
 
 #[unsafe(no_mangle)]
@@ -90,7 +96,19 @@ pub extern "C" fn parse(len: usize, flags: u32) -> i32 {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn reverse(len: usize, flags: u32) -> i32 {
-    convert(len, |source, out| reverse_html(source, flags, out))
+    convert(len, |input, out| {
+        let (tags, source) = match input.split_once('\0') {
+            Some((tags, source)) if flags & flags::HANDLERS != 0 => (tags, source),
+            _ => ("", input),
+        };
+        let claim = (flags & flags::HANDLERS != 0).then(|| reverse::Claim {
+            all: flags & flags::HANDLERS_ALL != 0,
+            tags: tags.split('\n').filter(|t| !t.is_empty()).map(str::to_string).collect(),
+        });
+        let options = reverse::ReverseOptions { preserve: flags & flags::DROP_UNSUPPORTED == 0, claim };
+        out.push_str(&reverse::html_to_markdown(source, &options)?);
+        Ok(())
+    })
 }
 
 fn convert(len: usize, run: impl FnOnce(&str, &mut String) -> Result<(), i32>) -> i32 {
@@ -130,7 +148,7 @@ pub fn render_markdown(source: &str, flags: u32, out: &mut String) -> Result<(),
 
 /// HTML → Markdown. Mirrors `htmlToMarkdown(source)`.
 pub fn reverse_html(source: &str, flags: u32, out: &mut String) -> Result<(), i32> {
-    let options = reverse::ReverseOptions { preserve: flags & flags::DROP_UNSUPPORTED == 0 };
+    let options = reverse::ReverseOptions { preserve: flags & flags::DROP_UNSUPPORTED == 0, claim: None };
     out.push_str(&reverse::html_to_markdown(source, &options)?);
     Ok(())
 }

@@ -8,7 +8,7 @@ import { extractFrontmatter } from '../dist/frontmatter.js';
 // The Rust engine may decline what it has not ported yet, but whatever it
 // produces must be byte-identical to the JavaScript engine.
 const bytes = await readFile(new URL('../dist/wasm/engine.wasm', import.meta.url));
-const { instance } = await WebAssembly.instantiate(bytes);
+const { instance } = await WebAssembly.instantiate(bytes, { env: { claim: () => -1 } });
 const { memory, input, output, render } = instance.exports;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -62,13 +62,15 @@ test('engine never differs from JavaScript on 20,000 fuzzed documents', async ()
     cwd: new URL('..', import.meta.url),
     encoding: 'utf8',
   });
-  // Forward, reverse, decoded AST and hook-path counts must all be zero.
+  // Forward, reverse, decoded AST, hook path and plugin reverse counts must all be zero.
   assert.doesNotMatch(output, /[1-9]\d* differences/, output);
-  assert.equal(output.match(/ 0 differences/g)?.length, 4, output);
-}, 120000);
+  assert.equal(output.match(/ 0 differences/g)?.length, 5, output);
+}, 240000);
 
 test('engine declines the blockquote input that never terminates in JavaScript (NIZEL-002)', async () => {
-  assert.equal(engineRender('x\n\n> a b', 1 | 2 | 4), undefined);
+  assert.equal(engineRender('x\n\n> a\u2028b', 1 | 2 | 4), undefined);
+  // The fuzzer's variant: a quoted list line after other content.
+  assert.equal(engineRender('<b>\n  indented*h\n    - \n> - \u2028)<span a=1><!X', 1 | 2 | 4), undefined);
   // At the start of a document the JavaScript does terminate: an empty quote, and the next line is skipped.
-  assert.equal(engineRender('> a b\nskipped\nkept', 1 | 2 | 4), await stock.useNizel().html('> a b\nskipped\nkept'));
+  assert.equal(engineRender('> a\u2028b\nskipped\nkept', 1 | 2 | 4), await stock.useNizel().html('> a\u2028b\nskipped\nkept'));
 });

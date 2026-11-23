@@ -24,7 +24,7 @@ const FLAG = { anchors: 1, autolinks: 2, safe: 4, slugClassic: 8 };
 /** Loads the engine and wraps its raw linear-memory interface. */
 async function loadEngine() {
   const bytes = await readFile(new URL('../engine/target/wasm32-unknown-unknown/release/nizel_engine.wasm', import.meta.url));
-  const { instance } = await WebAssembly.instantiate(bytes);
+  const { instance } = await WebAssembly.instantiate(bytes, { env: { claim: () => -1 } });
   const { memory, input, output, render, reverse } = instance.exports;
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();

@@ -10,6 +10,58 @@ type Result<T> = std::result::Result<T, i32>;
 pub struct ReverseOptions {
     /// `unsupported: 'preserve'` (the default) rather than `'drop'`.
     pub preserve: bool,
+    /// Plugin handlers in JavaScript: which elements to offer them.
+    pub claim: Option<Claim>,
+}
+
+pub struct Claim {
+    /// A handler without `htmlToMarkdownTags` may claim any element.
+    pub all: bool,
+    pub tags: Vec<String>,
+}
+
+impl Claim {
+    fn wants(&self, tag: &str) -> bool {
+        self.all || self.tags.iter().any(|t| t == tag)
+    }
+}
+
+/// Offers `element` to the JavaScript handlers; their Markdown if one claims it.
+fn offer(element: &Element) -> Result<Option<String>> {
+    let mut bytes = Vec::with_capacity(element.raw.len() + 64);
+    encode_element(element, &mut bytes);
+    crate::host::claim(&bytes)
+}
+
+fn encode_str(out: &mut Vec<u8>, value: &str) {
+    out.extend_from_slice(&(value.len() as u32).to_le_bytes());
+    out.extend_from_slice(value.as_bytes());
+}
+
+/// The subtree as `src/wasm/html-codec.ts` reads it.
+fn encode_element(element: &Element, out: &mut Vec<u8>) {
+    out.push(1);
+    encode_str(out, &element.tag);
+    out.extend_from_slice(&(element.attrs.len() as u32).to_le_bytes());
+    for (name, value) in &element.attrs {
+        encode_str(out, name);
+        encode_str(out, value);
+    }
+    encode_str(out, &element.raw);
+    out.extend_from_slice(&(element.children.len() as u32).to_le_bytes());
+    for child in &element.children {
+        match child {
+            Node::Element(e) => encode_element(e, out),
+            Node::Text(v) => {
+                out.push(2);
+                encode_str(out, v);
+            }
+            Node::Comment(v) => {
+                out.push(3);
+                encode_str(out, v);
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -419,6 +471,14 @@ fn render_node(node: &Node, options: &ReverseOptions, out: &mut String) -> Resul
         Node::Element(element) => element,
     };
     let tag = element.tag.as_str();
+    if let Some(claim) = &options.claim {
+        if claim.wants(tag) {
+            if let Some(claimed) = offer(element)? {
+                out.push_str(&claimed);
+                return Ok(());
+            }
+        }
+    }
     let inline = || -> Result<String> { Ok(normalize_inline(&render_children(&element.children, options)?)) };
     let block = || -> Result<String> { Ok(normalize_document(&render_children(&element.children, options)?)) };
     let wrap = |out: &mut String, value: &str| block_wrap(value, out);

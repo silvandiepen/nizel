@@ -47,6 +47,38 @@ export function htmlToMarkdown(html: string, options: NizelHtmlToMarkdownOptions
 }
 
 /**
+ * The plugin-handler half of `htmlToMarkdown`, for a renderer that walks
+ * the tree itself (the Wasm engine): `claim` runs the handlers on one node
+ * exactly as `renderNode` does, and `finish` appends their epilogue.
+ */
+export function createHtmlToMarkdownSession(options: NizelHtmlToMarkdownOptions = {}): {
+  handlers: NizelHtmlToMarkdownHandler[];
+  claim: (node: NizelHtmlElementNode) => string | undefined;
+  finish: (body: string) => string;
+} {
+  const resolved: Required<NizelHtmlToMarkdownOptions> = {
+    unsupported: options.unsupported ?? 'preserve',
+    plugins: options.plugins ?? [],
+  };
+  const handlers = resolved.plugins.flatMap((plugin) => {
+    const handler = plugin?.htmlToMarkdown;
+    return handler ? (Array.isArray(handler) ? handler : [handler]) : [];
+  });
+  const ctx: ConvertContext = { options: resolved, handlers, epilogue: [] };
+  return {
+    handlers,
+    claim: (node) => {
+      for (const handler of handlers) {
+        const result = handler(node, buildHandlerContext(node, ctx, 0));
+        if (result !== undefined) return blockTags.has(node.tag) ? blockWrap(result) : result;
+      }
+      return undefined;
+    },
+    finish: (body) => (ctx.epilogue.length ? normalizeDocument(`${body}\n\n${ctx.epilogue.join('\n\n')}`) : body),
+  };
+}
+
+/**
  * Builds the public context handed to plugin handlers.
  */
 function buildHandlerContext(node: HtmlNode, ctx: ConvertContext, depth: number): NizelHtmlToMarkdownContext {

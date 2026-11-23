@@ -2,6 +2,9 @@ import engineEncoded from './engine-bytes.js';
 import type { NizelHtmlToMarkdownOptions } from '../html-to-markdown.js';
 import type { NizelOptions, NizelPlugin, NizelRootNode } from '../types.js';
 import { decodeAst } from './ast-codec.js';
+import { decodeHtmlElement } from './html-codec.js';
+import { createHtmlToMarkdownSession } from '../html-to-markdown.js';
+import type { NizelHtmlElementNode } from '../types.js';
 
 // The Rust engine (packages/nizel/engine): Nizel's parser, renderer and
 // HTML-to-Markdown converter ported behaviour for behaviour.
@@ -12,7 +15,12 @@ type Engine = {
   render: (length: number, flags: number) => number;
   parse: (length: number, flags: number) => number;
   reverse: (length: number, flags: number) => number;
+  callback: (length: number) => number;
 };
+
+/** Runs the plugin handlers on one element during a reverse conversion. */
+type Claimer = (node: NizelHtmlElementNode) => string | undefined;
+let activeClaimer: Claimer | undefined;
 
 const maximumSourceLength = 1024 * 1024;
 const encoder = new TextEncoder();
@@ -24,11 +32,29 @@ function getEngine(): Engine | null {
   if (cachedEngine !== undefined) return cachedEngine;
   try {
     const bytes = Uint8Array.from(atob(engineEncoded), character => character.charCodeAt(0));
-    cachedEngine = new WebAssembly.Instance(new WebAssembly.Module(bytes)).exports as Engine;
+    const imports = { env: { claim: (pointer: number, length: number) => claim(pointer, length) } };
+    cachedEngine = new WebAssembly.Instance(new WebAssembly.Module(bytes), imports).exports as Engine;
   } catch {
     cachedEngine = null;
   }
   return cachedEngine;
+}
+
+/**
+ * The engine offering an element to the handlers: decode it, run them,
+ * and hand back their Markdown (-1 when none claims it, -2 to give up).
+ */
+function claim(pointer: number, length: number): number {
+  const engine = cachedEngine;
+  if (!engine || !activeClaimer) return -1;
+  const node = decodeHtmlElement(new Uint8Array(engine.memory.buffer, pointer, length).slice());
+  const result = activeClaimer(node);
+  if (result === undefined) return -1;
+  if (!isWellFormed(result)) return -2;
+  const encoded = encoder.encode(result);
+  const at = engine.callback(encoded.length);
+  new Uint8Array(engine.memory.buffer, at, encoded.length).set(encoded);
+  return encoded.length;
 }
 
 /** Copies `source` into the engine and runs `direction`; the output length, or undefined. */
@@ -97,9 +123,32 @@ export function renderWasm(source: string, options: NizelOptions): string | unde
 
 /** Converts HTML with the engine; undefined means JavaScript converts it. */
 export function reverseWasm(source: string, options?: NizelHtmlToMarkdownOptions): string | undefined {
-  // Reverse handlers are not ported to the engine yet.
-  if (options?.plugins?.some(plugin => blocksReverse(plugin, source))) return undefined;
-  return run('reverse', source, options?.unsupported === 'drop' ? 16 : 0);
+  const flags = options?.unsupported === 'drop' ? 16 : 0;
+  // Handlers only see elements they could claim; none can apply here.
+  if (!options?.plugins?.some(plugin => blocksReverse(plugin, source))) return run('reverse', source, flags);
+
+  const session = createHtmlToMarkdownSession(options);
+  const { all, tags } = handlerReach(options.plugins ?? []);
+  const previous = activeClaimer;
+  activeClaimer = session.claim;
+  try {
+    const body = run('reverse', `${tags.join('\n')}\0${source}`, flags | 32 | (all ? 64 : 0));
+    return body === undefined ? undefined : session.finish(body);
+  } finally {
+    activeClaimer = previous;
+  }
+}
+
+/** The tags plugin reverse handlers may claim; `all` when one does not say. */
+function handlerReach(plugins: NizelPlugin[]): { all: boolean; tags: string[] } {
+  let all = false;
+  const tags = new Set<string>();
+  for (const plugin of plugins) {
+    if (!plugin?.htmlToMarkdown) continue;
+    if (!plugin.htmlToMarkdownTags) all = true;
+    for (const tag of plugin.htmlToMarkdownTags ?? []) tags.add(tag);
+  }
+  return { all, tags: [...tags] };
 }
 
 /** `withAutolinkElements` adds an `a` element rule for these. */
