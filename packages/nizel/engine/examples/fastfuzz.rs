@@ -44,6 +44,8 @@ const ATOMS: &[&str] = &[
     "\n- a\n\n  ```\n  x\n\n```\n[ref]: /u\n```", "\n- a\n  ~~~\n", "\n```\n[r]: /x\n```", "\n| a | b |\n|---|---|\n``` | x", "\n| a |\n|---|\n<div> |", "\n> ```\n> x",
     "\ntext\n```a`b", "\n```a`b c", "\n  ```\n  [q]: /y", "\n<!--\n```\n-->", "\n~~~\n[s]: /z\n~~~", "\n- ```\n\n[t]: /w\n```",
     "\n>\t[qa]: /u", "\n>  [qb]: /u", "\n>\u{a0}[qc]: /u", "\n>\u{3000} [qd]: /u", "\n> \t[qe]: /u", "\n````\n[qf]: <a b>\n````",
+    "\n| `a\\|b` | <div class=\"x\">y</div> |\n|---|:-:|\n| \\`x\\` | ~~s~~ |", "\n| a | b |\n|--|--|\n| <https://e.com> | x@y.z |", "\n| &amp; | &#65; |\n|---|---|\n| [r] | ![i](s) |",
+    "\n| h |\n|---|\n| [^1] | x\\ |", "\n| <b>a</b> | `[x]` |\n|---|---|", "\n| a | b |\n|---|---|\n| www.e.com | https://e.com/x |", "\n| *a | b* |\n|---|---|",
     // Just outside: the tier must decline, never differ.
     "*em*", "**strong**", "_u_", "[link](x)", "<b>", "&amp;", "\\*", "~~d~~", "| a | b |", "a@b.co", "http://e.com",
     "> quote", "- item", "1. one", "+ plus", "===", "--", "\t", "\r\n", ":: note", "[r]: /url", "![i](s)",

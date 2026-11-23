@@ -404,7 +404,7 @@ fn checked_paragraph(source: &str, pos: usize, state: &mut Walk, out: &mut Strin
 /// definition (rows after the header can start with anything).
 fn checked_table(source: &str, pos: usize, state: &mut Walk, out: &mut String) -> Option<usize> {
     let mark = out.len();
-    let end = table(source, pos, out)?;
+    let end = table(source, pos, state.ctx, out)?;
     if state.check_definitions(&source[pos..end]).is_none() {
         out.truncate(mark);
         return None;
@@ -874,7 +874,10 @@ fn code_span_in_subset(value: &str) -> bool {
 /// `|` (`splitTableRow`, even inside code), trimmed, and rendered by the
 /// inline subset; each row keeps its own cell count and `align` applies by
 /// index. The position after the last row (the next block starts there).
-fn table(source: &str, start: usize, out: &mut String) -> Option<usize> {
+/// A table: tier 1 reads its rows and writes each cell in the inline subset;
+/// a cell outside it is the full engine's `parseInline` and `renderInline`
+/// of that cell alone (cells resolve no references), as `tableCells` does.
+fn table(source: &str, start: usize, ctx: &Ctx, out: &mut String) -> Option<usize> {
     let b = source.as_bytes();
     let header_end = line_end(b, start);
     let delimiter_end = line_end(b, header_end + 1);
@@ -894,7 +897,14 @@ fn table(source: &str, start: usize, out: &mut String) -> Option<usize> {
                 out.push('"');
             }
             out.push('>');
-            inline(crate::js::trim(cell), out, None)?;
+            let cell = crate::js::trim(cell);
+            let mark = out.len();
+            if inline(cell, out, None).is_none() {
+                out.truncate(mark);
+                let empty = References::new();
+                let cell_ctx = Ctx { options: ctx.options, references: &empty };
+                crate::render::render_inline(&crate::inline::parse_inline(cell, &cell_ctx).ok()?, out);
+            }
             out.push_str("</");
             out.push_str(tag);
             out.push('>');
