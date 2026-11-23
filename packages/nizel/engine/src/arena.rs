@@ -23,9 +23,10 @@ struct State {
     active: bool,
     chunks: [Chunk; MAX_CHUNKS],
     count: usize,
-    /// The chunk being bumped and the next free address in it.
+    /// The chunk being bumped, the next free address in it, and its end.
     current: usize,
     next: usize,
+    limit: usize,
     /// The newest allocation, which can be popped or grown in place.
     last: usize,
 }
@@ -41,7 +42,7 @@ impl Arena {
     pub const fn new() -> Self {
         const EMPTY: Chunk = Chunk { start: 0, size: 0 };
         Arena {
-            state: UnsafeCell::new(State { active: false, chunks: [EMPTY; MAX_CHUNKS], count: 0, current: 0, next: 0, last: 0 }),
+            state: UnsafeCell::new(State { active: false, chunks: [EMPTY; MAX_CHUNKS], count: 0, current: 0, next: 0, limit: 0, last: 0 }),
         }
     }
 
@@ -81,6 +82,7 @@ impl Arena {
         state.count = kept;
         state.current = 0;
         state.next = if kept > 0 { state.chunks[0].start } else { 0 };
+        state.limit = if kept > 0 { state.chunks[0].start + state.chunks[0].size } else { 0 };
         state.last = 0;
         state.active = true;
     }
@@ -90,7 +92,23 @@ impl Arena {
         self.state().active = false;
     }
 
+    /// The common case, inlined: the allocation fits in the current chunk.
+    #[inline(always)]
     unsafe fn bump(&self, layout: Layout) -> *mut u8 {
+        let state = self.state();
+        let aligned = (state.next + layout.align() - 1) & !(layout.align() - 1);
+        let end = aligned + layout.size();
+        if end <= state.limit && state.count > 0 {
+            state.next = end;
+            state.last = aligned;
+            return aligned as *mut u8;
+        }
+        unsafe { self.bump_slow(layout) }
+    }
+
+    /// The next chunk (a retained one, or a new one twice the size).
+    #[inline(never)]
+    unsafe fn bump_slow(&self, layout: Layout) -> *mut u8 {
         let state = self.state();
         loop {
             if state.count > 0 {
@@ -104,6 +122,7 @@ impl Arena {
                 if state.current + 1 < state.count && state.chunks[state.current + 1].size >= layout.size() + layout.align() {
                     state.current += 1;
                     state.next = state.chunks[state.current].start;
+                    state.limit = state.next + state.chunks[state.current].size;
                     continue;
                 }
             }
@@ -121,6 +140,7 @@ impl Arena {
             state.count += 1;
             state.current = state.count - 1;
             state.next = start;
+            state.limit = start + size;
         }
     }
 }
@@ -132,6 +152,7 @@ impl Default for Arena {
 }
 
 unsafe impl GlobalAlloc for Arena {
+    #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         if self.state().active { unsafe { self.bump(layout) } } else { unsafe { System.alloc(layout) } }
     }
@@ -155,12 +176,9 @@ unsafe impl GlobalAlloc for Arena {
             return unsafe { System.realloc(ptr, layout, new_size) };
         }
         let state = self.state();
-        if state.active && address == state.last && address + layout.size() == state.next {
-            let chunk = &state.chunks[state.current];
-            if address + new_size <= chunk.start + chunk.size {
-                state.next = address + new_size;
-                return ptr;
-            }
+        if state.active && address == state.last && address + layout.size() == state.next && address + new_size <= state.limit {
+            state.next = address + new_size;
+            return ptr;
         }
         let new_layout = unsafe { Layout::from_size_align_unchecked(new_size, layout.align()) };
         let moved = unsafe { self.alloc(new_layout) };
