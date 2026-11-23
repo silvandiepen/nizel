@@ -25,17 +25,52 @@ pub struct Options {
 
 type Result<T> = std::result::Result<T, i32>;
 
+thread_local! {
+    /// Whether the document holds a `|` / a tab at all: every line (and every
+    /// container line derived from them) is a slice of it, so when it does not,
+    /// the per-line searches for them can be skipped.
+    static DOC_HAS_PIPE: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+    static DOC_HAS_TAB: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+}
+
+fn doc_has_pipe() -> bool {
+    DOC_HAS_PIPE.with(std::cell::Cell::get)
+}
+
+fn doc_has_tab() -> bool {
+    DOC_HAS_TAB.with(std::cell::Cell::get)
+}
+
+/// One pass over the source: CR, tab, `|`, and a `]:` pair.
+fn scan_source(markdown: &str) -> (bool, bool, bool, bool) {
+    let (mut cr, mut tab, mut pipe, mut reference) = (false, false, false, false);
+    let b = markdown.as_bytes();
+    for (i, &c) in b.iter().enumerate() {
+        match c {
+            b'\r' => cr = true,
+            b'\t' => tab = true,
+            b'|' => pipe = true,
+            b']' if b.get(i + 1) == Some(&b':') => reference = true,
+            _ => {}
+        }
+    }
+    (cr, tab, pipe, reference)
+}
+
 pub fn parse_markdown(markdown: &str, options: &Options) -> Result<Vec<Block>> {
-    let normalized: std::borrow::Cow<str> = if markdown.contains('\r') { normalize_line_endings(markdown).into() } else { markdown.into() };
+    let (has_cr, has_tab, has_pipe, has_reference) = scan_source(markdown);
+    DOC_HAS_PIPE.with(|flag| flag.set(has_pipe));
+    DOC_HAS_TAB.with(|flag| flag.set(has_tab));
+    let normalized: std::borrow::Cow<str> = if has_cr { normalize_line_endings(markdown).into() } else { markdown.into() };
     // Lines borrow the source unless tabs had to be expanded.
     let expanded: Vec<String>;
-    let base: Vec<&str> = if normalized.contains('\t') {
+    let base: Vec<&str> = if has_tab {
         expanded = normalized.split('\n').map(expand_leading_tabs_in_line).collect();
         as_strs(&expanded)
     } else {
         normalized.split('\n').collect()
     };
-    let (content, references) = if normalized.contains("]:") && has_possible_reference_definition_start(&normalized) {
+    let (content, references) = if has_reference && has_possible_reference_definition_start(&normalized) {
         let (content, references) = refs::extract(&base);
         (Some(content), references)
     } else {
@@ -350,7 +385,7 @@ fn can_continue_paragraph(line: &str, lines: &[&str], index: usize, options: &Op
 
 /// `hasParagraphInterruptCandidate`.
 fn has_paragraph_interrupt_candidate(line: &str, options: &Options) -> bool {
-    if line.contains('|') {
+    if doc_has_pipe() && line.contains('|') {
         return true;
     }
     let first = js::trim_start(line).chars().next();
@@ -488,7 +523,8 @@ fn is_raw_html_block_line(line: &str) -> bool {
 
 /// `isTableStart`.
 fn is_table_start(lines: &[&str], index: usize) -> bool {
-    lines[index].contains('|') && lines.get(index + 1).is_some_and(|next| !next.is_empty() && is_table_delimiter_row(next))
+    doc_has_pipe()
+        && lines[index].contains('|') && lines.get(index + 1).is_some_and(|next| !next.is_empty() && is_table_delimiter_row(next))
 }
 
 /// `/^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/`
@@ -521,7 +557,7 @@ pub struct ListMarker {
 
 pub fn parse_list_marker(line: &str) -> Option<ListMarker> {
     let expanded;
-    let line = if line.contains('\t') {
+    let line = if doc_has_tab() && line.contains('\t') {
         expanded = expand_list_marker_tabs(line);
         expanded.as_str()
     } else {
@@ -787,6 +823,10 @@ fn strip_fence_indent(line: &str, indent: usize) -> &str {
 
 /// `parseCodeMeta` → (filename, highlight lines).
 fn parse_code_meta(meta: &str) -> (Option<String>, Option<Vec<f64>>) {
+    // Neither `filename=` nor `{…}` can match in less than three bytes.
+    if meta.len() < 3 {
+        return (None, None);
+    }
     let mut filename = None;
     let mut from = 0;
     while let Some(found) = meta[from..].find("filename=") {
