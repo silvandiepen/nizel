@@ -207,10 +207,19 @@ fn as_strs(lines: &[String]) -> Vec<&str> {
 }
 
 fn parse_blocks(lines: &[&str], ctx: &Ctx, seen: &mut crate::slug::Seen) -> Result<Vec<Block>> {
+    Ok(parse_blocks_until(lines, 0, ctx, seen, usize::MAX)?.0)
+}
+
+/// `parseBlocks` from line `start`, stopping before a block once `limit`
+/// blocks are parsed: the blocks and the line index it stopped at. Each turn
+/// of the loop starts at a block of `lines` with nothing carried over but
+/// the index (and the shared IDs and references), so tier 1 can hand the
+/// full engine one block and go on where it stopped.
+pub(crate) fn parse_blocks_until(lines: &[&str], start: usize, ctx: &Ctx, seen: &mut crate::slug::Seen, limit: usize) -> Result<(Vec<Block>, usize)> {
     let options = ctx.options;
     let mut children = Vec::new();
-    let mut index = 0;
-    while index < lines.len() {
+    let mut index = start;
+    while index < lines.len() && children.len() < limit {
         let line = lines[index];
         let trimmed = js::trim(line);
         if trimmed.is_empty() {
@@ -403,7 +412,7 @@ fn parse_blocks(lines: &[&str], ctx: &Ctx, seen: &mut crate::slug::Seen) -> Resu
         children.push(Block::Paragraph { children: parse_inline_owned(source, ctx)? });
         index += 1;
     }
-    Ok(children)
+    Ok((children, index))
 }
 
 pub(crate) fn heading(depth: u8, source: &str, ctx: &Ctx, seen: &mut crate::slug::Seen) -> Result<Block> {

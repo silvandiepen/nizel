@@ -315,8 +315,25 @@ fn walk(source: &str, state: &mut Walk, out: &mut String, mut spans: Option<&mut
                 // Tier 1 cannot render this block: the full engine renders the
                 // stretch up to the next point where it starts afresh.
                 out.truncate(block_start);
-                let end = segment_end(source, pos, state.options.safe).min(b.len());
-                state.check_definitions(&source[pos..end])?;
+                // Without tabs the full engine reads these very lines: it
+                // parses one block where tier 1 stands, and says where it
+                // stopped (see `parse_blocks_until`). With tabs (it reads
+                // expanded lines) it renders the stretch up to the next point
+                // where it starts afresh.
+                let (end, blocks) = if state.has_tab {
+                    let end = segment_end(source, pos, state.options.safe).min(b.len());
+                    state.check_definitions(&source[pos..end])?;
+                    let blocks = block::parse_markdown_with_references(&source[pos..end], state.options, &mut state.seen, state.ctx.references).ok()?;
+                    (end, blocks)
+                } else {
+                    let table = lines.get_or_insert_with(|| if state.depth == 0 { state.root_lines() } else { std::rc::Rc::new(Lines::new(source)) }).clone();
+                    let index = table.index_of(pos);
+                    block::set_document_flags(state.has_pipe, false);
+                    let (blocks, next) = block::parse_blocks_until(&table.lines, index, state.ctx, &mut state.seen, 1).ok()?;
+                    let end = table.starts.get(next).copied().unwrap_or(b.len()).min(b.len());
+                    state.check_definitions(&source[pos..end])?;
+                    (end, blocks)
+                };
                 state.note_block(&source[pos..end]);
                 HANDED_OVER.with(|handed| handed.set(handed.get() + end - pos));
                 TRACE.with(|trace| {
@@ -324,7 +341,6 @@ fn walk(source: &str, state: &mut Walk, out: &mut String, mut spans: Option<&mut
                         trace.push((end - pos, source[pos..line_end(b, pos).min(end)].to_string()));
                     }
                 });
-                let blocks = block::parse_markdown_with_references(&source[pos..end], state.options, &mut state.seen, state.ctx.references).ok()?;
                 if blocks.is_empty() {
                     out.truncate(before_separator);
                     pos = end;
