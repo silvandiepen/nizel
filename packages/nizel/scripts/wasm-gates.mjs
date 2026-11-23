@@ -217,7 +217,7 @@ if (!onlySection) {
     `| 5. Differential fuzzer (seed 7) | ${fuzz.replace(/^fuzz: /, 'forward: ').replace(/\n/g, '; ')} |`,
     `| 6. Fallbacks (nizel/wasm and every nizel-kit/wasm profile, fixtures + 20k fuzz) | ${gate6} |`,
     '| 7. Lezin iPhone tests | pass on the iPhone 14 Pro, 2026-11-23: PreviewRoundTripTests 16/16 and CodePreviewRoundTripUITests, testMeasureWasmFastPathCoverage 10/10 forward and reverse with Lezin\'s and bare options (device run, recorded by hand: `xcodebuild test` in Lezin, see NIZEL-001) |',
-    '| Speed (≥5x, cold start, size) | forward measured below (raw engine, not yet behind the entry points) |',
+    '| Speed (≥5x, cold start, size) | **not met**: 2.9x-6.0x JavaScript through the entry points (6 of 24 readings ≥5x; quiet machine, 2026-11-23, apps/benchmarks/experiments/wasm-html/benchmark.mjs); cold start 13.9 ms first call in Node (iPhone not measured); 139,719 B gzipped (budget 300 KB). Accepted for this PR; a single-pass engine is planned to reach the speed of @pierre/words |',
     '',
     '## Speed: forward, raw engine vs `useNizel().html` (Node, CPU time, warm median)',
     '',
