@@ -13,13 +13,40 @@ pub type References = HashMap<String, Reference>;
 /// `extractReferenceDefinitions` → (content lines, references).
 /// The content lines borrow the input (a quoted definition becomes `>`).
 pub fn extract<'a>(lines: &[&'a str]) -> (Vec<&'a str>, References) {
-    let mut references = References::new();
     let mut content: Vec<&'a str> = Vec::with_capacity(lines.len());
+    let references = scan_definitions(lines, Some(&mut content), false);
+    (content, references)
+}
+
+/// Whether `extract` finds any definition in `lines` (the same scan,
+/// stopping at the first one, without collecting content lines).
+pub fn defines_any(lines: &[&str]) -> bool {
+    !scan_definitions(lines, None, true).is_empty()
+}
+
+fn scan_definitions<'a>(lines: &[&'a str], mut content: Option<&mut Vec<&'a str>>, first_only: bool) -> References {
+    let mut references = References::new();
     let mut previous_was_reference = false;
     let mut index = 0;
     while index < lines.len() {
+        // A line whose first byte after up to three spaces is none of `[`
+        // (a definition), `<` (HTML), a fence marker or `>` (a quoted
+        // definition), and that is not indented code, is a content line:
+        // every reader below declines it.
+        let line = lines[index];
+        let lead = line.as_bytes().get(js::up_to_three_spaces(line)).copied();
+        if !matches!(lead, Some(b'[' | b'<' | b'`' | b'~' | b'>' | b' ')) {
+            if let Some(content) = content.as_deref_mut() {
+                content.push(line);
+            }
+            previous_was_reference = false;
+            index += 1;
+            continue;
+        }
         if let Some((_, end)) = read_html_block(lines, index) {
-            content.extend_from_slice(&lines[index..(end + 1).min(lines.len())]);
+            if let Some(content) = content.as_deref_mut() {
+                content.extend_from_slice(&lines[index..(end + 1).min(lines.len())]);
+            }
             index = end + 1;
             previous_was_reference = false;
             continue;
@@ -30,10 +57,14 @@ pub fn extract<'a>(lines: &[&'a str]) -> (Vec<&'a str>, References) {
         let fence_marker = after_indent.bytes().next().filter(|b| *b == b'`' || *b == b'~');
         if let Some(marker) = fence_marker.filter(|&m| js::run_of(after_indent, m) >= 3) {
             let length = js::run_of(after_indent, marker);
-            content.push(line);
+            if let Some(content) = content.as_deref_mut() {
+                content.push(line);
+            }
             index += 1;
             while index < lines.len() {
-                content.push(lines[index]);
+                if let Some(content) = content.as_deref_mut() {
+                    content.push(lines[index]);
+                }
                 if closes_fence(&lines[index], marker, length) {
                     break;
                 }
@@ -45,7 +76,9 @@ pub fn extract<'a>(lines: &[&'a str]) -> (Vec<&'a str>, References) {
         }
 
         if line.starts_with("    ") {
-            content.push(line);
+            if let Some(content) = content.as_deref_mut() {
+                content.push(line);
+            }
             index += 1;
             previous_was_reference = false;
             continue;
@@ -54,7 +87,12 @@ pub fn extract<'a>(lines: &[&'a str]) -> (Vec<&'a str>, References) {
         if let Some(quoted) = blockquote_reference_line(line) {
             if let Some((label, reference, _)) = read_reference_definition(&[quoted], 0) {
                 references.entry(normalize_reference(&label)).or_insert(reference);
-                content.push(">");
+                if first_only {
+                    return references;
+                }
+                if let Some(content) = content.as_deref_mut() {
+                    content.push(">");
+                }
                 previous_was_reference = true;
                 index += 1;
                 continue;
@@ -66,7 +104,9 @@ pub fn extract<'a>(lines: &[&'a str]) -> (Vec<&'a str>, References) {
             || previous_was_reference
             || is_reference_start_after_block(&lines[index - 1]);
         if !can_start {
-            content.push(line);
+            if let Some(content) = content.as_deref_mut() {
+                content.push(line);
+            }
             previous_was_reference = false;
             index += 1;
             continue;
@@ -75,17 +115,22 @@ pub fn extract<'a>(lines: &[&'a str]) -> (Vec<&'a str>, References) {
         match read_reference_definition(lines, index) {
             Some((label, reference, end)) => {
                 references.entry(normalize_reference(&label)).or_insert(reference);
+                if first_only {
+                    return references;
+                }
                 index = end + 1;
                 previous_was_reference = true;
             }
             None => {
-                content.push(line);
+                if let Some(content) = content.as_deref_mut() {
+                    content.push(line);
+                }
                 previous_was_reference = false;
                 index += 1;
             }
         }
     }
-    (content, references)
+    references
 }
 
 /// `^ {0,3}\${marker}{${length},}\s*$`

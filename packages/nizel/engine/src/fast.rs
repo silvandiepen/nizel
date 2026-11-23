@@ -124,7 +124,7 @@ impl Walk<'_> {
     /// reference definition, check (once) that the whole document defines
     /// none. None when it does (the document then goes to the full engine).
     fn check_definitions(&mut self, text: &str) -> Option<()> {
-        if !self.references_checked && block::has_possible_reference_definition_start(text) {
+        if !self.references_checked && may_start_definition(text.as_bytes()) {
             if defines_references(self.root) {
                 return None;
             }
@@ -132,6 +132,25 @@ impl Walk<'_> {
         }
         Some(())
     }
+}
+
+/// `hasPossibleReferenceDefinitionStart` by its `[` bytes: a line can start
+/// a definition when, before its first `[`, it holds only up to three spaces
+/// (optionally then `>` and one space). Lines without `[` are never looked at.
+fn may_start_definition(b: &[u8]) -> bool {
+    let mut from = 0;
+    while let Some(at) = crate::scan::find_byte(b, from, b'[') {
+        let line_start = b[..at].iter().rposition(|&c| c == b'\n').map_or(0, |n| n + 1);
+        let prefix = &b[line_start..at];
+        let spaces = prefix.iter().take_while(|&&c| c == b' ').count().min(3);
+        let rest = &prefix[spaces..];
+        if rest.is_empty() || rest == b">" || rest == b"> " {
+            return true;
+        }
+        // Later `[`s on this line have this one in their prefix.
+        from = crate::scan::find_byte(b, at, b'\n').map_or(b.len(), |n| n + 1);
+    }
+    false
 }
 
 /// One block's span in the output and whether it is a paragraph (tight list
@@ -235,13 +254,18 @@ impl<'a> Lines<'a> {
 /// tabs counts as defining them.
 fn defines_references(source: &str) -> bool {
     let b = source.as_bytes();
-    if !b.windows(2).any(|w| w == b"]:") {
-        return false;
+    let mut from = 0;
+    loop {
+        match crate::scan::find_byte(b, from, b']') {
+            Some(at) if b.get(at + 1) == Some(&b':') => break,
+            Some(at) => from = at + 1,
+            None => return false,
+        }
     }
     if crate::scan::find_byte(b, 0, b'\t').is_some() {
         return true;
     }
-    !crate::refs::extract(&crate::scan::lines(source)).1.is_empty()
+    crate::refs::defines_any(&crate::scan::lines(source))
 }
 
 /// One block at `pos` (not blank) in tier 1: the position after it and
