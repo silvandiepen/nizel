@@ -40,6 +40,15 @@ thread_local! {
     /// Bytes of the last document that tier 1 handed to the full engine
     /// (coverage reporting; see examples/coverage.rs).
     static HANDED_OVER: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// When set, each handed-over stretch's length and first line (see
+    /// `trace_handed_over`).
+    static TRACE: std::cell::RefCell<Option<Vec<(usize, String)>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Starts (true) or stops recording each stretch tier 1 hands over, and
+/// returns what was recorded since the last call (examples/coverage.rs).
+pub fn trace_handed_over(on: bool) -> Vec<(usize, String)> {
+    TRACE.with(|trace| std::mem::replace(&mut *trace.borrow_mut(), on.then(Vec::new)).unwrap_or_default())
 }
 
 /// Bytes of the last rendered document that tier 1 handed to the full engine.
@@ -166,6 +175,11 @@ fn walk(source: &str, state: &mut Walk, out: &mut String, mut spans: Option<&mut
                 let end = segment_end(source, pos, state.options.safe).min(b.len());
                 state.check_definitions(&source[pos..end])?;
                 HANDED_OVER.with(|handed| handed.set(handed.get() + end - pos));
+                TRACE.with(|trace| {
+                    if let Some(trace) = trace.borrow_mut().as_mut() {
+                        trace.push((end - pos, source[pos..line_end(b, pos).min(end)].to_string()));
+                    }
+                });
                 let blocks = block::parse_markdown_with_seen(&source[pos..end], state.options, &mut state.seen, false).ok()?;
                 if blocks.is_empty() {
                     out.truncate(before_separator);
@@ -242,10 +256,22 @@ fn block<'a>(source: &'a str, pos: usize, state: &mut Walk, lines: &mut Option<L
         return Some((checked_table(source, pos, state, out)?, false));
     }
     if lead.is_ascii_alphabetic() {
-        return Some((paragraph(source, pos, out)?, true));
+        return Some((checked_paragraph(source, pos, state, out)?, true));
     }
     let eol = line_end(b, pos);
     let line = &source[pos..eol];
+    // Leads that, past the constructs `parseBlocks` tries first (a fence for
+    // a backtick; a thematic break and a list for `*` and `_`), can only
+    // start a paragraph.
+    let paragraph_lead = match lead {
+        b'[' | b'!' | b'(' | b'"' => true,
+        b'*' | b'_' => !block::is_thematic_break(line) && block::parse_list_marker(line).is_none(),
+        b'`' => !block::fence_start(line),
+        _ => false,
+    };
+    if paragraph_lead && !line.contains(['\t', '|']) {
+        return Some((checked_paragraph(source, pos, state, out)?, true));
+    }
     if lead != b'`' && line.bytes().any(|c| c == b'\t' || c == b'\r') {
         return None;
     }
@@ -276,6 +302,18 @@ fn block<'a>(source: &'a str, pos: usize, state: &mut Walk, lines: &mut Option<L
         _ => return None,
     }
     Some((eol + 1, false))
+}
+
+/// A paragraph, after checking a line of it that starts with `[` (one at the
+/// start, or a continuation) for a reference definition.
+fn checked_paragraph(source: &str, pos: usize, state: &mut Walk, out: &mut String) -> Option<usize> {
+    let mark = out.len();
+    let (end, bracket) = paragraph(source, pos, out)?;
+    if bracket && state.check_definitions(&source[pos..end.min(source.len())]).is_none() {
+        out.truncate(mark);
+        return None;
+    }
+    Some(end)
 }
 
 /// A table, after checking its rows for lines that could start a reference
@@ -539,7 +577,7 @@ fn column_zero_fence_end(source: &str, start: usize, eol: usize) -> Option<usize
 /// Its lines are contiguous in the source and joined by `\n`, exactly the
 /// paragraph source the full engine builds, so it is read in place, in one
 /// pass that also decides where it ends.
-fn paragraph(source: &str, start: usize, out: &mut String) -> Option<usize> {
+fn paragraph(source: &str, start: usize, out: &mut String) -> Option<(usize, bool)> {
     let b = source.as_bytes();
     out.push_str("<p>");
     // The paragraph's (space-trimmed) end, computed at the first backtick:
@@ -547,6 +585,9 @@ fn paragraph(source: &str, start: usize, out: &mut String) -> Option<usize> {
     let mut text_limit: Option<usize> = None;
     let mut run = start;
     let mut i = start;
+    // Whether the paragraph holds a `[` (then the caller checks its lines
+    // for reference definitions).
+    let mut bracket = false;
     let end = loop {
         // Eight bytes at a time while none of them needs a look.
         while i + 8 <= b.len() {
@@ -623,6 +664,7 @@ fn paragraph(source: &str, start: usize, out: &mut String) -> Option<usize> {
             }
             UNDERSCORE => i = literal_underscores(b, start, i)?,
             BRACKET => {
+                bracket = true;
                 let link = inline_link(b, start, i)?;
                 out.push_str(&source[run..i]);
                 write_link(source, &link, out, None);
@@ -635,7 +677,7 @@ fn paragraph(source: &str, start: usize, out: &mut String) -> Option<usize> {
     // `source.trimEnd()` of spaces: the last text run loses them.
     out.push_str(&source[run..trim_spaces_end(b, run, end)]);
     out.push_str("</p>");
-    Some(if end < b.len() { end + 1 } else { b.len() })
+    Some((if end < b.len() { end + 1 } else { b.len() }, bracket))
 }
 
 /// At the newline `i` inside a paragraph: does the paragraph go on (Some(true)),
@@ -648,7 +690,33 @@ fn continues_after(b: &[u8], i: usize) -> Option<bool> {
     if is_blank_from(b, next) {
         return Some(false);
     }
-    (b[next].is_ascii_alphabetic() && b[i - 1] != b' ').then_some(true)
+    // Leads `hasParagraphInterruptCandidate` never looks at: the line
+    // continues the paragraph (a `|` is declined by the paragraph itself).
+    if b[next].is_ascii_alphabetic() || matches!(b[next], b'[' | b'!' | b'(' | b'"' | b'_') {
+        return (b[i - 1] != b' ').then_some(true);
+    }
+    // `canContinueParagraph` on a column-0 line that certainly interrupts:
+    // the paragraph ends and the line starts a block of its own. A setext
+    // underline (it would make the paragraph a heading) and every other
+    // line decline.
+    if !matches!(b[next], b'#' | b'`' | b'-' | b'*' | b'+' | b'>' | b'0'..=b'9') {
+        return None;
+    }
+    let line = std::str::from_utf8(&b[next..line_end(b, next)]).ok()?;
+    if line.contains(['|', '\t']) || block::setext_underline(line).is_some() {
+        return None;
+    }
+    let interrupts = block::is_thematic_break(line)
+        || block::atx_at_line_start(line)
+        || block::fence_start(line)
+        || block::is_paragraph_interrupting_list_marker(line)
+        || block::blockquote_start(line);
+    // A candidate that does not interrupt continues the paragraph.
+    if interrupts {
+        Some(false)
+    } else {
+        (b[i - 1] != b' ').then_some(true)
+    }
 }
 
 /// Is the line starting at `at` blank (empty or ASCII spaces only)? Steps

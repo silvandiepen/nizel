@@ -431,7 +431,7 @@ fn atx_start(line: &str) -> bool {
 }
 
 /// `/^(#{1,6})\s+/` (no leading spaces).
-fn atx_at_line_start(line: &str) -> bool {
+pub(crate) fn atx_at_line_start(line: &str) -> bool {
     let hashes = js::run_of(line, b'#');
     (1..=hashes.min(6)).any(|count| line[count..].chars().next().is_some_and(js::is_space))
 }
@@ -495,7 +495,7 @@ pub fn is_thematic_break(line: &str) -> bool {
 }
 
 /// `isSetextUnderline`: `/^ {0,3}(=+|-+)\s*$/` → 1 for `=`, 2 for `-`.
-fn setext_underline(line: &str) -> Option<u8> {
+pub(crate) fn setext_underline(line: &str) -> Option<u8> {
     let rest = &line[js::up_to_three_spaces(line)..];
     let marker = rest.bytes().next().filter(|b| *b == b'=' || *b == b'-')?;
     let run = js::run_of(rest, marker);
@@ -503,13 +503,13 @@ fn setext_underline(line: &str) -> Option<u8> {
 }
 
 /// `/^ {0,3}(`{3,}|~{3,})/`
-fn fence_start(line: &str) -> bool {
+pub(crate) fn fence_start(line: &str) -> bool {
     let rest = &line[js::up_to_three_spaces(line)..];
     js::run_of(rest, b'`') >= 3 || js::run_of(rest, b'~') >= 3
 }
 
 /// `/^ {0,3}> ?/`
-fn blockquote_start(line: &str) -> bool {
+pub(crate) fn blockquote_start(line: &str) -> bool {
     line[js::up_to_three_spaces(line)..].starts_with('>')
 }
 
@@ -626,7 +626,7 @@ fn list_content_indent(indent: usize, marker_length: usize, padding: usize) -> u
 }
 
 /// `isParagraphInterruptingListMarker`.
-fn is_paragraph_interrupting_list_marker(line: &str) -> bool {
+pub(crate) fn is_paragraph_interrupting_list_marker(line: &str) -> bool {
     parse_list_marker(line).is_some_and(|marker| !marker.body.is_empty() && (!marker.ordered || marker.start == Some(1)))
 }
 

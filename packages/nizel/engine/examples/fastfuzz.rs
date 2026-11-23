@@ -34,6 +34,11 @@ const ATOMS: &[&str] = &[
     "\n- a\n  - b\n    - c", "\n- a\n  continued", "\n- a\nlazy", "\n- a\n\n  para two", "\n- a\n\n- b", "\n1. a\n   1. b\n2. c", "\n- [x] a\n  - [ ] b",
     "\n- a\n  ```\n  code\n  ```", "\n- a\n  | x | y |\n  |---|---|", "\n- a\n  > q", "\n- # h\n  text", "\n-   wide\n    text", "\n3. three\n4. four", "\n- a\n\n\n- b",
     "\n  - indented item", "\n- a\n    code-ish", "\n* a\n- b", "\n- **a**\n  *b* [c](d)",
+    "\npara\n- item", "\npara\n# head", "\npara\n---", "\npara\n***", "\npara\n- ", "\npara\n2. two", "\npara\n1. one", "\npara\n```\nx\n```", "\npara\n> q",
+    "\npara  \n- item", "\npara\n#tag", "\npara\n-x", "\npara\n=", "\npara\n* * *", "\npara\n+ p", "\npara\n- a | b", "\npara `x\n- y`",
+    "\n**Bold start** text", "\n*em start* x", "\n`code` start", "\n[link](u) start", "\n[ref]: /def", "\n![i](a.png) x", "\n(paren) x", "\n\"q\" x", "\n_u_ x",
+    "\ntext\n**more**", "\ntext\n`c` more", "\ntext\n[l](u)", "\ntext\n[ref]: /x", "\ntext\n2. not", "\ntext\n#tag", "\ntext\n-x", "\ntext\n+x", "\n**a\n**b",
+    "\n*\tx", "\n**x** | y", "\n``x``", "\n`x\n```",
     // Just outside: the tier must decline, never differ.
     "*em*", "**strong**", "_u_", "[link](x)", "<b>", "&amp;", "\\*", "~~d~~", "| a | b |", "a@b.co", "http://e.com",
     "> quote", "- item", "1. one", "+ plus", "===", "--", "\t", "\r\n", ":: note", "[r]: /url", "![i](s)",
