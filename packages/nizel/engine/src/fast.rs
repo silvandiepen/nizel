@@ -93,7 +93,11 @@ fn render_inner(source: &str, options: &Options, out: &mut String) -> Option<()>
         has_pipe: crate::scan::find_byte(b, 0, b'|').is_some(),
         seen: crate::slug::Seen::default(),
         text: String::new(),
+        slug: String::new(),
+        attribute: String::new(),
         references_checked: false,
+        in_step: true,
+        depth: 0,
     };
     walk(source, &mut state, out, None)
 }
@@ -111,12 +115,24 @@ struct Walk<'a> {
     seen: crate::slug::Seen,
     /// Heading text for IDs, reused across headings.
     text: String,
+    /// A heading's slug and its ID attribute, reused across headings.
+    slug: String,
+    attribute: String,
     /// Whether the document defines references is decided lazily (see
     /// `defines_references`), the first time a stretch, a nested list item
     /// a table or a fence holds a line that could start one. Tier 1's
     /// paragraphs, headings and single-line items start with letters,
     /// markers or `#`.
     references_checked: bool,
+    /// Whether extraction, reading the document line by line, is at the same
+    /// place as tier 1's root walk: true until a root block that tier 1 did
+    /// not read the way extraction does (a table, a list, a handed-over
+    /// stretch) holds a line extraction would open a fence or HTML block on.
+    /// While it holds, a root fence or HTML block is one extraction skips
+    /// whole too, so its lines need no definition check.
+    in_step: bool,
+    /// List-item nesting of the current walk (0 is the document itself).
+    depth: usize,
 }
 
 impl Walk<'_> {
@@ -134,17 +150,52 @@ impl Walk<'_> {
     }
 }
 
-/// `hasPossibleReferenceDefinitionStart` by its `[` bytes: a line can start
-/// a definition when, before its first `[`, it holds only up to three spaces
-/// (optionally then `>` and one space). Lines without `[` are never looked at.
+/// Does `b` hold a line on which extraction would open a fence (three or
+/// more backticks or tildes) or try an HTML block (`<`), after up to three
+/// spaces?
+fn opens_for_extraction(b: &[u8]) -> bool {
+    let mut at = 0;
+    while at < b.len() {
+        let spaces = b[at..].iter().take(3).take_while(|&&c| c == b' ').count();
+        let lead = at + spaces;
+        match b.get(lead) {
+            Some(b'<') => return true,
+            Some(&marker @ (b'`' | b'~')) if b[lead..].iter().take(3).take_while(|&&c| c == marker).count() == 3 => return true,
+            _ => {}
+        }
+        at = crate::scan::find_byte(b, at, b'\n').map_or(b.len(), |n| n + 1);
+    }
+    false
+}
+
+impl Walk<'_> {
+    /// A root block tier 1 rendered without reading it as extraction does:
+    /// extraction may have fallen out of step if it holds such a line.
+    fn note_block(&mut self, text: &str) {
+        if self.depth == 0 && self.in_step && opens_for_extraction(text.as_bytes()) {
+            self.in_step = false;
+        }
+    }
+
+    /// Whether a root fence or HTML block needs no definition check.
+    fn skipped_by_extraction(&self) -> bool {
+        self.depth == 0 && self.in_step
+    }
+}
+
+/// Could a line of `b` start a reference definition for extraction? A
+/// superset of the lines its readers take: `[` after up to three spaces, or
+/// a column-0 `>` followed by whitespace and then `[` (the quoted reader takes
+/// any one whitespace character, then up to three spaces; non-ASCII bytes
+/// count as whitespace here). Lines without `[` are never looked at.
 fn may_start_definition(b: &[u8]) -> bool {
     let mut from = 0;
     while let Some(at) = crate::scan::find_byte(b, from, b'[') {
         let line_start = b[..at].iter().rposition(|&c| c == b'\n').map_or(0, |n| n + 1);
         let prefix = &b[line_start..at];
         let spaces = prefix.iter().take_while(|&&c| c == b' ').count().min(3);
-        let rest = &prefix[spaces..];
-        if rest.is_empty() || rest == b">" || rest == b"> " {
+        let quoted = prefix.first() == Some(&b'>') && prefix[1..].iter().all(|&c| matches!(c, b' ' | b'\t' | 0x0b | 0x0c) || c >= 0x80);
+        if spaces == prefix.len() || quoted {
             return true;
         }
         // Later `[`s on this line have this one in their prefix.
@@ -193,6 +244,7 @@ fn walk(source: &str, state: &mut Walk, out: &mut String, mut spans: Option<&mut
                 out.truncate(block_start);
                 let end = segment_end(source, pos, state.options.safe).min(b.len());
                 state.check_definitions(&source[pos..end])?;
+                state.note_block(&source[pos..end]);
                 HANDED_OVER.with(|handed| handed.set(handed.get() + end - pos));
                 TRACE.with(|trace| {
                     if let Some(trace) = trace.borrow_mut().as_mut() {
@@ -290,7 +342,8 @@ fn block<'a>(source: &'a str, pos: usize, state: &mut Walk, lines: &mut Option<L
     let paragraph_lead = match lead {
         b'[' | b'!' | b'(' | b'"' => true,
         b'*' | b'_' => !block::is_thematic_break(line) && block::parse_list_marker(line).is_none(),
-        b'`' => !block::fence_start(line),
+        // Three backticks that are not a fence: extraction would open one.
+        b'`' => !block::fence_start(line) && !line.starts_with("```"),
         _ => false,
     };
     if paragraph_lead && !line.contains(['\t', '|']) {
@@ -303,14 +356,14 @@ fn block<'a>(source: &'a str, pos: usize, state: &mut Walk, lines: &mut Option<L
         return Some((html_block(source, pos, state, lines, out)?, false));
     }
     match lead {
-        b'#' => heading(line, state.options, state.ctx, &mut state.seen, &mut state.text, out)?,
+        b'#' => heading(line, state.options, state.ctx, &mut state.seen, &mut state.text, (&mut state.slug, &mut state.attribute), out)?,
         b'`' => {
             // Extraction tracks fences by its own rule, which can fall out of
             // step with the blocks (after a list item's fence, say): a fence's
             // lines get the same check as any other.
             let mark = out.len();
             let end = fenced_code(source, pos, eol, out)?;
-            if state.check_definitions(&source[pos..end.min(source.len())]).is_none() {
+            if !state.skipped_by_extraction() && state.check_definitions(&source[pos..end.min(source.len())]).is_none() {
                 out.truncate(mark);
                 return None;
             }
@@ -320,11 +373,15 @@ fn block<'a>(source: &'a str, pos: usize, state: &mut Walk, lines: &mut Option<L
         b'-' | b'*' | b'+' | b'0'..=b'9' if table_starts(source, pos) => return Some((checked_table(source, pos, state, out)?, false)),
         b'-' | b'*' | b'+' | b'0'..=b'9' => {
             let mark = out.len();
-            if let Some(next) = list(source, pos, out) {
-                return Some((next, false));
-            }
-            out.truncate(mark);
-            return Some((nested_list(source, pos, state, lines, out)?, false));
+            let next = match list(source, pos, out) {
+                Some(next) => next,
+                None => {
+                    out.truncate(mark);
+                    nested_list(source, pos, state, lines, out)?
+                }
+            };
+            state.note_block(&source[pos..next.min(source.len())]);
+            return Some((next, false));
         }
         _ => return None,
     }
@@ -352,6 +409,7 @@ fn checked_table(source: &str, pos: usize, state: &mut Walk, out: &mut String) -
         out.truncate(mark);
         return None;
     }
+    state.note_block(&source[pos..end]);
     Some(end)
 }
 
@@ -367,7 +425,9 @@ fn html_block<'a>(source: &'a str, pos: usize, state: &mut Walk, lines: &mut Opt
     if value.contains('\t') {
         return None;
     }
-    state.check_definitions(&value)?;
+    if !state.skipped_by_extraction() {
+        state.check_definitions(&value)?;
+    }
     out.push_str(&value);
     Some(lines.starts.get(end + 1).copied().unwrap_or(source.len()))
 }
@@ -442,7 +502,10 @@ fn nested_list<'a>(source: &'a str, pos: usize, state: &mut Walk, lines: &mut Op
         state.check_definitions(&item)?;
         let mut body = String::with_capacity(item.len() + 16);
         let mut spans = Vec::new();
-        walk(&item, state, &mut body, Some(&mut spans))?;
+        state.depth += 1;
+        let walked = walk(&item, state, &mut body, Some(&mut spans));
+        state.depth -= 1;
+        walked?;
         list_item_children(&body, &spans, tight, out);
         out.push_str("</li>");
     }
@@ -748,6 +811,11 @@ fn continues_after(b: &[u8], i: usize) -> Option<bool> {
         return None;
     }
     let line = std::str::from_utf8(&b[next..line_end(b, next)]).ok()?;
+    // A continuation opening with three backticks would be a fence to
+    // extraction (see `Walk::in_step`).
+    if line.starts_with("```") && !block::fence_start(line) {
+        return None;
+    }
     if line.contains(['|', '\t']) || block::setext_underline(line).is_some() {
         return None;
     }
@@ -1208,7 +1276,7 @@ fn code_span(value: &str, out: &mut String, text: Option<&mut String>) {
 /// An ATX heading line. The common shape (ASCII, `#` run, a space, content
 /// with no closing hashes) is read here; anything else, and content outside
 /// the inline subset, goes through the full engine's own functions.
-fn heading(line: &str, options: &Options, ctx: &Ctx, seen: &mut crate::slug::Seen, text: &mut String, out: &mut String) -> Option<()> {
+fn heading(line: &str, options: &Options, ctx: &Ctx, seen: &mut crate::slug::Seen, text: &mut String, buffers: (&mut String, &mut String), out: &mut String) -> Option<()> {
     let b = line.as_bytes();
     let hashes = b.iter().take_while(|&&c| c == b'#').count();
     let simple = (1..=6).contains(&hashes)
@@ -1236,12 +1304,16 @@ fn heading(line: &str, options: &Options, ctx: &Ctx, seen: &mut crate::slug::See
             text.clear();
             if inline(content, out, Some(text)).is_some() {
                 if !text.is_empty() {
-                    let id = crate::slug::unique_slug(crate::slug::slugify(text, options.slug_classic), seen);
-                    let mut attribute = String::with_capacity(id.len() + 6);
+                    // The slug and the ` id="…"` attribute, in reused buffers.
+                    let (slug, attribute) = buffers;
+                    slug.clear();
+                    crate::slug::slugify_into(text, options.slug_classic, slug);
+                    crate::slug::unique_slug_in_place(slug, seen);
+                    attribute.clear();
                     attribute.push_str(" id=\"");
-                    escape_html_into(&mut attribute, &id);
+                    escape_html_into(attribute, slug);
                     attribute.push('"');
-                    out.insert_str(body_start - 1, &attribute);
+                    out.insert_str(body_start - 1, attribute);
                 }
                 close_heading(hashes as u8, out);
                 return Some(());

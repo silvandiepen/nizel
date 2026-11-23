@@ -1,10 +1,12 @@
 //! Native throughput of tier 1 and the full engine on one document.
-//! `cargo run --release --example fastbench -- file.md`.
+//! `cargo run --release --example fastbench -- file.md [--defaults]`: bare
+//! options, or the defaults (heading IDs, autolinks, safe mode).
 use std::time::Instant;
 fn main() {
     let path = std::env::args().nth(1).expect("file");
     let source = std::fs::read_to_string(&path).expect("read");
-    let options = nizel_engine::block::Options { anchors: false, autolinks: false, safe: false, slug_classic: false };
+    let defaults = std::env::args().any(|arg| arg == "--defaults");
+    let options = nizel_engine::block::Options { anchors: defaults, autolinks: defaults, safe: defaults, slug_classic: false };
     let mut out = String::with_capacity(source.len() * 2);
     let rounds = (200_000_000 / source.len().max(1)).max(10);
     for (name, fast) in [("tier 1", true), ("full engine", false)] {

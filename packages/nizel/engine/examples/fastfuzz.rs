@@ -41,6 +41,9 @@ const ATOMS: &[&str] = &[
     "\n*\tx", "\n**x** | y", "\n``x``", "\n`x\n```",
     "\n<div>\nx\n</div>", "\n<p align=\"center\">\n  <img src=\"a.png\">\n</p>", "\n<style>\na {}\n\nb {}\n</style>", "\n<!-- c\n\nd -->", "\n<!-- open", "\n<span>inline</span> text",
     "\n<br>", "\n<x-y>", "\n<?php x ?>", "\n<![CDATA[ x ]]>", "\n<!DOCTYPE html>", "\n</div>", "\n<script>\n[ref]: /u\n</script>", "\n<pre>\n\n</pre>", "\n<a href=\"x\">a</a>", "\n<notatag",
+    "\n- a\n\n  ```\n  x\n\n```\n[ref]: /u\n```", "\n- a\n  ~~~\n", "\n```\n[r]: /x\n```", "\n| a | b |\n|---|---|\n``` | x", "\n| a |\n|---|\n<div> |", "\n> ```\n> x",
+    "\ntext\n```a`b", "\n```a`b c", "\n  ```\n  [q]: /y", "\n<!--\n```\n-->", "\n~~~\n[s]: /z\n~~~", "\n- ```\n\n[t]: /w\n```",
+    "\n>\t[qa]: /u", "\n>  [qb]: /u", "\n>\u{a0}[qc]: /u", "\n>\u{3000} [qd]: /u", "\n> \t[qe]: /u", "\n````\n[qf]: <a b>\n````",
     // Just outside: the tier must decline, never differ.
     "*em*", "**strong**", "_u_", "[link](x)", "<b>", "&amp;", "\\*", "~~d~~", "| a | b |", "a@b.co", "http://e.com",
     "> quote", "- item", "1. one", "+ plus", "===", "--", "\t", "\r\n", ":: note", "[r]: /url", "![i](s)",

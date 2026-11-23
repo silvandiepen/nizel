@@ -68,17 +68,36 @@ pub fn slugify(value: &str, classic: bool) -> String {
     if classic { classic_slug(value) } else { slug_case(value) }
 }
 
+/// `slugify` appended to `slug` (ASCII text without a scratch string).
+pub fn slugify_into(value: &str, classic: bool, slug: &mut String) {
+    if !classic && value.is_ascii() {
+        ascii_slug_case_into(value, slug);
+    } else {
+        slug.push_str(&slugify(value, classic));
+    }
+}
+
 /// `uniqueSlug`.
 pub fn unique_slug(base: String, seen: &mut Seen) -> String {
-    let fallback = if base.is_empty() { "section".to_string() } else { base };
-    // The key is cloned only the first time a slug is seen.
-    if let Some(count) = seen.get_mut(&fallback) {
+    let mut slug = base;
+    unique_slug_in_place(&mut slug, seen);
+    slug
+}
+
+/// `uniqueSlug` on `slug` in place (`section` for an empty one, `-N` for a
+/// repeat). The key is cloned only the first time a slug is seen.
+pub fn unique_slug_in_place(slug: &mut String, seen: &mut Seen) {
+    if slug.is_empty() {
+        slug.push_str("section");
+    }
+    if let Some(count) = seen.get_mut(slug.as_str()) {
         let previous = *count;
         *count += 1;
-        return format!("{fallback}-{}", previous + 1);
+        use std::fmt::Write;
+        let _ = write!(slug, "-{}", previous + 1);
+        return;
     }
-    seen.insert(fallback.clone(), 1);
-    fallback
+    seen.insert(slug.clone(), 1);
 }
 
 /// `value.toLowerCase().replace(/[^\w\s-]/g, '').replace(/[\s_]+/g, '-').replace(/^-+|-+$/g, '')`.
@@ -110,7 +129,7 @@ fn slug_case(value: &str) -> String {
         return String::new();
     }
     if value.is_ascii() {
-        return ascii_slug_case(value.as_bytes());
+        return ascii_slug_case(value);
     }
     // `normalize` (per UTF-16 unit: keep [a-zA-Z0-9 -], fold accents, anything
     // else `_`) and `.replace(/[-_]/g, ' ')` in one pass: every byte here is
@@ -185,29 +204,47 @@ fn slug_case(value: &str) -> String {
 /// run of two or more followed by a lower-case letter (`([A-Z]+)([A-Z][a-z])`,
 /// whose leftmost greedy match always lands there; the first replacement
 /// never splits such a run). Words are lower-cased and joined with `-`.
-fn ascii_slug_case(text: &[u8]) -> String {
-    let class = |c: u8| if c.is_ascii_alphanumeric() { c } else { b' ' };
+fn ascii_slug_case(text: &str) -> String {
     let mut slug = String::with_capacity(text.len());
+    ascii_slug_case_into(text, &mut slug);
+    slug
+}
+
+/// `ascii_slug_case` appended to `slug`.
+fn ascii_slug_case_into(text: &str, slug: &mut String) {
+    let bytes = text.as_bytes();
+    let class = |c: u8| if c.is_ascii_alphanumeric() { c } else { b' ' };
+    let start = slug.len();
     let mut pending = false;
-    for i in 0..text.len() {
-        let c = class(text[i]);
+    let mut i = 0;
+    while i < bytes.len() {
+        let c = class(bytes[i]);
         if c == b' ' {
-            pending = !slug.is_empty();
+            pending = slug.len() > start;
+            i += 1;
             continue;
         }
-        let previous = if i > 0 { class(text[i - 1]) } else { b' ' };
-        let next = text.get(i + 1).map_or(b' ', |&n| class(n));
-        let upper = c.is_ascii_uppercase();
-        if upper && (previous.is_ascii_lowercase() || (previous.is_ascii_uppercase() && next.is_ascii_lowercase())) && !slug.is_empty() {
-            pending = true;
+        if c.is_ascii_uppercase() {
+            let previous = if i > 0 { class(bytes[i - 1]) } else { b' ' };
+            let next = bytes.get(i + 1).map_or(b' ', |&n| class(n));
+            if (previous.is_ascii_lowercase() || (previous.is_ascii_uppercase() && next.is_ascii_lowercase())) && slug.len() > start {
+                pending = true;
+            }
         }
         if pending {
             slug.push('-');
             pending = false;
         }
-        slug.push(c.to_ascii_lowercase() as char);
+        if c.is_ascii_uppercase() {
+            slug.push(c.to_ascii_lowercase() as char);
+            i += 1;
+            continue;
+        }
+        // Lower-case letters and digits never start a word: copy the run.
+        let run = bytes[i..].iter().take_while(|c| c.is_ascii_lowercase() || c.is_ascii_digit()).count();
+        slug.push_str(&text[i..i + run]);
+        i += run;
     }
-    slug
 }
 
 /// `.split(' ').filter(Boolean).map(toLowerCase).join('-')` over ASCII bytes, in one pass.
@@ -241,4 +278,51 @@ fn fold_accent(c: char) -> char {
     let mut upper = c.to_uppercase();
     let is_upper = matches!((upper.next(), upper.next()), (Some(u), None) if u == c);
     if is_upper { base.to_ascii_uppercase() } else { base }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ascii_slug_case;
+
+    /// The byte-at-a-time form `ascii_slug_case` replaced.
+    fn reference(text: &[u8]) -> String {
+        let class = |c: u8| if c.is_ascii_alphanumeric() { c } else { b' ' };
+        let mut slug = String::new();
+        let mut pending = false;
+        for i in 0..text.len() {
+            let c = class(text[i]);
+            if c == b' ' {
+                pending = !slug.is_empty();
+                continue;
+            }
+            let previous = if i > 0 { class(text[i - 1]) } else { b' ' };
+            let next = text.get(i + 1).map_or(b' ', |&n| class(n));
+            if c.is_ascii_uppercase() && (previous.is_ascii_lowercase() || (previous.is_ascii_uppercase() && next.is_ascii_lowercase())) && !slug.is_empty() {
+                pending = true;
+            }
+            if pending {
+                slug.push('-');
+                pending = false;
+            }
+            slug.push(c.to_ascii_lowercase() as char);
+        }
+        slug
+    }
+
+    #[test]
+    fn ascii_slug_case_matches_the_byte_at_a_time_form() {
+        let alphabet = b"aZB1 -_.";
+        let mut text = Vec::new();
+        for len in 0..=6u32 {
+            for mut n in 0..alphabet.len().pow(len) {
+                text.clear();
+                for _ in 0..len {
+                    text.push(alphabet[n % alphabet.len()]);
+                    n /= alphabet.len();
+                }
+                let s = std::str::from_utf8(&text).expect("ASCII");
+                assert_eq!(ascii_slug_case(s), reference(&text), "{s:?}");
+            }
+        }
+    }
 }

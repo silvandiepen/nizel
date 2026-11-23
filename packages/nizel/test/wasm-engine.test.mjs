@@ -156,3 +156,17 @@ test('a fence-looking line inside a table is a row, not a fence', async () => {
   assert.equal(engineRender(source, 0), await stock.useNizel({ anchors: false, autolinks: false, frontmatter: false, safe: false }).html(source));
   assert.equal(engineRender(source, 1 | 2 | 4), await stock.useNizel().html(source));
 });
+
+test('a quoted definition after a tab or extra spaces defines its reference', async () => {
+  // Found by the JS fuzzer: extraction reads `>`, any one whitespace
+  // character and up to three spaces before a definition's `[`, so tier 1
+  // must not take such a line as plain text.
+  const bare = stock.useNizel({ anchors: false, autolinks: false, frontmatter: false, safe: false });
+  for (const source of [
+    '1. \\_\\\n1) [a](b(c)d)<\n>\t[r]: /urlK\n    code\n\n````\n[a]b]\n[r]: <a b>\n',
+    'text [r]\n\n>  [r]: /u\n\n```\n[x]: /y\n```\n',
+  ]) {
+    assert.equal(engineRender(source, 0), await bare.html(source), JSON.stringify(source));
+    assert.equal(engineRender(source, 1 | 2 | 4), await stock.useNizel().html(source), JSON.stringify(source));
+  }
+});
