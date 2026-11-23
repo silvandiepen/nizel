@@ -14,6 +14,7 @@
 //!   own heading function) and fenced code opening at column 0
 //! - thematic breaks
 //! - tables (cells in the inline subset)
+//! - inline links in their unambiguous shape (`inline_link`)
 //! - emphasis and strong in their unambiguous shape (`emphasis_pair`), and
 //!   intraword underscores
 //! - tight lists of single-line items (`-`, `*`, `+`, or `1.`/`1)`), one
@@ -391,6 +392,13 @@ fn paragraph(source: &str, start: usize, out: &mut String) -> Option<usize> {
                 run = pair.end;
             }
             UNDERSCORE => i = literal_underscores(b, start, i)?,
+            BRACKET => {
+                let link = inline_link(b, start, i)?;
+                out.push_str(&source[run..i]);
+                write_link(source, &link, out, None);
+                i = link.end;
+                run = link.end;
+            }
             _ => return None,
         }
     };
@@ -598,6 +606,7 @@ const OUTSIDE: u8 = 5;
 const NEWLINE: u8 = 6;
 const STAR: u8 = 7;
 const UNDERSCORE: u8 = 8;
+const BRACKET: u8 = 9;
 
 /// What each byte means inside a paragraph. Outside the subset: escapes,
 /// HTML and autolinks, entities, links and images, emphasis,
@@ -611,7 +620,8 @@ static CLASS: [u8; 256] = {
     table[b'\n' as usize] = NEWLINE;
     table[b'*' as usize] = STAR;
     table[b'_' as usize] = UNDERSCORE;
-    let outside = b"\\<&[~|@\t\r";
+    table[b'[' as usize] = BRACKET;
+    let outside = b"\\<&~|@\t\r";
     let mut i = 0;
     while i < outside.len() {
         table[outside[i] as usize] = OUTSIDE;
@@ -677,6 +687,16 @@ fn inline(source: &str, out: &mut String, mut text: Option<&mut String>) -> Opti
                 run = pair.end;
             }
             UNDERSCORE => i = literal_underscores(b, 0, i)?,
+            BRACKET => {
+                let link = inline_link(b, 0, i)?;
+                out.push_str(&source[run..i]);
+                if let Some(text) = text.as_deref_mut() {
+                    text.push_str(&source[run..i]);
+                }
+                write_link(source, &link, out, text.as_deref_mut());
+                i = link.end;
+                run = link.end;
+            }
             _ => return None,
         }
     }
@@ -743,6 +763,70 @@ fn emphasis(source: &str, pair: &EmphasisPair, out: &mut String, text: Option<&m
     out.push('>');
     if let Some(text) = text {
         text.push_str(content);
+    }
+}
+
+/// An inline link in the subset: the label and destination ranges.
+struct Link {
+    label: (usize, usize),
+    destination: (usize, usize),
+    end: usize,
+}
+
+/// `[label](destination)` whose result is provably the full engine's: the
+/// balanced-link pre-scan finds it, the pieces around it parse on their own
+/// (none of them can hold syntax that would reach across it), the label is
+/// plain text on one line, and the destination holds only characters that
+/// `encodeURI` leaves alone and entity decoding never sees, so the href is the
+/// destination as written. Not an image (`![`), not `javascript:`.
+fn inline_link(b: &[u8], floor: usize, open: usize) -> Option<Link> {
+    if open > floor && b[open - 1] == b'!' {
+        return None;
+    }
+    let label_start = open + 1;
+    let mut i = label_start;
+    while i < b.len() && b[i] != b']' {
+        let c = b[i];
+        if !(CLASS[c as usize] == PLAIN || c == b'>' || c == b'"' || c == b':') || c == b'\n' || c == b'(' || c == b')' {
+            return None;
+        }
+        if c == b':' && b[i + 1..].starts_with(b"//") {
+            return None;
+        }
+        i += 1;
+    }
+    let label_end = i;
+    if label_end == label_start || b.get(label_end) != Some(&b']') || b.get(label_end + 1) != Some(&b'(') {
+        return None;
+    }
+    let destination_start = label_end + 2;
+    let mut j = destination_start;
+    while j < b.len() && b[j] != b')' {
+        let c = b[j];
+        if !(c.is_ascii_alphanumeric() || matches!(c, b';' | b',' | b'/' | b'?' | b':' | b'=' | b'+' | b'$' | b'-' | b'_' | b'.' | b'!' | b'~' | b'*' | b'#')) {
+            return None;
+        }
+        j += 1;
+    }
+    if j == destination_start || j >= b.len() {
+        return None;
+    }
+    let destination = &b[destination_start..j];
+    if destination.len() >= 11 && destination[..11].eq_ignore_ascii_case(b"javascript:") {
+        return None;
+    }
+    Some(Link { label: (label_start, label_end), destination: (destination_start, j), end: j + 1 })
+}
+
+fn write_link(source: &str, link: &Link, out: &mut String, text: Option<&mut String>) {
+    out.push_str("<a href=\"");
+    out.push_str(&source[link.destination.0..link.destination.1]);
+    out.push_str("\">");
+    let label = &source[link.label.0..link.label.1];
+    escape_html_into(out, label);
+    out.push_str("</a>");
+    if let Some(text) = text {
+        text.push_str(label);
     }
 }
 

@@ -28,6 +28,9 @@ const ATOMS: &[&str] = &[
     "\n| a | b |\n| --- | --- |\n| 1 | 2 |\n", "\n| L | C | R |\n|:--|:-:|--:|\n| x | y | z |", "a | b\n---|---\nc | d", "\n| one |\n| --- |", "\n| `a|b` | c |\n|---|---|",
     "\n| *em* | **s** |\n|---|---|\n| x |", "\n|a|b|\n|-|-|", "\n| a |\n|---|---|\n| 1 | 2 | 3 |", "\nx\n| a | b |\n|---|---|", "\n| a | b |\n|---|---|\n\n", "\n| a\t| b |\n|---|---|",
     "\n| > q | \"d\" |\n| --- | --- |", "\n|  |  |\n|---|---|", "\n| a | b |\n|---|---|\nnext",
+    " [link](https://example.com/a)", " [two words](/docs/x.md#y)", "[x](y)", " ![img](a.png)", " [js](javascript:alert)", " [js](JavaScript:x)", " [](x)", " [a]()",
+    " [a](b c)", " [a](b(c))", " [a](b \"t\")", " [a][ref]", " [a]", " *[a](b)*", " [a](b)*x*", " `[a](b)`", " [`a`](b)", "# [Head](h)", "\n| [a](b) | c |\n|---|---|",
+    " [a](b%20c)", " [a](b&c)", " [a](<b>)", " [a.b](mailto:x)", " [a](b)c", " [a]  (b)", " [[a]](b)", " [a](b)[c](d)",
     // Just outside: the tier must decline, never differ.
     "*em*", "**strong**", "_u_", "[link](x)", "<b>", "&amp;", "\\*", "~~d~~", "| a | b |", "a@b.co", "http://e.com",
     "> quote", "- item", "1. one", "+ plus", "===", "--", "\t", "\r\n", ":: note", "[r]: /url", "![i](s)",
