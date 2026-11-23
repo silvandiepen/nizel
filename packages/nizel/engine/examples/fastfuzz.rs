@@ -13,6 +13,8 @@ const ATOMS: &[&str] = &[
     "  ", " ", "    indented", "  two",
     "a > b", "say \"hi\"", "`<b>*x*`", "`a|b`", "`[x](y)`", "x: y", "a://b", "`http://e.com`", "` `", "`  `",
     "`\na\n`", "``` ```", "# a > b \"c\"", "# `x` y ##", "#  ", "```\ncode < & >\n```", "```py title\n", "text`", "a `b\n\nc` d", "x `y\n# z` w", "a `\tb`", "```\n\tcode\n```", "# a\tb", "-\t-\t-", "a\r\nb", "`a  ",
+    "# Caf\u{e9}", "#\u{b}x", "# x\u{c}", "# C# guide", "# a #", "# a#", "#   spaced   ", "###### six", "## `code` and > \"q\"",
+    "```rust,ignore", "```c++", "``` js ", "```{1,2}", "```js filename=\"a.js\"", "```j\u{e9}", "```a b", "    ```", "   ```",
     // Just outside: the tier must decline, never differ.
     "*em*", "**strong**", "_u_", "[link](x)", "<b>", "&amp;", "\\*", "~~d~~", "| a | b |", "a@b.co", "http://e.com",
     "> quote", "- item", "1. one", "+ plus", "===", "--", "\t", "\r\n", ":: note", "[r]: /url", "![i](s)",

@@ -49,7 +49,6 @@ fn render_inner(source: &str, options: &Options, out: &mut String) -> Option<()>
     let mut first_block = true;
     let mut pos = 0;
     while pos < b.len() {
-        let eol = line_end(b, pos);
         let lead = b[pos];
         if lead == b'\n' {
             pos += 1;
@@ -58,8 +57,8 @@ fn render_inner(source: &str, options: &Options, out: &mut String) -> Option<()>
         if lead == b' ' {
             // Blank (JavaScript's trim would see only ASCII spaces here); an
             // indented line is outside the subset.
-            if b[pos..eol].iter().all(|&c| c == b' ') {
-                pos = eol + 1;
+            if is_blank_from(b, pos) {
+                pos = line_end(b, pos) + 1;
                 continue;
             }
             return None;
@@ -73,6 +72,7 @@ fn render_inner(source: &str, options: &Options, out: &mut String) -> Option<()>
             pos = paragraph(source, pos, out)?;
             continue;
         }
+        let eol = line_end(b, pos);
         let line = &source[pos..eol];
         if lead != b'`' && line.bytes().any(|c| c == b'\t' || c == b'\r') {
             return None;
@@ -178,10 +178,20 @@ fn paragraph(source: &str, start: usize, out: &mut String) -> Option<usize> {
 /// makes a hard or trimmed soft break.
 fn continues_after(b: &[u8], i: usize) -> Option<bool> {
     let next = i + 1;
-    if b[next..line_end(b, next)].iter().all(|&c| c == b' ') {
+    if is_blank_from(b, next) {
         return Some(false);
     }
     (b[next].is_ascii_alphabetic() && b[i - 1] != b' ').then_some(true)
+}
+
+/// Is the line starting at `at` blank (empty or ASCII spaces only)? Steps
+/// over its spaces instead of searching for its end.
+fn is_blank_from(b: &[u8], at: usize) -> bool {
+    let mut i = at;
+    while i < b.len() && b[i] == b' ' {
+        i += 1;
+    }
+    i >= b.len() || b[i] == b'\n'
 }
 
 /// The end of the paragraph containing `from` (the newline that ends it, or
@@ -318,32 +328,58 @@ fn code_span(value: &str, out: &mut String, text: Option<&mut String>) {
     out.push_str("</code>");
 }
 
-/// An ATX heading line. Content in the subset renders here; anything else
-/// goes through the full engine's heading function, which is exact.
+/// An ATX heading line. The common shape (ASCII, `#` run, a space, content
+/// with no closing hashes) is read here; anything else, and content outside
+/// the inline subset, goes through the full engine's own functions.
 fn heading(line: &str, options: &Options, ctx: &Ctx, seen: &mut HashMap<String, usize>, out: &mut String) -> Option<()> {
+    let b = line.as_bytes();
+    let hashes = b.iter().take_while(|&&c| c == b'#').count();
+    let simple = (1..=6).contains(&hashes)
+        && b.is_ascii()
+        // JavaScript's \s also trims vertical tabs and form feeds.
+        && !b.iter().any(|c| (0x09..=0x0d).contains(c))
+        && (hashes == b.len() || b[hashes] == b' ')
+        && !line.trim_end_matches(' ').ends_with('#');
+    if simple {
+        let content = line[hashes..].trim_matches(' ');
+        let mark = out.len();
+        out.push_str("<h");
+        out.push((b'0' + hashes as u8) as char);
+        if !options.anchors || content.is_empty() {
+            out.push('>');
+            if inline(content, out, None).is_some() {
+                close_heading(hashes as u8, out);
+                return Some(());
+            }
+        } else {
+            let mut body = String::with_capacity(content.len() + 8);
+            let mut text = String::with_capacity(content.len());
+            if inline(content, &mut body, Some(&mut text)).is_some() {
+                if !text.is_empty() {
+                    let id = crate::slug::unique_slug(crate::slug::slugify(&text, options.slug_classic), seen);
+                    out.push_str(" id=\"");
+                    escape_html_into(out, &id);
+                    out.push('"');
+                }
+                out.push('>');
+                out.push_str(&body);
+                close_heading(hashes as u8, out);
+                return Some(());
+            }
+        }
+        out.truncate(mark);
+    }
     let (depth, content) = block::atx_heading(line)?;
     let content = block::trim_closing_heading_hashes(content);
-    let mut body = String::with_capacity(content.len() + 8);
-    let mut text = String::with_capacity(content.len());
-    if inline(&content, &mut body, Some(&mut text)).is_none() {
-        let heading = block::heading(depth, &content, ctx, seen).ok()?;
-        crate::render::render_block(&heading, out);
-        return Some(());
-    }
-    out.push_str("<h");
-    out.push((b'0' + depth) as char);
-    if options.anchors && !text.is_empty() {
-        let id = crate::slug::unique_slug(crate::slug::slugify(&text, options.slug_classic), seen);
-        out.push_str(" id=\"");
-        escape_html_into(out, &id);
-        out.push('"');
-    }
-    out.push('>');
-    out.push_str(&body);
+    let heading = block::heading(depth, &content, ctx, seen).ok()?;
+    crate::render::render_block(&heading, out);
+    Some(())
+}
+
+fn close_heading(depth: u8, out: &mut String) {
     out.push_str("</h");
     out.push((b'0' + depth) as char);
     out.push('>');
-    Some(())
 }
 
 /// A fenced code block opening on the line `start..eol`, as `parseBlocks`
@@ -357,10 +393,18 @@ fn fenced_code(source: &str, start: usize, eol: usize, out: &mut String) -> Opti
         return None;
     }
     let fence = block::opening_fence(opening)?;
-    let info = block::parse_fence_info(fence.info, fence.marker)?;
-    let (filename, highlight_lines) = block::parse_code_meta(&info.meta);
+    // A plain info string (one ASCII word, or none): it is the language, and
+    // there is no filename or highlight list to find in it.
+    let word = fence.info.trim_matches(' ');
+    let (lang, filename, highlight_lines) = if word.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'-' | b'+' | b'.' | b'_' | b'#')) {
+        ((!word.is_empty()).then(|| word.to_string()), None, None)
+    } else {
+        let info = block::parse_fence_info(fence.info, fence.marker)?;
+        let (filename, highlight_lines) = block::parse_code_meta(&info.meta);
+        (info.lang, filename, highlight_lines)
+    };
     out.push_str("<pre><code");
-    if let Some(lang) = info.lang.as_deref().filter(|l| !l.is_empty()) {
+    if let Some(lang) = lang.as_deref().filter(|l| !l.is_empty()) {
         out.push_str(" class=\"language-");
         escape_html_into(out, lang);
         out.push('"');
@@ -380,6 +424,11 @@ fn fenced_code(source: &str, start: usize, eol: usize, out: &mut String) -> Opti
 
     // Does the line starting at `at` close the fence? Its tabs or CR leave the subset.
     let closes = |at: usize| -> Option<Option<usize>> {
+        // A closing fence starts with up to three spaces and the fence marker.
+        let indent = b[at.min(b.len())..].iter().take(3).take_while(|&&c| c == b' ').count();
+        if b.get(at + indent) != Some(&fence.marker) {
+            return Some(None);
+        }
         let end = line_end(b, at);
         let line = &source[at..end];
         if block::closes_fence(line, fence.marker, fence.length) {
