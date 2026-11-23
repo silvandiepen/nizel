@@ -190,7 +190,15 @@ fn segment_end(source: &str, from: usize, safe: bool) -> usize {
         if !first && previous_blank && line.first().is_some_and(|&c| c.is_ascii_alphabetic() || c == b'#' || c == b'`' || c == b'~') {
             return pos;
         }
+        let at_start = first;
         first = false;
+        if line.starts_with(b"::") && (at_start || previous_blank) {
+            if let Some(after) = column_zero_custom_block_end(source, pos, eol) {
+                pos = after;
+                previous_blank = false;
+                continue;
+            }
+        }
         if matches!(line.first(), Some(b'`' | b'~')) {
             if let Some(after) = column_zero_fence_end(source, pos, eol) {
                 pos = after;
@@ -245,6 +253,22 @@ fn may_open_fence(line: &[u8]) -> bool {
         break;
     }
     rest.starts_with(b"```") || rest.starts_with(b"~~~")
+}
+
+/// A custom block (`::name`) opening at column 0 on `start..eol` at a fresh
+/// top-level position (the stretch's start, or after a blank line), read by
+/// the full engine's own `readCustomBlock`: the position after it. None when
+/// the line does not open one.
+fn column_zero_custom_block_end(source: &str, start: usize, eol: usize) -> Option<usize> {
+    block::custom_block_name(crate::js::trim(&source[start..eol]))?;
+    let lines = crate::scan::lines(&source[start..]);
+    let (_, end_index, _) = block::read_custom_block(&lines, 0);
+    let b = source.as_bytes();
+    let mut pos = start;
+    for _ in 0..=end_index {
+        pos = line_end(b, pos) + 1;
+    }
+    Some(pos.min(b.len()))
 }
 
 /// A fenced code block opening at column 0 on `start..eol`, read by the full

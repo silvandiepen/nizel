@@ -661,7 +661,7 @@ fn normalize_paragraph_line(line: &str) -> &str {
 
 
 /// `/^::([A-Za-z][\w-]*)(?:\s+(.*))?$/` on the trimmed line → (name, args source).
-fn custom_block_name(trimmed: &str) -> Option<(&str, &str)> {
+pub(crate) fn custom_block_name(trimmed: &str) -> Option<(&str, &str)> {
     let rest = trimmed.strip_prefix("::")?;
     if !rest.bytes().next().is_some_and(|b| b.is_ascii_alphabetic()) {
         return None;
@@ -729,7 +729,7 @@ fn parse_primitive(value: &str) -> crate::ast::Prop {
 }
 
 /// `readCustomBlock` → (content, end index, props).
-fn read_custom_block(lines: &[&str], start: usize) -> (String, usize, Vec<(String, crate::ast::Prop)>) {
+pub(crate) fn read_custom_block(lines: &[&str], start: usize) -> (String, usize, Vec<(String, crate::ast::Prop)>) {
     let find = |from: usize| (from..lines.len()).find(|&i| js::trim(&lines[i]) == "::");
     let Some(first) = find(start + 1) else {
         return (lines[start + 1..].join("\n"), lines.len() - 1, Vec::new());
