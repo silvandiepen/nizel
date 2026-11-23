@@ -27,6 +27,7 @@ pub mod jsnum;
 pub mod links;
 pub mod refs;
 pub mod render;
+pub mod scan;
 pub mod reverse;
 pub mod slug;
 pub mod status;

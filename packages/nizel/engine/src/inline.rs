@@ -372,15 +372,17 @@ impl<'a> Scanner<'a> {
     /// alternative; every other position is skipped without trying them.
     fn next_token(&mut self, from: usize) -> Option<(usize, usize, Token)> {
         let bytes = self.source.as_bytes();
-        let table = if self.has_at { &TOKEN_START_WITH_AT } else { &TOKEN_START };
+        // With an `@` most bytes are candidates; the table loop is the fast path then.
+        let (table, needles): (&[bool; 256], &[u8]) =
+            if self.has_at { (&TOKEN_START_WITH_AT, &[]) } else { (&TOKEN_START, b"< \\\n`&![~hH") };
         let mut position = from;
-        while position < bytes.len() {
-            if table[bytes[position] as usize] && self.source.is_char_boundary(position) {
-                if let Some((end, token)) = self.match_at(position) {
-                    return Some((position, end, token));
+        while let Some(candidate) = crate::scan::find_in_table(bytes, position, table, needles) {
+            if self.source.is_char_boundary(candidate) {
+                if let Some((end, token)) = self.match_at(candidate) {
+                    return Some((candidate, end, token));
                 }
             }
-            position += 1;
+            position = candidate + 1;
         }
         None
     }

@@ -61,27 +61,12 @@ const fn byte_table(bytes: &[u8]) -> [bool; 256] {
 
 static HTML_SPECIAL: [bool; 256] = byte_table(b"&<>\"");
 
-/// `escapeHtml` from `utils.ts`: jumps from one special byte to the next,
-/// eight bytes at a time.
+/// `escapeHtml` from `utils.ts`: jumps from one special byte to the next.
 pub fn escape_html_into(out: &mut String, text: &str) {
     let bytes = text.as_bytes();
     out.reserve(bytes.len());
     let mut start = 0;
-    let mut index = 0;
-    while index < bytes.len() {
-        let special = if index + 8 <= bytes.len() {
-            let mask = html_special_mask(u64::from_le_bytes(bytes[index..index + 8].try_into().expect("eight bytes")));
-            if mask == 0 {
-                index += 8;
-                continue;
-            }
-            index + (mask.trailing_zeros() / 8) as usize
-        } else if HTML_SPECIAL[bytes[index] as usize] {
-            index
-        } else {
-            index += 1;
-            continue;
-        };
+    while let Some(special) = crate::scan::find_in_table(bytes, start, &HTML_SPECIAL, b"&<>\"") {
         out.push_str(&text[start..special]);
         out.push_str(match bytes[special] {
             b'&' => "&amp;",
@@ -90,20 +75,8 @@ pub fn escape_html_into(out: &mut String, text: &str) {
             _ => "&quot;",
         });
         start = special + 1;
-        index = special + 1;
     }
     out.push_str(&text[start..]);
-}
-
-/// A mask with the high bit set in each byte of `word` that is `&`, `<`,
-/// `>` or `"` (SWAR zero-byte test). Bits above a true match can be false
-/// positives, but the lowest set bit is always the first match.
-#[inline]
-fn html_special_mask(word: u64) -> u64 {
-    const ONES: u64 = 0x0101_0101_0101_0101;
-    const HIGHS: u64 = 0x8080_8080_8080_8080;
-    let zero = |x: u64| x.wrapping_sub(ONES) & !x & HIGHS;
-    zero(word ^ (ONES * b'&' as u64)) | zero(word ^ (ONES * b'<' as u64)) | zero(word ^ (ONES * b'>' as u64)) | zero(word ^ (ONES * b'"' as u64))
 }
 
 static INLINE_SYNTAX: [bool; 256] = byte_table(b"\\`<&\n[]*_~");
@@ -114,11 +87,14 @@ static INLINE_SYNTAX_AUTOLINKS: [bool; 256] = byte_table(b"\\`<&\n[]*_~@h");
 /// `http://` or `https://` (case-sensitive, as the JavaScript checks them).
 pub fn has_inline_syntax(source: &str, autolinks: bool) -> bool {
     let b = source.as_bytes();
-    let table = if autolinks { &INLINE_SYNTAX_AUTOLINKS } else { &INLINE_SYNTAX };
-    for (i, &byte) in b.iter().enumerate() {
-        if table[byte as usize] && (byte != b'h' || b[i..].starts_with(b"http://") || b[i..].starts_with(b"https://")) {
+    let (table, needles): (&[bool; 256], &[u8]) =
+        if autolinks { (&INLINE_SYNTAX_AUTOLINKS, b"\\`<&\n[]*_~@h") } else { (&INLINE_SYNTAX, b"\\`<&\n[]*_~") };
+    let mut at = 0;
+    while let Some(i) = crate::scan::find_in_table(b, at, table, needles) {
+        if b[i] != b'h' || b[i..].starts_with(b"http://") || b[i..].starts_with(b"https://") {
             return true;
         }
+        at = i + 1;
     }
     false
 }

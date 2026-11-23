@@ -41,18 +41,31 @@ fn doc_has_tab() -> bool {
     DOC_HAS_TAB.with(std::cell::Cell::get)
 }
 
+static SOURCE_MARKERS: [bool; 256] = {
+    let mut table = [false; 256];
+    table[b'\r' as usize] = true;
+    table[b'\t' as usize] = true;
+    table[b'|' as usize] = true;
+    table[b']' as usize] = true;
+    table
+};
+
 /// One pass over the source: CR, tab, `|`, and a `]:` pair.
 fn scan_source(markdown: &str) -> (bool, bool, bool, bool) {
     let (mut cr, mut tab, mut pipe, mut reference) = (false, false, false, false);
     let b = markdown.as_bytes();
-    for (i, &c) in b.iter().enumerate() {
-        match c {
+    let mut at = 0;
+    while let Some(i) = crate::scan::find_in_table(b, at, &SOURCE_MARKERS, b"\r\t|]") {
+        match b[i] {
             b'\r' => cr = true,
             b'\t' => tab = true,
             b'|' => pipe = true,
-            b']' if b.get(i + 1) == Some(&b':') => reference = true,
-            _ => {}
+            _ => reference |= b.get(i + 1) == Some(&b':'),
         }
+        if cr && tab && pipe && reference {
+            break;
+        }
+        at = i + 1;
     }
     (cr, tab, pipe, reference)
 }
@@ -68,7 +81,7 @@ pub fn parse_markdown(markdown: &str, options: &Options) -> Result<Vec<Block>> {
         expanded = normalized.split('\n').map(expand_leading_tabs_in_line).collect();
         as_strs(&expanded)
     } else {
-        normalized.split('\n').collect()
+        crate::scan::lines(&normalized)
     };
     let (content, references) = if has_reference && has_possible_reference_definition_start(&normalized) {
         let (content, references) = refs::extract(&base);

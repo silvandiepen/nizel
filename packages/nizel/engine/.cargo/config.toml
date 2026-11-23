@@ -1,0 +1,6 @@
+# WebAssembly SIMD (Safari 16.4+, every current browser and Node): the
+# engine's byte scans compare 16 bytes per instruction. A runtime without it
+# fails to compile the module, which the backend treats as Wasm being
+# unavailable and leaves to JavaScript.
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "target-feature=+simd128"]
