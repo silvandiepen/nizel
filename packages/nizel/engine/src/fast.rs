@@ -47,11 +47,22 @@ fn line_end(b: &[u8], from: usize) -> usize {
 
 fn render_inner(source: &str, options: &Options, out: &mut String) -> Option<()> {
     let b = source.as_bytes();
-    // Document-wide: reference definitions are extracted from the whole
-    // document before any block is parsed, and CR changes how lines split.
-    // Either leaves the whole document to the full engine.
-    if b.windows(2).any(|w| w == b"]:") || crate::scan::find_byte(b, 0, b'\r').is_some() {
+    // Document-wide: CR changes how lines split, and reference definitions
+    // are extracted from the whole document before any block is parsed.
+    // A document with either stays whole with the full engine. Whether it
+    // has definitions is the full engine's own extraction (which skips
+    // fenced code and HTML blocks); with none, it leaves every line as is.
+    if crate::scan::find_byte(b, 0, b'\r').is_some() {
         return None;
+    }
+    if b.windows(2).any(|w| w == b"]:") && block::has_possible_reference_definition_start(source) {
+        if crate::scan::find_byte(b, 0, b'\t').is_some() {
+            return None;
+        }
+        let (_, references) = crate::refs::extract(&crate::scan::lines(source));
+        if !references.is_empty() {
+            return None;
+        }
     }
     let references = References::new();
     let ctx = Ctx { options, references: &references };
@@ -83,7 +94,7 @@ fn render_inner(source: &str, options: &Options, out: &mut String) -> Option<()>
                 // stretch up to the next point where it starts afresh.
                 out.truncate(block_start);
                 let end = segment_end(b, pos, options.safe);
-                let blocks = block::parse_markdown_with_seen(&source[pos..end], options, &mut seen).ok()?;
+                let blocks = block::parse_markdown_with_seen(&source[pos..end], options, &mut seen, false).ok()?;
                 if blocks.is_empty() {
                     out.truncate(before_separator);
                     pos = end;
