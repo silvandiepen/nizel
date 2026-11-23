@@ -844,6 +844,8 @@ fn normalize_document_into(value: &str, out: &mut String) {
     let mut copied = 0;
     while i < b.len() {
         match b[i] {
+            // A single space between words: nothing to remove.
+            b' ' if b.get(i + 1).is_some_and(|next| !matches!(next, b' ' | b'\t' | b'\n')) => i += 2,
             b' ' | b'\t' => {
                 let run = i + b[i..].iter().take_while(|c| **c == b' ' || **c == b'\t').count();
                 if b.get(run) == Some(&b'\n') {
@@ -874,12 +876,23 @@ fn normalize_document_into(value: &str, out: &mut String) {
                 copied = j;
                 i = j;
             }
-            _ => i += 1,
+            _ => {
+                // Jump to the next space, tab or newline.
+                i = crate::scan::find_in_table(b, i + 1, &DOCUMENT_WHITESPACE, b" \t\n").unwrap_or(b.len());
+            }
         }
     }
     out.push_str(&value[copied..]);
     trim_from(out, start_len);
 }
+
+static DOCUMENT_WHITESPACE: [bool; 256] = {
+    let mut table = [false; 256];
+    table[b' ' as usize] = true;
+    table[b'\t' as usize] = true;
+    table[b'\n' as usize] = true;
+    table
+};
 
 /// Trims (JavaScript `trim`) the part of `out` from `start` on, in place.
 fn trim_from(out: &mut String, start: usize) {
@@ -965,18 +978,26 @@ fn normalize_paragraph(value: &str) -> String {
 fn normalize_list_item_body(value: &str) -> String {
     let normalized = normalize_document(value);
     let b = normalized.as_bytes();
-    let mut out = String::with_capacity(normalized.len());
-    let mut i = 0;
-    while i < b.len() {
-        if b[i..].starts_with(b"\n\n") && starts_list_marker(&b[i + 2..]) {
-            out.push('\n');
-            i += 2;
-            continue;
+    // `.replace(/\n\n(?=(?:[-*+]|\d+[.)]) )/g, '\n')`: copy between the matches.
+    let mut out = String::new();
+    let mut copied = 0;
+    let mut at = 0;
+    while let Some(newline) = crate::scan::find_byte(b, at, b'\n') {
+        if b.get(newline + 1) == Some(&b'\n') && starts_list_marker(&b[newline + 2..]) {
+            if out.capacity() == 0 {
+                out.reserve(normalized.len());
+            }
+            out.push_str(&normalized[copied..=newline]);
+            copied = newline + 2;
+            at = newline + 2;
+        } else {
+            at = newline + 1;
         }
-        let len = normalized[i..].chars().next().map_or(1, char::len_utf8);
-        out.push_str(&normalized[i..i + len]);
-        i += len;
     }
+    if copied == 0 {
+        return normalized;
+    }
+    out.push_str(&normalized[copied..]);
     out
 }
 
@@ -1034,16 +1055,19 @@ fn prefix_lines(value: &str, prefix: &str) -> String {
 
 /// `indentContinuation`.
 fn indent_continuation(value: &str, size: usize) -> String {
-    if !value.contains('\n') {
+    let b = value.as_bytes();
+    let Some(first) = crate::scan::find_byte(b, 0, b'\n') else {
         return value.to_string();
+    };
+    let mut out = String::with_capacity(value.len() + size * 8);
+    let mut start = 0;
+    let mut newline = Some(first);
+    while let Some(at) = newline {
+        out.push_str(&value[start..=at]);
+        out.extend(std::iter::repeat_n(' ', size));
+        start = at + 1;
+        newline = crate::scan::find_byte(b, start, b'\n');
     }
-    let mut out = String::with_capacity(value.len() + size * 4);
-    for (index, line) in value.split('\n').enumerate() {
-        if index > 0 {
-            out.push('\n');
-            out.extend(std::iter::repeat_n(' ', size));
-        }
-        out.push_str(line);
-    }
+    out.push_str(&value[start..]);
     out
 }
