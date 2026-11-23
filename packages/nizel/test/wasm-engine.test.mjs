@@ -137,3 +137,14 @@ test('the engine scans paragraphs with @ (a table without a needle list) safely'
     assert.equal(engineRender(source, 0), await stock.useNizel({ anchors: false, autolinks: false, frontmatter: false, safe: false }).html(source), source);
   }
 });
+
+test('a task item opening a fence keeps tier 1 from cutting a stretch inside it', async () => {
+  // Found by the fuzzer: after a task box, an item's content can be a fence,
+  // which stays open across a blank line and takes the next lines lazily.
+  for (const source of [
+    "[r]: /url　||\n- [x] ``` filename='b' {2,1.5,x,0x3,1e1}\n\nlazy[r]: /url\n  - ===",
+    'http://x.y)\n- [x] ```js filename="a.js" {1-3,5}\n\nn-1: 2\n***<https://e.com/a?b>[a [b] c](d)',
+  ]) {
+    assert.equal(engineRender(source, 1 | 2 | 4), await stock.useNizel().html(source), JSON.stringify(source));
+  }
+});

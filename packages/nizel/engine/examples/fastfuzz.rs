@@ -23,6 +23,7 @@ const ATOMS: &[&str] = &[
     " *em*", " **strong**", " *a b*", " **a**b", "a*b*", " *a *b**", " ***x***", " *x*.", " *x*)", "(*x*)", " _x_", " snake_case_name", " *x\ny*",
     " * x*", " *x *", " **x*", " *x**", " *`c`*", " _a_b", "a_", "_", " *x*`c`", "`c`*x*", " *x*:", " *x*?y", " *1*", "*z*", " **a b c**,",
     "\n1. item\n\n   ```swift\n   code\n\n   ```\n", "\n- a\n  ```\n\ntext\n  ```", "\n  ```\nx\n    ```", "\n- ```js", "\n   ~~~\n", "\n      ```", "\n  ````\n  ```\n  ````",
+    "\n- [x] ```js", "\n- [ ] ```\n\nlazy", "\n- [X]\u{3000}```", "\n> - [x] ```", "\n1. [ ] ~~~",
     // Just outside: the tier must decline, never differ.
     "*em*", "**strong**", "_u_", "[link](x)", "<b>", "&amp;", "\\*", "~~d~~", "| a | b |", "a@b.co", "http://e.com",
     "> quote", "- item", "1. one", "+ plus", "===", "--", "\t", "\r\n", ":: note", "[r]: /url", "![i](s)",

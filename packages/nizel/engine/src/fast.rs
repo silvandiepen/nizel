@@ -212,8 +212,8 @@ fn segment_end(source: &str, from: usize, safe: bool) -> usize {
 }
 
 /// Could this line open a fenced code block anywhere: at its start after
-/// indentation, list markers or quote markers (all stripped generously, so
-/// this only ever says yes too often)?
+/// indentation, list markers, task boxes or quote markers (all stripped
+/// generously, so this only ever says yes too often)?
 fn may_open_fence(line: &[u8]) -> bool {
     let mut rest = line;
     loop {
@@ -231,6 +231,16 @@ fn may_open_fence(line: &[u8]) -> bool {
         if digits > 0 && matches!(rest.get(digits), Some(b'.' | b')')) && matches!(rest.get(digits + 1), Some(b' ' | b'\t')) {
             rest = &rest[digits + 1..];
             continue;
+        }
+        // A task box (`taskBox`): `[ ]`, `[x]` or `[X]`, then any JavaScript
+        // whitespace, all of which comes off.
+        if rest.len() >= 3 && rest[0] == b'[' && matches!(rest[1], b' ' | b'x' | b'X') && rest[2] == b']' {
+            let after = std::str::from_utf8(&rest[3..]).unwrap_or("");
+            let trimmed = crate::js::trim_start(after);
+            if trimmed.len() < after.len() {
+                rest = &rest[3 + after.len() - trimmed.len()..];
+                continue;
+            }
         }
         break;
     }
