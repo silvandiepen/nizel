@@ -39,7 +39,9 @@ fn render_block(block: &Block, out: &mut String) {
         Block::Code { code, lang, filename, highlight_lines, .. } => {
             out.push_str("<pre><code");
             if let Some(lang) = lang.as_deref().filter(|l| !l.is_empty()) {
-                attr(out, "class", &format!("language-{lang}"));
+                out.push_str(" class=\"language-");
+                escape_html_into(out, lang);
+                out.push('"');
             }
             if let Some(filename) = filename {
                 attr(out, "data-filename", filename);

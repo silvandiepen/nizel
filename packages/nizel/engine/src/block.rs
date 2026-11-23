@@ -148,18 +148,25 @@ fn parse_blocks(lines: &[&str], ctx: &Ctx, seen: &mut HashMap<String, usize>) ->
 
         if let Some(fence) = opening_fence(line).filter(|_| !letter_start) {
             if let Some(info) = parse_fence_info(fence.info, fence.marker) {
-                let mut code: Vec<String> = Vec::new();
+                // `code.join('\n') + '\n'` built in one buffer; a trailing empty
+                // line at the end of the input is dropped, as the JavaScript pops it.
+                let mut code = String::new();
+                let mut code_lines = 0usize;
+                let mut last_line_start = 0usize;
                 index += 1;
-                while index < lines.len() && !closes_fence(&lines[index], fence.marker, fence.length) {
-                    code.push(strip_fence_indent(&lines[index], fence.indent).to_string());
+                while index < lines.len() && !closes_fence(lines[index], fence.marker, fence.length) {
+                    last_line_start = code.len();
+                    code.push_str(strip_fence_indent(lines[index], fence.indent));
+                    code.push('\n');
+                    code_lines += 1;
                     index += 1;
                 }
-                if index >= lines.len() && code.last().is_some_and(String::is_empty) {
-                    code.pop();
+                if index >= lines.len() && code_lines > 0 && code.len() == last_line_start + 1 {
+                    code.truncate(last_line_start);
                 }
                 let (filename, highlight_lines) = parse_code_meta(&info.meta);
                 children.push(Block::Code {
-                    code: if code.is_empty() { String::new() } else { format!("{}\n", code.join("\n")) },
+                    code,
                     fenced: true,
                     meta: (!info.meta.is_empty()).then(|| info.meta.clone()),
                     lang: info.lang,

@@ -288,7 +288,7 @@ fn trim_trailing_soft_break_space(nodes: &mut [Inline]) {
 
 /// `normalizeCodeSpan` from `parse/code.ts`.
 fn normalize_code_span(code: &str) -> String {
-    let normalized = code.replace("\r\n", " ").replace('\n', " ");
+    let normalized = if code.contains('\n') { code.replace("\r\n", " ").replace('\n', " ") } else { code.to_string() };
     if normalized.starts_with(' ') && normalized.ends_with(' ') && normalized.bytes().any(|b| b != b' ') {
         normalized[1..normalized.len() - 1].to_string()
     } else {
