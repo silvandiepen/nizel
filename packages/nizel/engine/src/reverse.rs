@@ -10,6 +10,8 @@ type Result<T> = std::result::Result<T, i32>;
 pub struct ReverseOptions {
     /// `unsupported: 'preserve'` (the default) rather than `'drop'`.
     pub preserve: bool,
+    /// The caller mapped the input's lone surrogates to markers.
+    pub mapped_surrogates: bool,
     /// Plugin handlers in JavaScript: which elements to offer them.
     pub claim: Option<Claim>,
 }
@@ -114,71 +116,49 @@ fn is_block(tag: &str) -> bool {
     BLOCK_TAGS.contains(&tag)
 }
 
-/// Decoded surrogate entities (`&#xD83D;`) are lone UTF-16 units in the
-/// JavaScript. They travel as `SURROGATE_BASE + (unit - 0xD800)`, which
-/// behaves like a lone surrogate in every check here (not whitespace, not a
-/// word character), and are joined back into characters at the end.
-const SURROGATE_BASE: u32 = 0xe000;
-const SURROGATE_END: u32 = SURROGATE_BASE + 0x800;
+// Decoded surrogate entities (`&#xD83D;`) are lone UTF-16 units in the
+// JavaScript. They travel as markers (`common::marker_for`), which behave like
+// a lone surrogate in every check here (not whitespace, not a word character);
+// the host turns them back into units, so a pair becomes its character.
 
-fn is_surrogate_marker(c: char) -> bool {
-    (SURROGATE_BASE..SURROGATE_END).contains(&(c as u32))
+thread_local! {
+    /// Per conversion: whether the caller mapped the input's lone surrogates
+    /// to markers, whether an entity decoded to a surrogate (a marker), and
+    /// whether one decoded to a real character in the marker range.
+    static MARKERS: std::cell::Cell<(bool, bool, bool)> = const { std::cell::Cell::new((false, false, false)) };
+    static THROWN: std::cell::Cell<f64> = const { std::cell::Cell::new(0.0) };
 }
 
-/// U+E000–U+E7FF in UTF-8 is `EE 80..=9F xx`.
-fn has_surrogate_marker(text: &str) -> bool {
-    let b = text.as_bytes();
-    let mut from = 0;
-    while let Some(offset) = b[from..].iter().position(|&c| c == 0xee) {
-        let at = from + offset;
-        if b.get(at + 1).is_some_and(|next| (0x80..=0x9f).contains(next)) {
-            return true;
-        }
-        from = at + 1;
-    }
-    false
+/// After a conversion: do the markers in its output stand for lone surrogates?
+pub fn output_markers_are_surrogates() -> bool {
+    let (mapped, surrogate, _) = MARKERS.with(std::cell::Cell::get);
+    mapped || surrogate
 }
+
+/// The code point the last `THROWS` status throws for.
+pub fn thrown_code_point() -> f64 {
+    THROWN.with(std::cell::Cell::get)
+}
+
+
 
 pub fn html_to_markdown(html: &str, options: &ReverseOptions) -> Result<String> {
-    if has_surrogate_marker(html) {
-        // The markers would be ambiguous.
-        return Err(status::NEEDS_JAVASCRIPT);
-    }
+    MARKERS.with(|m| m.set((options.mapped_surrogates, false, false)));
+    let genuine_markers = !options.mapped_surrogates && crate::common::has_marker(html);
     let root = parse_html(html)?;
     let doc = Doc { html, preserve: options.preserve, claim: options.claim.as_ref() };
     let mut out = String::with_capacity(html.len());
     for node in &root {
         render_node(node, &doc, &mut out)?;
     }
-    join_surrogates(normalize_document(&out))
+    // Markers must mean one thing: lone surrogates, or real characters.
+    let (mapped, surrogate, real) = MARKERS.with(std::cell::Cell::get);
+    if (mapped || surrogate) && (genuine_markers || real) {
+        return Err(status::NEEDS_JAVASCRIPT);
+    }
+    Ok(normalize_document(&out))
 }
 
-/// Joins adjacent high/low markers into characters; a marker left alone is
-/// a lone surrogate in the JavaScript's output.
-fn join_surrogates(text: String) -> Result<String> {
-    if !has_surrogate_marker(&text) {
-        return Ok(text);
-    }
-    let mut out = String::with_capacity(text.len());
-    let mut chars = text.chars().peekable();
-    while let Some(c) = chars.next() {
-        if !is_surrogate_marker(c) {
-            out.push(c);
-            continue;
-        }
-        let high = c as u32 - SURROGATE_BASE + 0xd800;
-        let low = chars.peek().filter(|n| is_surrogate_marker(**n)).map(|n| *n as u32 - SURROGATE_BASE + 0xd800);
-        match low {
-            Some(low) if (0xd800..0xdc00).contains(&high) && (0xdc00..0xe000).contains(&low) => {
-                chars.next();
-                let code = 0x10000 + ((high - 0xd800) << 10) + (low - 0xdc00);
-                out.push(char::from_u32(code).expect("valid pair"));
-            }
-            _ => return Err(status::NEEDS_JAVASCRIPT),
-        }
-    }
-    Ok(out)
-}
 
 // ---------------------------------------------------------------------------
 // parseHtml
@@ -453,14 +433,25 @@ fn decode_entities(value: &str) -> Result<std::borrow::Cow<'_, str>> {
 }
 
 /// `String.fromCodePoint`: throws above U+10FFFF (left to JavaScript); a
-/// surrogate becomes a marker (see `SURROGATE_BASE`).
+/// surrogate becomes a marker (see `common::marker_base`).
 fn from_code_point(value: f64) -> Result<char> {
     if value > 0x10ffff as f64 {
-        return Err(status::NEEDS_JAVASCRIPT);
+        THROWN.with(|t| t.set(value));
+        return Err(status::THROWS);
     }
     let code = value as u32;
     if (0xd800..0xe000).contains(&code) {
-        return Ok(char::from_u32(SURROGATE_BASE + (code - 0xd800)).expect("marker"));
+        MARKERS.with(|m| {
+            let (mapped, _, real) = m.get();
+            m.set((mapped, true, real));
+        });
+        return Ok(crate::common::marker_for(code));
+    }
+    if crate::common::is_marker_code(code) {
+        MARKERS.with(|m| {
+            let (mapped, surrogate, _) = m.get();
+            m.set((mapped, surrogate, true));
+        });
     }
     char::from_u32(code).ok_or(status::NEEDS_JAVASCRIPT)
 }

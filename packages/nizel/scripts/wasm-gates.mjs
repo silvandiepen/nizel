@@ -113,8 +113,22 @@ if (!onlySection) {
   const suiteLines = suites.split('\n').filter((line) => /^(ok  |FAIL)/.test(line));
   const suitesFailed = suiteLines.filter((line) => line.startsWith('FAIL')).length;
   const testsPassed = suiteLines.reduce((sum, line) => sum + Number(/(\d+) passed/.exec(line)?.[1] ?? 0), 0);
-  const gate3 = `${suiteLines.length - suitesFailed}/${suiteLines.length} suites, ${testsPassed} tests passed${suitesFailed ? ` — **${suitesFailed} failing**` : ''} (features not yet in the engine still fall back to JavaScript; see gate 6)`;
+  const gate3 = `${suiteLines.length - suitesFailed}/${suiteLines.length} suites, ${testsPassed} tests passed${suitesFailed ? ` — **${suitesFailed} failing**` : ''}`;
   console.log('gate 3:', gate3);
+  // Gate 4 is packages/nizel-kit/test/wasm-parity.test.mjs, part of the nizel-kit suite above.
+  const kitLine = suiteLines.find((line) => /\bnizel-kit:/.test(line));
+  const gate4 = kitLine ? `${kitLine.startsWith('ok') ? 'pass' : '**failing**'}: every supportedPlugins profile, both option sets (nizel-kit suite: ${/Tests\s+(.*)$/.exec(kitLine)?.[1]?.trim() ?? kitLine})` : '**not run**';
+
+  let fallbacks;
+  try {
+    fallbacks = execFileSync(process.execPath, [new URL('wasm-fallbacks.mjs', import.meta.url).pathname, '--count', '20000', '--seed', '5'], { encoding: 'utf8' }).trim();
+  } catch (error) {
+    fallbacks = String(error.stdout ?? error).trim();
+  }
+  console.log(fallbacks);
+  const [fallbackSummary, ...fallbackReasons] = fallbacks.split('\n');
+  const onlyNizel002 = fallbackReasons.every((line) => line.includes('NIZEL-002'));
+  const gate6 = `${fallbackSummary.replace(/^fallbacks: /, '')}${fallbackReasons.length ? `: ${fallbackReasons.map((line) => line.slice(0, line.indexOf('  e.g. ')).trim().replace(/\s{2,}/g, ' ')).join('; ')}` : ''}${fallbackReasons.length && onlyNizel002 ? ' — only input the JavaScript never finishes on' : ''}`;
 
   // Speed: the raw engine (encode, render, decode) against useNizel().html.
   const { performance } = await import('node:perf_hooks');
@@ -185,9 +199,9 @@ if (!onlySection) {
     '| --- | --- |',
     '| 2. GFM cases | not built yet |',
     `| 3. Nizel suite through Wasm entry points | ${gate3} |`,
-    '| 4. nizel-kit parity, every profile | not built yet |',
+    `| 4. nizel-kit parity, every profile | ${gate4} |`,
     `| 5. Differential fuzzer (seed 7) | ${fuzz.replace(/^fuzz: /, 'forward: ').replace(/\n/g, '; ')} |`,
-    '| 6. Zero syntax fallbacks | not met (engine declines unported syntax) |',
+    `| 6. Fallbacks (nizel/wasm and every nizel-kit/wasm profile, fixtures + 20k fuzz) | ${gate6} |`,
     '| 7. Lezin iPhone tests | not run |',
     '| Speed (≥5x, cold start, size) | forward measured below (raw engine, not yet behind the entry points) |',
     '',

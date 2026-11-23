@@ -8,7 +8,7 @@ import { isDeepStrictEqual } from 'node:util';
 import * as stock from '../dist/index.js';
 import * as wasmEntry from '../dist/wasm.js';
 import { parseMarkdown } from '../dist/parse.js';
-import { parseWasm } from '../dist/wasm/backend.js';
+import { parseWasm, renderWasm, reverseWasm } from '../dist/wasm/backend.js';
 import { taskListPlugin } from '../../plugin-task-list/dist/index.js';
 import { hiddenCommentsPlugin } from '../../nizel-plugin-hidden-comments/dist/index.js';
 import { autolinkPlugin } from '../../plugin-autolink/dist/index.js';
@@ -30,7 +30,14 @@ const { instance } = await WebAssembly.instantiate(bytes, { env: { claim: () => 
 const { memory, input, output, render, reverse } = instance.exports;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
+// The real backend paths: they map lone surrogates and reproduce throws.
+const optionsFor = (flags) => (flags & 4 ? {} : { anchors: false, autolinks: false, safe: false });
 const engineRender = (source, flags) => {
+  const result = renderWasm(source, optionsFor(flags));
+  lastStatus = result === undefined ? -1 : 0;
+  return result;
+};
+const rawEngineRender = (source, flags) => {
   const encoded = encoder.encode(source);
   const at = input(encoded.length);
   new Uint8Array(memory.buffer, at, encoded.length).set(encoded);
@@ -39,12 +46,14 @@ const engineRender = (source, flags) => {
   return length < 0 ? undefined : decoder.decode(new Uint8Array(memory.buffer, output(), length));
 };
 let lastStatus = 0;
+/** reverseWasm's result, `{ threw }` with the message, or -3 when it leaves the input to JavaScript. */
 const engineReverse = (source, flags) => {
-  const encoded = encoder.encode(source);
-  const at = input(encoded.length);
-  new Uint8Array(memory.buffer, at, encoded.length).set(encoded);
-  const length = reverse(encoded.length, flags);
-  return length < 0 ? length : decoder.decode(new Uint8Array(memory.buffer, output(), length));
+  try {
+    const result = reverseWasm(source, flags & 16 ? { unsupported: 'drop' } : {});
+    return result === undefined ? -3 : result;
+  } catch (error) {
+    return { threw: `${error.constructor.name}: ${error.message}` };
+  }
 };
 
 // Tag soup for the reverse direction.
@@ -74,18 +83,16 @@ const checkReverse = (html, flags) => {
   let expected;
   try {
     expected = stock.htmlToMarkdown(html, flags & 16 ? { unsupported: 'drop' } : {});
-  } catch {
-    expected = undefined;
+  } catch (error) {
+    expected = { threw: `${error.constructor.name}: ${error.message}` };
   }
   const actual = engineReverse(html, flags);
   if (actual === -3) {
     reverseDeferred += 1;
-    // The engine hands back exactly the inputs JavaScript throws on or answers with a lone surrogate.
-    if (expected !== undefined && expected.isWellFormed()) reverseDiffs.push({ html, flags, expected, actual: 'deferred to JavaScript' });
     return;
   }
   reverseCompared += 1;
-  if (actual !== expected) reverseDiffs.push({ html, flags, expected, actual });
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) reverseDiffs.push({ html, flags, expected, actual });
 };
 
 const random = (n) => {
@@ -108,6 +115,7 @@ const atoms = [
   '\n[r]: <a b>\n', '[r]:\n/u', '[ r ]: /u', '[\\]]: /x', '[a]b]', '[a [b] c](d)', '[a](b(c)d)', '[a](b\\)c)', '[`]`](x)',
   '[<b>](c)', '[a](javascript:x)', '\n<div>\n', '<div>', '</div>', '<pre>', '</pre>', '<!-- x\n', '<?x', '<!X', '<![CDATA[', ']]>',
   '<script>', '</SCRIPT>', '<span a=1>', '<x\ny>', '(', ')', '"', '\n> [q]: /q\n',
+  '\ud800', '\ude80', '\ud83d', '\ud83d\ude80', '\ue000', '\ue7ff', '&#xE000;', '*\udc00*', '[\ud800](x)',
   '\n```\n', '\n```js\n', '\n~~~ py\n', '```js filename="a.js" {1-3,5}\n', "``` filename='b' {2,1.5,x,0x3,1e1}\n", '\n````\n',
   '\n    code\n', '\n\tcode\n', '\n> ', '\n>> ', '\n > > ', '\n>\t', '\n- ', '\n  - ', '\n    - ', '\n* ', '\n+ ', '\n1. ',
   '\n2. ', '\n1) ', '\n10. ', '\n- [ ] ', '\n- [x] ', '\n* [X] ', '\n-\t', '\n1.\t', '\n   ', '\n\n- ', '\n\n  ', '\n> - ',
@@ -141,15 +149,18 @@ const pluginStock = stock.useNizel({ plugins: pluginProfile });
 let pluginCompared = 0;
 const pluginDiffs = [];
 const checkPluginReverse = (html) => {
-  let expected;
-  try {
-    expected = stock.htmlToMarkdown(html, { plugins: pluginProfile });
-  } catch {
-    return;
-  }
+  const outcome = (convert) => {
+    try {
+      return convert();
+    } catch (error) {
+      return { threw: `${error.constructor.name}: ${error.message}` };
+    }
+  };
+  const expected = outcome(() => stock.htmlToMarkdown(html, { plugins: pluginProfile }));
   pluginCompared += 1;
-  const actual = wasmEntry.htmlToMarkdown(html, { plugins: pluginProfile });
-  if (actual !== expected) pluginDiffs.push({ markdown: html, expected, actual });
+  // Where a handler throws in JavaScript, the entry point throws the same error.
+  const actual = outcome(() => wasmEntry.htmlToMarkdown(html, { plugins: pluginProfile }));
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) pluginDiffs.push({ markdown: html, expected, actual });
 };
 let astCompared = 0;
 const astDiffs = [];

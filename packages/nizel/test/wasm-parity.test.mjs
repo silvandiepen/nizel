@@ -25,8 +25,9 @@ test('uses Wasm in both directions and rejects unsupported input', async () => {
   assert.equal(reverseWasm('<h1 id="different">Hello</h1>'), stock.htmlToMarkdown('<h1 id="different">Hello</h1>'));
   assert.equal(reverseWasm('<table><tr><td>One</td></tr></table>'), stock.htmlToMarkdown('<table><tr><td>One</td></tr></table>'));
   assert.equal(reverseWasm('<p>'+'a'.repeat(1024 * 1024)+'</p>'), undefined);
-  // JavaScript throws on an out-of-range entity; the engine leaves that to it.
-  assert.equal(reverseWasm('<p>&#99999999;</p>'), undefined);
+  // JavaScript throws on an out-of-range entity (NIZEL-003); the engine throws the same error.
+  assert.throws(() => stock.htmlToMarkdown('<p>&#99999999;</p>'), { name: 'RangeError', message: 'Invalid code point 99999999' });
+  assert.throws(() => reverseWasm('<p>&#99999999;</p>'), { name: 'RangeError', message: 'Invalid code point 99999999' });
 });
 
 test('matches forward and reverse HTML on the CommonMark corpus', async () => {

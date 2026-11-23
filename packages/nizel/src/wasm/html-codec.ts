@@ -4,7 +4,7 @@ import type { NizelHtmlDocNode, NizelHtmlElementNode } from '../types.js';
  * Decodes an element subtree serialized by the engine (`encode_element` in
  * engine/src/reverse.rs) into exactly the nodes `parseHtml` builds.
  */
-export function decodeHtmlElement(bytes: Uint8Array): NizelHtmlElementNode {
+export function decodeHtmlElement(bytes: Uint8Array, restore: (text: string) => string = text => text): NizelHtmlElementNode {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const decoder = new TextDecoder();
   let at = 0;
@@ -17,7 +17,7 @@ export function decodeHtmlElement(bytes: Uint8Array): NizelHtmlElementNode {
   /** Reads a length-prefixed UTF-8 string. */
   const str = (): string => {
     const length = u32();
-    const value = decoder.decode(bytes.subarray(at, at + length));
+    const value = restore(decoder.decode(bytes.subarray(at, at + length)));
     at += length;
     return value;
   };

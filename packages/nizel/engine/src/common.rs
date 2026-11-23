@@ -146,8 +146,50 @@ fn parse_int(digits: &str, radix: u32) -> f64 {
     value
 }
 
+thread_local! {
+    /// Set when an entity decodes to U+E000–U+E7FF, the range lone
+    /// surrogates travel in when the caller mapped them.
+    pub static DECODED_MARKER_RANGE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// This conversion's marker characters are lone surrogates.
+    pub static MAPPED_SURROGATES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Lone surrogates travel as `base + (unit - 0xD800)`: the caller picks a
+    /// 2048-character Private Use block the source doesn't use.
+    static MARKER_BASE: std::cell::Cell<u32> = const { std::cell::Cell::new(0xe000) };
+}
+
+/// Sets the marker block: U+E000, U+E800 or U+F000.
+pub fn set_marker_base(base: u32) {
+    MARKER_BASE.with(|b| b.set(if matches!(base, 0xe000 | 0xe800 | 0xf000) { base } else { 0xe000 }));
+}
+
+pub fn marker_base() -> u32 {
+    MARKER_BASE.with(std::cell::Cell::get)
+}
+
+/// Is `code` in the marker block?
+pub fn is_marker_code(code: u32) -> bool {
+    let base = marker_base();
+    (base..base + 0x800).contains(&code)
+}
+
+/// The marker for a surrogate unit.
+pub fn marker_for(unit: u32) -> char {
+    char::from_u32(marker_base() + (unit - 0xd800)).expect("marker")
+}
+
+/// Does `text` hold a marker? The block is one lead byte and 32 second bytes in UTF-8.
+pub fn has_marker(text: &str) -> bool {
+    let base = marker_base();
+    let lead = 0xe0 | (base >> 12) as u8;
+    let low = 0x80 | ((base >> 6) & 0x3f) as u8;
+    text.as_bytes().windows(2).any(|w| w[0] == lead && (low..=low + 0x1f).contains(&w[1]))
+}
+
 /// `decodeCodePoint`.
 fn decode_code_point(entity: &str, code_point: f64) -> String {
+    if code_point >= 0.0 && code_point < 0x110000 as f64 && is_marker_code(code_point as u32) {
+        DECODED_MARKER_RANGE.with(|flag| flag.set(true));
+    }
     if !code_point.is_finite() || code_point == 0.0 || (0xd800 as f64..=0xdfff as f64).contains(&code_point) {
         return "\u{fffd}".to_string();
     }
@@ -159,6 +201,10 @@ fn decode_code_point(entity: &str, code_point: f64) -> String {
 
 /// `normalizeHref`: `encodeURI(destination).replace(/%25([0-9A-Fa-f]{2})/g, '%$1')`.
 pub fn normalize_href(destination: &str) -> String {
+    // `encodeURI` throws on a lone surrogate, and the JavaScript keeps the destination.
+    if MAPPED_SURROGATES.with(std::cell::Cell::get) && has_marker(destination) {
+        return destination.to_string();
+    }
     const KEEP: &[u8] = b";,/?:@&=+$-_.!~*'()#";
     let mut encoded = String::with_capacity(destination.len() + 8);
     for &byte in destination.as_bytes() {

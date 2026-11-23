@@ -3,11 +3,13 @@ import type { NizelBlockNode, NizelInlineNode, NizelRootNode } from '../types.js
 /**
  * Decodes the engine's binary AST (`engine/src/codec.rs`) into exactly the
  * objects `parseMarkdown` builds: the same node types, the same keys
- * (including keys whose value is undefined) in the same order.
+ * (including keys whose value is undefined) in the same order. `restore`
+ * turns lone-surrogate markers back into units.
  */
 export function decodeAst(
   bytes: Uint8Array,
   onCustomBlock?: (node: { name: string; args: string[]; props: Record<string, unknown>; value: unknown }, content: string) => void,
+  restore: (text: string) => string = text => text,
 ): NizelRootNode {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const decoder = new TextDecoder();
@@ -30,7 +32,7 @@ export function decodeAst(
   /** Reads a length-prefixed UTF-8 string. */
   const str = (): string => {
     const length = u32();
-    const value = decoder.decode(bytes.subarray(at, at + length));
+    const value = restore(decoder.decode(bytes.subarray(at, at + length)));
     at += length;
     return value;
   };

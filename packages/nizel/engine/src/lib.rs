@@ -79,6 +79,8 @@ pub mod flags {
     pub const HANDLERS: u32 = 32;
     /// A handler without declared tags: offer every element.
     pub const HANDLERS_ALL: u32 = 64;
+    /// The caller mapped lone surrogates to U+E000 + (unit - 0xD800).
+    pub const MAPPED_SURROGATES: u32 = 128;
 }
 
 #[unsafe(no_mangle)]
@@ -110,13 +112,35 @@ pub extern "C" fn parse(len: usize, flags: u32) -> i32 {
     let result = INPUT.with(|input| {
         let input = input.borrow();
         let source = std::str::from_utf8(&input[..len.min(input.len())]).map_err(|_| status::INVALID_UTF8)?;
-        block::parse_markdown(source, &parse_options(flags)).map(|blocks| codec::encode(&blocks))
+        common::DECODED_MARKER_RANGE.with(|flag| flag.set(false));
+    common::MAPPED_SURROGATES.with(|flag| flag.set(flags & flags::MAPPED_SURROGATES != 0));
+        let blocks = block::parse_markdown(source, &parse_options(flags))?;
+        check_forward_markers(flags)?;
+        Ok(codec::encode(&blocks))
     });
     arena_end();
     match result {
         Ok(bytes) => publish(&bytes),
         Err(code) => code,
     }
+}
+
+/// Picks the Private Use block lone surrogates travel in (see `common::marker_base`).
+#[unsafe(no_mangle)]
+pub extern "C" fn set_marker_base(base: u32) {
+    common::set_marker_base(base);
+}
+
+/// After `reverse`: 1 when markers in the output stand for lone surrogates.
+#[unsafe(no_mangle)]
+pub extern "C" fn markers() -> i32 {
+    i32::from(reverse::output_markers_are_surrogates())
+}
+
+/// After a `THROWS` status: the code point `String.fromCodePoint` throws for.
+#[unsafe(no_mangle)]
+pub extern "C" fn thrown_code_point() -> f64 {
+    reverse::thrown_code_point()
 }
 
 #[unsafe(no_mangle)]
@@ -130,7 +154,11 @@ pub extern "C" fn reverse(len: usize, flags: u32) -> i32 {
             all: flags & flags::HANDLERS_ALL != 0,
             tags: tags.split('\n').filter(|t| !t.is_empty()).map(str::to_string).collect(),
         });
-        let options = reverse::ReverseOptions { preserve: flags & flags::DROP_UNSUPPORTED == 0, claim };
+        let options = reverse::ReverseOptions {
+            preserve: flags & flags::DROP_UNSUPPORTED == 0,
+            mapped_surrogates: flags & flags::MAPPED_SURROGATES != 0,
+            claim,
+        };
         out.push_str(&reverse::html_to_markdown(source, &options)?);
         Ok(())
     })
@@ -161,15 +189,28 @@ fn parse_options(flags: u32) -> block::Options {
 }
 
 /// Markdown → HTML. Mirrors `renderHtml(parseMarkdown(source, options))`.
+/// With mapped surrogates, a decoded U+E000–U+E7FF would read as one.
+fn check_forward_markers(flags: u32) -> Result<(), i32> {
+    let decoded = common::DECODED_MARKER_RANGE.with(|flag| flag.replace(false));
+    if flags & flags::MAPPED_SURROGATES != 0 && decoded { Err(status::NEEDS_JAVASCRIPT) } else { Ok(()) }
+}
+
 pub fn render_markdown(source: &str, flags: u32, out: &mut String) -> Result<(), i32> {
+    common::DECODED_MARKER_RANGE.with(|flag| flag.set(false));
+    common::MAPPED_SURROGATES.with(|flag| flag.set(flags & flags::MAPPED_SURROGATES != 0));
     let blocks = block::parse_markdown(source, &parse_options(flags))?;
+    check_forward_markers(flags)?;
     render::render_blocks(&blocks, out);
     Ok(())
 }
 
 /// HTML → Markdown. Mirrors `htmlToMarkdown(source)`.
 pub fn reverse_html(source: &str, flags: u32, out: &mut String) -> Result<(), i32> {
-    let options = reverse::ReverseOptions { preserve: flags & flags::DROP_UNSUPPORTED == 0, claim: None };
+    let options = reverse::ReverseOptions {
+        preserve: flags & flags::DROP_UNSUPPORTED == 0,
+        mapped_surrogates: flags & flags::MAPPED_SURROGATES != 0,
+        claim: None,
+    };
     out.push_str(&reverse::html_to_markdown(source, &options)?);
     Ok(())
 }

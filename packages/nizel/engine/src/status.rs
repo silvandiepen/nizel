@@ -7,3 +7,6 @@ pub const INVALID_UTF8: i32 = -2;
 /// The JavaScript throws or produces a lone surrogate here, neither of
 /// which crosses as UTF-8; the caller lets JavaScript produce it.
 pub const NEEDS_JAVASCRIPT: i32 = -3;
+/// The JavaScript throws here (`String.fromCodePoint` on an out-of-range
+/// entity); `thrown_code_point` holds the value it throws for.
+pub const THROWS: i32 = -4;
