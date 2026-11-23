@@ -39,6 +39,8 @@ const ATOMS: &[&str] = &[
     "\n**Bold start** text", "\n*em start* x", "\n`code` start", "\n[link](u) start", "\n[ref]: /def", "\n![i](a.png) x", "\n(paren) x", "\n\"q\" x", "\n_u_ x",
     "\ntext\n**more**", "\ntext\n`c` more", "\ntext\n[l](u)", "\ntext\n[ref]: /x", "\ntext\n2. not", "\ntext\n#tag", "\ntext\n-x", "\ntext\n+x", "\n**a\n**b",
     "\n*\tx", "\n**x** | y", "\n``x``", "\n`x\n```",
+    "\n<div>\nx\n</div>", "\n<p align=\"center\">\n  <img src=\"a.png\">\n</p>", "\n<style>\na {}\n\nb {}\n</style>", "\n<!-- c\n\nd -->", "\n<!-- open", "\n<span>inline</span> text",
+    "\n<br>", "\n<x-y>", "\n<?php x ?>", "\n<![CDATA[ x ]]>", "\n<!DOCTYPE html>", "\n</div>", "\n<script>\n[ref]: /u\n</script>", "\n<pre>\n\n</pre>", "\n<a href=\"x\">a</a>", "\n<notatag",
     // Just outside: the tier must decline, never differ.
     "*em*", "**strong**", "_u_", "[link](x)", "<b>", "&amp;", "\\*", "~~d~~", "| a | b |", "a@b.co", "http://e.com",
     "> quote", "- item", "1. one", "+ plus", "===", "--", "\t", "\r\n", ":: note", "[r]: /url", "![i](s)",

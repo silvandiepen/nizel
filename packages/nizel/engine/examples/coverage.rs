@@ -1,11 +1,17 @@
 //! Tier-1 coverage: the share of each document's bytes tier 1 renders itself.
 //! `cargo run --release --example coverage -- [--why] file.md...`; with
-//! `--why`, also the largest stretches handed to the full engine.
+//! `--why`, also the largest stretches handed to the full engine; with
+//! `--bare`, under bare options (no heading IDs, autolinks or safe mode).
 fn main() {
-    let options = nizel_engine::block::Options { anchors: true, autolinks: true, safe: true, slug_classic: false };
+    let bare = std::env::args().any(|arg| arg == "--bare");
+    let options = if bare {
+        nizel_engine::block::Options { anchors: false, autolinks: false, safe: false, slug_classic: false }
+    } else {
+        nizel_engine::block::Options { anchors: true, autolinks: true, safe: true, slug_classic: false }
+    };
     let (mut all, mut handed) = (0usize, 0usize);
     let why = std::env::args().any(|arg| arg == "--why");
-    for path in std::env::args().skip(1).filter(|arg| arg != "--why") {
+    for path in std::env::args().skip(1).filter(|arg| arg != "--why" && arg != "--bare") {
         let source = std::fs::read_to_string(&path).expect("read");
         nizel_engine::fast::trace_handed_over(why);
         let accepted = nizel_engine::fast::render(&source, &options, &mut String::new());

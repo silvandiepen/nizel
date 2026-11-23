@@ -258,6 +258,12 @@ pub fn read_html_block(lines: &[&str], start: usize) -> Option<(String, usize)> 
     None
 }
 
+/// Whether `readHtmlBlock` reads a block starting at `line` (it decides on
+/// that line alone).
+pub fn starts_html_block(line: &str) -> bool {
+    read_html_block(&[line], 0).is_some()
+}
+
 /// `isInterruptingHtmlBlockStart`.
 pub fn is_interrupting_html_block_start(line: &str) -> bool {
     if !html_line_start(line) {

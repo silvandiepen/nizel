@@ -275,6 +275,9 @@ fn block<'a>(source: &'a str, pos: usize, state: &mut Walk, lines: &mut Option<L
     if lead != b'`' && line.bytes().any(|c| c == b'\t' || c == b'\r') {
         return None;
     }
+    if lead == b'<' && !state.options.safe {
+        return Some((html_block(source, pos, state, lines, out)?, false));
+    }
     match lead {
         b'#' => heading(line, state.options, state.ctx, &mut state.seen, &mut state.text, out)?,
         b'`' => {
@@ -326,6 +329,23 @@ fn checked_table(source: &str, pos: usize, state: &mut Walk, out: &mut String) -
         return None;
     }
     Some(end)
+}
+
+/// A column-0 HTML block (`safe: false`), read by the full engine's own
+/// `readHtmlBlock` at this line, as `parseBlocks` tries it first. Its lines
+/// get the reference-definition check (extraction skips HTML blocks by a
+/// rule of its own).
+fn html_block<'a>(source: &'a str, pos: usize, state: &mut Walk, lines: &mut Option<Lines<'a>>, out: &mut String) -> Option<usize> {
+    let lines = lines.get_or_insert_with(|| Lines::new(source));
+    let index = lines.index_of(pos);
+    let (value, end) = crate::html::read_html_block(&lines.lines, index)?;
+    // The full engine reads the block from tab-expanded lines.
+    if value.contains('\t') {
+        return None;
+    }
+    state.check_definitions(&value)?;
+    out.push_str(&value);
+    Some(lines.starts.get(end + 1).copied().unwrap_or(source.len()))
 }
 
 /// `isTableStart` at `pos`: the line holds `|` and the next is a delimiter row.
@@ -449,7 +469,7 @@ fn list_item_children(body: &str, spans: &[Span], tight: bool, out: &mut String)
 
 /// Where a stretch handed to the full engine can end: the first line, after
 /// at least one line, that follows a blank line and starts at column 0 with
-/// an ASCII letter, `#` or a fence. There the full engine starts a new
+/// an ASCII letter, `#`, a fence or `<`. There the full engine starts a new
 /// top-level block whatever came before: a blank line ends paragraphs,
 /// quotes, tables and setext candidates, and a column-0 line that is not a
 /// list marker ends any list item and indented code.
@@ -459,8 +479,9 @@ fn list_item_children(body: &str, spans: &[Span], tight: bool, out: &mut String)
 /// it exactly, by the full engine's own fence rules. Constructs that can
 /// span blank lines past a boundary send the rest of the document instead:
 /// any other line that could open a fence (an indented fence keeps a list
-/// item open across blank lines), custom blocks, and HTML blocks when HTML
-/// is allowed.
+/// item open across blank lines), custom blocks, and lines that start an
+/// HTML block when HTML is allowed (a stretch ending at a `<` boundary holds none: its own `<`
+/// lines would have sent the rest already).
 fn segment_end(source: &str, from: usize, safe: bool) -> usize {
     let b = source.as_bytes();
     let mut pos = from;
@@ -469,7 +490,7 @@ fn segment_end(source: &str, from: usize, safe: bool) -> usize {
     while pos < b.len() {
         let eol = line_end(b, pos);
         let line = &b[pos..eol];
-        if !first && previous_blank && line.first().is_some_and(|&c| c.is_ascii_alphabetic() || c == b'#' || c == b'`' || c == b'~') {
+        if !first && previous_blank && line.first().is_some_and(|&c| c.is_ascii_alphabetic() || matches!(c, b'#' | b'`' | b'~' | b'<')) {
             return pos;
         }
         let at_start = first;
@@ -493,7 +514,7 @@ fn segment_end(source: &str, from: usize, safe: bool) -> usize {
         let indent = line.iter().take_while(|&&c| c == b' ').count();
         let hazard = may_open_fence(line)
             || line[indent..].starts_with(b"::")
-            || (!safe && indent <= 3 && line.get(indent) == Some(&b'<'));
+            || (!safe && indent <= 3 && line.get(indent) == Some(&b'<') && std::str::from_utf8(line).map_or(true, crate::html::starts_html_block));
         if hazard {
             return b.len();
         }
