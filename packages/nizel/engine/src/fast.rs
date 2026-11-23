@@ -176,8 +176,9 @@ fn block(source: &str, pos: usize, options: &Options, ctx: &Ctx, seen: &mut crat
 /// at least two columns, quote lines start with `>`), so the scan steps over
 /// it exactly, by the full engine's own fence rules. Constructs that can
 /// span blank lines past a boundary send the rest of the document instead:
-/// any other fence-like text (an indented fence keeps a list item open
-/// across blank lines), custom blocks, and HTML blocks when HTML is allowed.
+/// any other line that could open a fence (an indented fence keeps a list
+/// item open across blank lines), custom blocks, and HTML blocks when HTML
+/// is allowed.
 fn segment_end(source: &str, from: usize, safe: bool) -> usize {
     let b = source.as_bytes();
     let mut pos = from;
@@ -198,7 +199,7 @@ fn segment_end(source: &str, from: usize, safe: bool) -> usize {
             }
         }
         let indent = line.iter().take_while(|&&c| c == b' ').count();
-        let hazard = line.windows(3).any(|w| w == b"```" || w == b"~~~")
+        let hazard = may_open_fence(line)
             || line[indent..].starts_with(b"::")
             || (!safe && indent <= 3 && line.get(indent) == Some(&b'<'));
         if hazard {
@@ -208,6 +209,32 @@ fn segment_end(source: &str, from: usize, safe: bool) -> usize {
         pos = eol + 1;
     }
     b.len()
+}
+
+/// Could this line open a fenced code block anywhere: at its start after
+/// indentation, list markers or quote markers (all stripped generously, so
+/// this only ever says yes too often)?
+fn may_open_fence(line: &[u8]) -> bool {
+    let mut rest = line;
+    loop {
+        let blank = rest.iter().take_while(|&&c| c == b' ' || c == b'\t').count();
+        rest = &rest[blank..];
+        if let Some(after) = rest.strip_prefix(b">") {
+            rest = after;
+            continue;
+        }
+        if matches!(rest.first(), Some(b'-' | b'*' | b'+')) && matches!(rest.get(1), Some(b' ' | b'\t')) {
+            rest = &rest[1..];
+            continue;
+        }
+        let digits = rest.iter().take_while(|c| c.is_ascii_digit()).count();
+        if digits > 0 && matches!(rest.get(digits), Some(b'.' | b')')) && matches!(rest.get(digits + 1), Some(b' ' | b'\t')) {
+            rest = &rest[digits + 1..];
+            continue;
+        }
+        break;
+    }
+    rest.starts_with(b"```") || rest.starts_with(b"~~~")
 }
 
 /// A fenced code block opening at column 0 on `start..eol`, read by the full
