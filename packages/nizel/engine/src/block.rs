@@ -531,7 +531,7 @@ fn is_table_start(lines: &[&str], index: usize) -> bool {
 }
 
 /// `/^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/`
-fn is_table_delimiter_row(line: &str) -> bool {
+pub(crate) fn is_table_delimiter_row(line: &str) -> bool {
     let mut rest = js::trim_start(line);
     rest = rest.strip_prefix('|').unwrap_or(rest);
     let cells: Vec<&str> = rest.split('|').collect();
@@ -754,14 +754,14 @@ fn is_prop_or_blank(line: &str) -> bool {
 }
 
 /// `splitTableRow`: trim, drop one leading and one trailing pipe, split on `|`.
-fn split_table_row(line: &str) -> Vec<&str> {
+pub(crate) fn split_table_row(line: &str) -> Vec<&str> {
     let t = js::trim(line);
     let start = usize::from(t.starts_with('|'));
     let end = if t.len() > start && t.ends_with('|') { t.len() - 1 } else { t.len() };
     t[start..end].split('|').collect()
 }
 
-fn cell_alignment(cell: &str) -> Option<&'static str> {
+pub(crate) fn cell_alignment(cell: &str) -> Option<&'static str> {
     let trimmed = js::trim(cell);
     match (trimmed.starts_with(':'), trimmed.ends_with(':')) {
         (true, true) => Some("center"),

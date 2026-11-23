@@ -13,6 +13,7 @@
 //! - ATX headings (content outside the subset goes through the full engine's
 //!   own heading function) and fenced code opening at column 0
 //! - thematic breaks
+//! - tables (cells in the inline subset)
 //! - emphasis and strong in their unambiguous shape (`emphasis_pair`), and
 //!   intraword underscores
 //! - tight lists of single-line items (`-`, `*`, `+`, or `1.`/`1)`), one
@@ -147,6 +148,18 @@ fn defines_references(source: &str) -> bool {
 fn block(source: &str, pos: usize, options: &Options, ctx: &Ctx, seen: &mut crate::slug::Seen, text: &mut String, out: &mut String) -> Option<usize> {
     let b = source.as_bytes();
     let lead = b[pos];
+    // `isTableStart` comes before paragraphs (and after every construct
+    // that cannot hold a `|` line at a block start).
+    if lead == b'|' || lead.is_ascii_alphabetic() {
+        let eol = line_end(b, pos);
+        if source[pos..eol].contains('|') && eol < b.len() {
+            let next_eol = line_end(b, eol + 1);
+            let next = &source[eol + 1..next_eol];
+            if !next.is_empty() && block::is_table_delimiter_row(next) {
+                return table(source, pos, out);
+            }
+        }
+    }
     if lead.is_ascii_alphabetic() {
         return paragraph(source, pos, out);
     }
@@ -199,7 +212,9 @@ fn segment_end(source: &str, from: usize, safe: bool) -> usize {
                 continue;
             }
         }
-        if matches!(line.first(), Some(b'`' | b'~')) {
+        // A fence-looking line holding `|` right after another line can be a
+        // table row (rows go on while a line holds `|`), not a fence.
+        if matches!(line.first(), Some(b'`' | b'~')) && (at_start || previous_blank || !line.contains(&b'|')) {
             if let Some(after) = column_zero_fence_end(source, pos, eol) {
                 pos = after;
                 previous_blank = false;
@@ -433,6 +448,59 @@ fn trim_spaces_end(b: &[u8], floor: usize, mut end: usize) -> usize {
 /// how the whole document is read.
 fn code_span_in_subset(value: &str) -> bool {
     !value.bytes().any(|c| matches!(c, b'[' | b'|' | b'\t' | b'\r'))
+}
+
+/// A table at `start` (header line, then a delimiter row), as `parseBlocks`
+/// reads it: rows go on while a line holds `|`; cells are split on every
+/// `|` (`splitTableRow`, even inside code), trimmed, and rendered by the
+/// inline subset; each row keeps its own cell count and `align` applies by
+/// index. The position after the last row (the next block starts there).
+fn table(source: &str, start: usize, out: &mut String) -> Option<usize> {
+    let b = source.as_bytes();
+    let header_end = line_end(b, start);
+    let delimiter_end = line_end(b, header_end + 1);
+    let align: Vec<Option<&str>> =
+        block::split_table_row(&source[header_end + 1..delimiter_end]).into_iter().map(block::cell_alignment).collect();
+    let row = |line: &str, tag: &str, out: &mut String| -> Option<()> {
+        if line.bytes().any(|c| c == b'\t' || c == b'\r') {
+            return None;
+        }
+        out.push_str("<tr>");
+        for (index, cell) in block::split_table_row(line).into_iter().enumerate() {
+            out.push('<');
+            out.push_str(tag);
+            if let Some(Some(value)) = align.get(index) {
+                out.push_str(" align=\"");
+                out.push_str(value);
+                out.push('"');
+            }
+            out.push('>');
+            inline(crate::js::trim(cell), out, None)?;
+            out.push_str("</");
+            out.push_str(tag);
+            out.push('>');
+        }
+        out.push_str("</tr>");
+        Some(())
+    };
+    if source[header_end + 1..delimiter_end].bytes().any(|c| c == b'\t' || c == b'\r') {
+        return None;
+    }
+    out.push_str("<table><thead>");
+    row(&source[start..header_end], "th", out)?;
+    out.push_str("</thead><tbody>");
+    let mut pos = (delimiter_end + 1).min(b.len());
+    while pos < b.len() {
+        let eol = line_end(b, pos);
+        let line = &source[pos..eol];
+        if !line.contains('|') || crate::js::trim(line).is_empty() {
+            break;
+        }
+        row(line, "td", out)?;
+        pos = (eol + 1).min(b.len());
+    }
+    out.push_str("</tbody></table>");
+    Some(pos)
 }
 
 /// A list item marker at `at`: (ordered, marker byte, start number, content

@@ -148,3 +148,11 @@ test('a task item opening a fence keeps tier 1 from cutting a stretch inside it'
     assert.equal(engineRender(source, 1 | 2 | 4), await stock.useNizel().html(source), JSON.stringify(source));
   }
 });
+
+test('a fence-looking line inside a table is a row, not a fence', async () => {
+  // Found by the tier-1 fuzzer: rows go on while a line holds `|`, so a
+  // column-0 "```a | b" after table rows is a row.
+  const source = '\n10. ten\n| a | b |\n| --- | --- |\n| 1 | 2 |\n```a | b\n---|---\nc | d`a|b`\n- a\n  ```\n\ntext\n  ``` \n007. bond_u_---\n1. item\n\n   ```swift\n   code\n\n   ```\n';
+  assert.equal(engineRender(source, 0), await stock.useNizel({ anchors: false, autolinks: false, frontmatter: false, safe: false }).html(source));
+  assert.equal(engineRender(source, 1 | 2 | 4), await stock.useNizel().html(source));
+});

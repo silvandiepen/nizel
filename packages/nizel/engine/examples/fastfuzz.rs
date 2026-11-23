@@ -25,6 +25,9 @@ const ATOMS: &[&str] = &[
     "\n1. item\n\n   ```swift\n   code\n\n   ```\n", "\n- a\n  ```\n\ntext\n  ```", "\n  ```\nx\n    ```", "\n- ```js", "\n   ~~~\n", "\n      ```", "\n  ````\n  ```\n  ````",
     "\n- [x] ```js", "\n- [ ] ```\n\nlazy", "\n- [X]\u{3000}```", "\n> - [x] ```", "\n1. [ ] ~~~",
     "\n\n::note\nbody\n::\n", "\n\n::warning title\nkey: v\n::\ntext\n::\n", "\n\n::tip\n", "\n::inline-ish", "\n  ::indented\n", "\n\n::bad!\n::\n", "\n\n::\n", "\n- item\n::lazy\n",
+    "\n| a | b |\n| --- | --- |\n| 1 | 2 |\n", "\n| L | C | R |\n|:--|:-:|--:|\n| x | y | z |", "a | b\n---|---\nc | d", "\n| one |\n| --- |", "\n| `a|b` | c |\n|---|---|",
+    "\n| *em* | **s** |\n|---|---|\n| x |", "\n|a|b|\n|-|-|", "\n| a |\n|---|---|\n| 1 | 2 | 3 |", "\nx\n| a | b |\n|---|---|", "\n| a | b |\n|---|---|\n\n", "\n| a\t| b |\n|---|---|",
+    "\n| > q | \"d\" |\n| --- | --- |", "\n|  |  |\n|---|---|", "\n| a | b |\n|---|---|\nnext",
     // Just outside: the tier must decline, never differ.
     "*em*", "**strong**", "_u_", "[link](x)", "<b>", "&amp;", "\\*", "~~d~~", "| a | b |", "a@b.co", "http://e.com",
     "> quote", "- item", "1. one", "+ plus", "===", "--", "\t", "\r\n", ":: note", "[r]: /url", "![i](s)",
