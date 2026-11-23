@@ -66,11 +66,25 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 let cachedEngine: Engine | null | undefined;
 
+/**
+ * The engine's bytes from base64: natively where the runtime has it (Safari
+ * 18.2+), else one pass over `atob`'s output. (A per-byte callback, as in
+ * `Uint8Array.from(text, mapper)`, made this most of the cold start.)
+ */
+function decodeBase64(encoded: string): Uint8Array<ArrayBuffer> {
+  const native = (Uint8Array as unknown as { fromBase64?: (text: string) => Uint8Array<ArrayBuffer> }).fromBase64;
+  if (native) return native(encoded);
+  const text = atob(encoded);
+  const bytes = new Uint8Array(text.length);
+  for (let index = 0; index < text.length; index += 1) bytes[index] = text.charCodeAt(index);
+  return bytes;
+}
+
 /** Lazily initializes the engine and remembers unavailable runtimes. */
 function getEngine(): Engine | null {
   if (cachedEngine !== undefined) return cachedEngine;
   try {
-    const bytes = Uint8Array.from(atob(engineEncoded), character => character.charCodeAt(0));
+    const bytes = decodeBase64(engineEncoded);
     const imports = { env: { claim: (pointer: number, length: number) => claim(pointer, length) } };
     cachedEngine = new WebAssembly.Instance(new WebAssembly.Module(bytes), imports).exports as Engine;
   } catch {
