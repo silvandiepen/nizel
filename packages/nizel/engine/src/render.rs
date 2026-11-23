@@ -13,7 +13,7 @@ pub fn render_blocks(blocks: &[Block], out: &mut String) {
     }
 }
 
-fn render_block(block: &Block, out: &mut String) {
+pub(crate) fn render_block(block: &Block, out: &mut String) {
     match block {
         Block::Heading { depth, id, children } => {
             out.push_str("<h");

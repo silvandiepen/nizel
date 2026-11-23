@@ -16,6 +16,7 @@ pub mod arena;
 pub mod ast;
 pub mod backtrack;
 pub mod block;
+pub mod fast;
 pub mod codec;
 pub mod common;
 pub mod emphasis;
@@ -87,9 +88,11 @@ pub mod flags {
 pub extern "C" fn input(len: usize) -> *mut u8 {
     arena_end();
     INPUT.with(|buffer| {
+        // The host overwrites the bytes it uses: zero only what is new.
         let mut buffer = buffer.borrow_mut();
-        buffer.clear();
-        buffer.resize(len, 0);
+        if buffer.len() < len {
+            buffer.resize(len, 0);
+        }
         buffer.as_mut_ptr()
     })
 }
@@ -123,6 +126,25 @@ pub extern "C" fn parse(len: usize, flags: u32) -> i32 {
         Ok(bytes) => publish(&bytes),
         Err(code) => code,
     }
+}
+
+/// 1 when the first `len` input bytes hold U+FFFD (`EF BF BD`), which is
+/// what `encodeInto` writes for a lone surrogate: only then does the host
+/// need to check the source for one.
+#[unsafe(no_mangle)]
+pub extern "C" fn input_has_replacement(len: usize) -> i32 {
+    INPUT.with(|input| {
+        let input = input.borrow();
+        let bytes = &input[..len.min(input.len())];
+        let mut at = 0;
+        while let Some(i) = scan::find_any_n(bytes, at, [0xef]) {
+            if bytes[i + 1..].starts_with(&[0xbf, 0xbd]) {
+                return 1;
+            }
+            at = i + 1;
+        }
+        0
+    })
 }
 
 /// Picks the Private Use block lone surrogates travel in (see `common::marker_base`).
@@ -165,18 +187,29 @@ pub extern "C" fn reverse(len: usize, flags: u32) -> i32 {
 }
 
 fn convert(len: usize, run: impl FnOnce(&str, &mut String) -> Result<(), i32>) -> i32 {
+    // Render straight into the output buffer (no copy afterwards). Its room is
+    // reserved before the arena starts, so it stays with the system allocator
+    // and outlives the call; growth during the call reallocates it there too.
+    let mut out = String::from_utf8(OUTPUT.with(|output| {
+        let mut bytes = std::mem::take(&mut *output.borrow_mut());
+        bytes.clear();
+        bytes
+    }))
+    .expect("empty");
+    out.reserve(len + len / 4 + 16);
     arena_begin();
     let result = INPUT.with(|input| {
         let input = input.borrow();
         let source = std::str::from_utf8(&input[..len.min(input.len())]).map_err(|_| status::INVALID_UTF8)?;
-        let mut out = String::with_capacity(source.len() + source.len() / 4 + 16);
-        run(source, &mut out).map(|()| out)
+        run(source, &mut out)
     });
     arena_end();
-    match result {
-        Ok(out) => publish(out.as_bytes()),
+    let status = match result {
+        Ok(()) => out.len() as i32,
         Err(code) => code,
-    }
+    };
+    OUTPUT.with(|output| *output.borrow_mut() = out.into_bytes());
+    status
 }
 
 fn parse_options(flags: u32) -> block::Options {
@@ -196,6 +229,15 @@ fn check_forward_markers(flags: u32) -> Result<(), i32> {
 }
 
 pub fn render_markdown(source: &str, flags: u32, out: &mut String) -> Result<(), i32> {
+    // Tier 1 when the document is in its subset (lone-surrogate markers stay with the full engine).
+    if flags & flags::MAPPED_SURROGATES == 0 && fast::render(source, &parse_options(flags), out) {
+        return Ok(());
+    }
+    render_markdown_full(source, flags, out)
+}
+
+/// The full engine alone: the reference for tier 1.
+pub fn render_markdown_full(source: &str, flags: u32, out: &mut String) -> Result<(), i32> {
     common::DECODED_MARKER_RANGE.with(|flag| flag.set(false));
     common::MAPPED_SURROGATES.with(|flag| flag.set(flags & flags::MAPPED_SURROGATES != 0));
     let blocks = block::parse_markdown(source, &parse_options(flags))?;

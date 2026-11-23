@@ -53,3 +53,22 @@ pub fn find_any4(bytes: &[u8], from: usize, needles: [u8; 4]) -> Option<usize> {
     }
     bytes[at.min(bytes.len())..].iter().position(|b| needles.contains(b)).map(|i| at + i)
 }
+
+/// The first index at or after `from` holding any of `N` bytes, eight bytes
+/// at a time.
+#[inline]
+pub fn find_any_n<const N: usize>(bytes: &[u8], from: usize, needles: [u8; N]) -> Option<usize> {
+    let mut at = from;
+    while at + 8 <= bytes.len() {
+        let word = u64::from_le_bytes(bytes[at..at + 8].try_into().expect("eight bytes"));
+        let mut hits = 0;
+        for needle in needles {
+            hits |= equal_bytes(word, needle);
+        }
+        if hits != 0 {
+            return Some(at + (hits.trailing_zeros() / 8) as usize);
+        }
+        at += 8;
+    }
+    bytes[at.min(bytes.len())..].iter().position(|b| needles.contains(b)).map(|i| at + i)
+}

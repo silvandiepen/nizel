@@ -351,7 +351,7 @@ fn parse_blocks(lines: &[&str], ctx: &Ctx, seen: &mut HashMap<String, usize>) ->
     Ok(children)
 }
 
-fn heading(depth: u8, source: &str, ctx: &Ctx, seen: &mut HashMap<String, usize>) -> Result<Block> {
+pub(crate) fn heading(depth: u8, source: &str, ctx: &Ctx, seen: &mut HashMap<String, usize>) -> Result<Block> {
     let options = ctx.options;
     let children = parse_inline(source, ctx)?;
     let text = strip_inline(&children);
@@ -422,7 +422,7 @@ fn atx_at_line_start(line: &str) -> bool {
 }
 
 /// `/^ {0,3}(#{1,6})(?:\s+(.*?))?\s*$/` → (depth, group 2 or "").
-fn atx_heading(line: &str) -> Option<(u8, &str)> {
+pub(crate) fn atx_heading(line: &str) -> Option<(u8, &str)> {
     let rest = &line[js::up_to_three_spaces(line)..];
     let hashes = js::run_of(rest, b'#');
     if hashes == 0 || hashes > 6 {
@@ -444,7 +444,7 @@ fn atx_heading(line: &str) -> Option<(u8, &str)> {
 }
 
 /// `trimClosingHeadingHashes`.
-fn trim_closing_heading_hashes(source: &str) -> String {
+pub(crate) fn trim_closing_heading_hashes(source: &str) -> String {
     let without_trailing = js::trim_end(source);
     if !source.is_empty() && without_trailing.bytes().all(|b| b == b'#') && !without_trailing.is_empty() {
         return String::new();
@@ -795,13 +795,13 @@ pub fn closes_fence(line: &str, marker: u8, length: usize) -> bool {
     run >= length && js::trim_end(&rest[run..]).is_empty()
 }
 
-struct FenceInfo {
-    lang: Option<String>,
-    meta: String,
+pub(crate) struct FenceInfo {
+    pub(crate) lang: Option<String>,
+    pub(crate) meta: String,
 }
 
 /// `parseFenceInfo`; `None` when invalid.
-fn parse_fence_info(info: &str, marker: u8) -> Option<FenceInfo> {
+pub(crate) fn parse_fence_info(info: &str, marker: u8) -> Option<FenceInfo> {
     let meta = decode_string_content(js::trim(info));
     if marker == b'`' && meta.contains('`') {
         return None;
@@ -814,13 +814,13 @@ fn parse_fence_info(info: &str, marker: u8) -> Option<FenceInfo> {
 }
 
 /// `stripFenceIndent`.
-fn strip_fence_indent(line: &str, indent: usize) -> &str {
+pub(crate) fn strip_fence_indent(line: &str, indent: usize) -> &str {
     let spaces = line.bytes().take(indent).take_while(|&b| b == b' ').count();
     &line[spaces..]
 }
 
 /// `parseCodeMeta` → (filename, highlight lines).
-fn parse_code_meta(meta: &str) -> (Option<String>, Option<Vec<f64>>) {
+pub(crate) fn parse_code_meta(meta: &str) -> (Option<String>, Option<Vec<f64>>) {
     // Neither `filename=` nor `{…}` can match in less than three bytes.
     if meta.len() < 3 {
         return (None, None);

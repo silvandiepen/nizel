@@ -19,6 +19,7 @@ type Engine = {
   markers: () => number;
   set_marker_base: (base: number) => void;
   thrown_code_point: () => number;
+  input_has_replacement: (length: number) => number;
 };
 
 const needsJavaScriptStatus = -3;
@@ -130,6 +131,7 @@ function call(engine: Engine, direction: 'render' | 'parse' | 'reverse', source:
   const capacity = source.length * 3;
   const at = engine.input(capacity);
   const { written } = encoder.encodeInto(source, new Uint8Array(engine.memory.buffer, at, capacity));
+  lastWritten = written;
   const length = engine[direction](written, flags);
   if (length === throwsStatus) throw new EngineThrows(engine.thrown_code_point());
   return length;
@@ -184,7 +186,7 @@ function run<T>(
     // On a marker conflict the engine asks for JavaScript; try the next block.
     for (const prepared of prepareSource(source)) {
       attempt?.();
-      engine.set_marker_base(prepared.base);
+      setMarkerBase(engine, prepared.base);
       const previous = activeSource;
       activeSource = prepared;
       let length: number;
@@ -207,6 +209,7 @@ function run<T>(
     if (!(error instanceof EngineThrows)) {
       // A trap leaves the instance's state undefined: start the next call on a fresh one.
       cachedEngine = undefined;
+      markerBase = -1;
       return undefined;
     }
     thrown = error;
@@ -215,6 +218,47 @@ function run<T>(
   String.fromCodePoint(thrown.codePoint);
   return undefined;
 }
+
+/** Bytes `call` wrote for its last source. */
+let lastWritten = 0;
+
+/** The marker block the engine was last given. */
+let markerBase = -1;
+
+/** Gives the engine `base` as its marker block, when it is not already. */
+function setMarkerBase(engine: Engine, base: number): void {
+  if (markerBase === base) return;
+  engine.set_marker_base(base);
+  markerBase = base;
+}
+
+/**
+ * The common forward case without `run`'s machinery: the first marker
+ * block, one call, and the well-formedness check only when the encoded
+ * input holds U+FFFD. `retry` when `run` must take over (a
+ * marker conflict); undefined when JavaScript must render it.
+ */
+function renderDirect(source: string, flags: number): string | undefined | typeof retry {
+  if (source.length > maximumSourceLength) return undefined;
+  const engine = getEngine();
+  if (!engine) return undefined;
+  try {
+    setMarkerBase(engine, markerBlocks[0]);
+    const length = call(engine, 'render', source, flags);
+    // encodeInto writes U+FFFD for a lone surrogate: only a U+FFFD in the
+    // input needs the source checked (lone surrogates take the mapped path).
+    if (length >= 0 && engine.input_has_replacement(lastWritten) === 1 && !isWellFormed(source)) return retry;
+    if (length >= 0) return decoder.decode(new Uint8Array(engine.memory.buffer, engine.output(), length));
+    return length === needsJavaScriptStatus ? retry : undefined;
+  } catch (error) {
+    if (error instanceof EngineThrows) return retry;
+    // A trap leaves the instance's state undefined: start the next call on a fresh one.
+    cachedEngine = undefined;
+    markerBase = -1;
+    return undefined;
+  }
+}
+const retry = Symbol('retry');
 
 /** Runs a text conversion; undefined when JavaScript must produce the result. */
 function runText(direction: 'render' | 'reverse', source: string, flags: number, attempt?: () => void): string | undefined {
@@ -263,7 +307,9 @@ export function renderWasm(source: string, options: NizelOptions): string | unde
   if (options.plugins?.some(plugin => blocksRender(plugin, source)) || options.transforms?.length ||
       Object.keys(options.blocks ?? {}).length || Object.keys(options.elements ?? {}).length ||
       options.unwrapStandaloneImages || hasAutolinkAttributes(options.autolinks)) return undefined;
-  return runText('render', source, renderFlags(options));
+  const flags = renderFlags(options);
+  const direct = renderDirect(source, flags);
+  return direct === retry ? runText('render', source, flags) : direct;
 }
 
 /** Converts HTML with the engine; undefined means JavaScript converts it. */

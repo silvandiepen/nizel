@@ -287,7 +287,7 @@ fn trim_trailing_soft_break_space(nodes: &mut [Inline]) {
 }
 
 /// `normalizeCodeSpan` from `parse/code.ts`.
-fn normalize_code_span(code: &str) -> String {
+pub(crate) fn normalize_code_span(code: &str) -> String {
     let normalized = if code.contains('\n') { code.replace("\r\n", " ").replace('\n', " ") } else { code.to_string() };
     if normalized.starts_with(' ') && normalized.ends_with(' ') && normalized.bytes().any(|b| b != b' ') {
         normalized[1..normalized.len() - 1].to_string()
@@ -564,7 +564,7 @@ fn match_http_prefix(s: &str, p: usize) -> Option<usize> {
 }
 
 /// Code span: `` (?<!`)(`+)(?!`)([\s\S]*?)(?<!`)\1(?!`) `` → (end, value range).
-fn match_code_span(b: &[u8], p: usize) -> Option<(usize, (usize, usize))> {
+pub(crate) fn match_code_span(b: &[u8], p: usize) -> Option<(usize, (usize, usize))> {
     if p > 0 && b[p - 1] == b'`' {
         return None;
     }
