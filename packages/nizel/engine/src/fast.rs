@@ -13,6 +13,9 @@
 //! - ATX headings (content outside the subset goes through the full engine's
 //!   own heading function) and fenced code opening at column 0
 //! - thematic breaks
+//! - tight lists of single-line items (`-`, `*`, `+`, or `1.`/`1)`), one
+//!   space after the marker, content starting with a letter, ended by a blank
+//!   line or the input's end that nothing could continue
 //!
 //! Paragraphs are read in place from the source and classified one byte at a
 //! time against a table, copying runs of plain bytes at once.
@@ -85,6 +88,10 @@ fn render_inner(source: &str, options: &Options, out: &mut String) -> Option<()>
                 continue;
             }
             b'-' | b'*' | b'_' if block::is_thematic_break(line) => out.push_str("<hr />"),
+            b'-' | b'*' | b'+' | b'0'..=b'9' => {
+                pos = list(source, pos, out)?;
+                continue;
+            }
             _ => return None,
         }
         pos = eol + 1;
@@ -220,6 +227,89 @@ fn trim_spaces_end(b: &[u8], floor: usize, mut end: usize) -> usize {
 /// how the whole document is read.
 fn code_span_in_subset(value: &str) -> bool {
     !value.bytes().any(|c| matches!(c, b'[' | b'|' | b'\t' | b'\r'))
+}
+
+/// A list item marker at `at`: (ordered, marker byte, start number, content
+/// position). Exactly one space after it, and content starting with a letter.
+fn item_marker(b: &[u8], at: usize) -> Option<(bool, u8, u64, usize)> {
+    let lead = *b.get(at)?;
+    let (ordered, marker, start, after) = if matches!(lead, b'-' | b'*' | b'+') {
+        (false, lead, 0, at + 1)
+    } else {
+        let digits = b[at..].iter().take(10).take_while(|c| c.is_ascii_digit()).count();
+        if !(1..=9).contains(&digits) {
+            return None;
+        }
+        let delimiter = *b.get(at + digits)?;
+        if delimiter != b'.' && delimiter != b')' {
+            return None;
+        }
+        let start = std::str::from_utf8(&b[at..at + digits]).ok()?.parse().ok()?;
+        (true, delimiter, start, at + digits + 1)
+    };
+    (b.get(after) == Some(&b' ') && b.get(after + 1).is_some_and(u8::is_ascii_alphabetic)).then_some((ordered, marker, start, after + 1))
+}
+
+/// A tight list of single-line items starting at `start`; the position after
+/// it. Each item is one paragraph, rendered without `<p>` in a tight list.
+fn list(source: &str, start: usize, out: &mut String) -> Option<usize> {
+    let b = source.as_bytes();
+    let (ordered, marker, first_number, _) = item_marker(b, start)?;
+    let tag = if ordered { "ol" } else { "ul" };
+    out.push('<');
+    out.push_str(tag);
+    if ordered && first_number != 1 {
+        out.push_str(" start=\"");
+        out.push_str(&first_number.to_string());
+        out.push('"');
+    }
+    out.push_str(">\n");
+    let mut pos = start;
+    let mut first_item = true;
+    loop {
+        let (item_ordered, item_marker_byte, _, content) = item_marker(b, pos)?;
+        if item_ordered != ordered || item_marker_byte != marker {
+            return None;
+        }
+        let eol = line_end(b, pos);
+        // The marker regex's `(.*)$` fails on a JavaScript line terminator
+        // (U+2028/U+2029), which makes the line a paragraph instead.
+        if crate::js::has_line_terminator(&source[content..eol]) {
+            return None;
+        }
+        if !first_item {
+            out.push('\n');
+        }
+        first_item = false;
+        out.push_str("<li>");
+        inline(&source[content..trim_spaces_end(b, content, eol)], out, None)?;
+        out.push_str("</li>");
+        if eol >= b.len() {
+            pos = b.len();
+            break;
+        }
+        let next = eol + 1;
+        if is_blank_from(b, next) {
+            // After a blank line, an indented line could continue the item and
+            // a marker could continue the list (loose): outside the subset.
+            let mut after = next;
+            while after < b.len() && is_blank_from(b, after) {
+                after = line_end(b, after) + 1;
+            }
+            if after < b.len() && (b[after] == b' ' || matches!(b[after], b'-' | b'*' | b'+' | b'0'..=b'9')) {
+                return None;
+            }
+            pos = next;
+            break;
+        }
+        // The next line must be the next item; anything else could be a lazy
+        // continuation or interrupt the list.
+        pos = next;
+    }
+    out.push_str("\n</");
+    out.push_str(tag);
+    out.push('>');
+    Some(pos)
 }
 
 const PLAIN: u8 = 0;

@@ -15,6 +15,9 @@ const ATOMS: &[&str] = &[
     "`\na\n`", "``` ```", "# a > b \"c\"", "# `x` y ##", "#  ", "```\ncode < & >\n```", "```py title\n", "text`", "a `b\n\nc` d", "x `y\n# z` w", "a `\tb`", "```\n\tcode\n```", "# a\tb", "-\t-\t-", "a\r\nb", "`a  ",
     "# Caf\u{e9}", "#\u{b}x", "# x\u{c}", "# C# guide", "# a #", "# a#", "#   spaced   ", "###### six", "## `code` and > \"q\"",
     "```rust,ignore", "```c++", "``` js ", "```{1,2}", "```js filename=\"a.js\"", "```j\u{e9}", "```a b", "    ```", "   ```",
+    "\n- item one", "\n- item two", "\n* star item", "\n+ plus item", "\n1. first", "\n2. second", "\n3) paren", "\n0. zero", "\n007. bond",
+    "\n10. ten", "\n1234567890. big", "\n-  two spaces", "\n- ", "\n-x", "\n- [ ] task", "\n- [x] done", "\n  continued", "\n   - nested",
+    "\n- `code` item", "\n- item > q", "\n- a  ", "\n1.x", "\n- - -", "\n* * *",
     // Just outside: the tier must decline, never differ.
     "*em*", "**strong**", "_u_", "[link](x)", "<b>", "&amp;", "\\*", "~~d~~", "| a | b |", "a@b.co", "http://e.com",
     "> quote", "- item", "1. one", "+ plus", "===", "--", "\t", "\r\n", ":: note", "[r]: /url", "![i](s)",
