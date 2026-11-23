@@ -86,14 +86,7 @@ pub fn parse_markdown(markdown: &str, options: &Options) -> Result<Vec<Block>> {
     } else {
         (None, References::new())
     };
-    let content_lines: Vec<&str>;
-    let lines: &[&str] = match &content {
-        Some(content) => {
-            content_lines = as_strs(content);
-            &content_lines
-        }
-        None => &base,
-    };
+    let lines: &[&str] = content.as_deref().unwrap_or(&base);
     let ctx = Ctx { options, references: &references };
     let mut seen = HashMap::new();
     parse_blocks(lines, &ctx, &mut seen)

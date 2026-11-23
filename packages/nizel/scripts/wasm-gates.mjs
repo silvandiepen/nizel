@@ -216,7 +216,7 @@ if (!onlySection) {
     `| 4. nizel-kit parity, every profile | ${gate4} |`,
     `| 5. Differential fuzzer (seed 7) | ${fuzz.replace(/^fuzz: /, 'forward: ').replace(/\n/g, '; ')} |`,
     `| 6. Fallbacks (nizel/wasm and every nizel-kit/wasm profile, fixtures + 20k fuzz) | ${gate6} |`,
-    '| 7. Lezin iPhone tests | not run |',
+    '| 7. Lezin iPhone tests | pass on the iPhone 14 Pro, 2026-11-23: PreviewRoundTripTests 16/16 and CodePreviewRoundTripUITests, testMeasureWasmFastPathCoverage 10/10 forward and reverse with Lezin\'s and bare options (device run, recorded by hand: `xcodebuild test` in Lezin, see NIZEL-001) |',
     '| Speed (≥5x, cold start, size) | forward measured below (raw engine, not yet behind the entry points) |',
     '',
     '## Speed: forward, raw engine vs `useNizel().html` (Node, CPU time, warm median)',

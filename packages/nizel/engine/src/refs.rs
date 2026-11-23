@@ -11,28 +11,29 @@ use std::collections::HashMap;
 pub type References = HashMap<String, Reference>;
 
 /// `extractReferenceDefinitions` → (content lines, references).
-pub fn extract(lines: &[&str]) -> (Vec<String>, References) {
+/// The content lines borrow the input (a quoted definition becomes `>`).
+pub fn extract<'a>(lines: &[&'a str]) -> (Vec<&'a str>, References) {
     let mut references = References::new();
-    let mut content: Vec<String> = Vec::with_capacity(lines.len());
+    let mut content: Vec<&'a str> = Vec::with_capacity(lines.len());
     let mut previous_was_reference = false;
     let mut index = 0;
     while index < lines.len() {
         if let Some((_, end)) = read_html_block(lines, index) {
-            content.extend(lines[index..(end + 1).min(lines.len())].iter().map(|l| l.to_string()));
+            content.extend_from_slice(&lines[index..(end + 1).min(lines.len())]);
             index = end + 1;
             previous_was_reference = false;
             continue;
         }
 
-        let line = &lines[index];
+        let line = lines[index];
         let after_indent = &line[js::up_to_three_spaces(line)..];
         let fence_marker = after_indent.bytes().next().filter(|b| *b == b'`' || *b == b'~');
         if let Some(marker) = fence_marker.filter(|&m| js::run_of(after_indent, m) >= 3) {
             let length = js::run_of(after_indent, marker);
-            content.push(line.to_string());
+            content.push(line);
             index += 1;
             while index < lines.len() {
-                content.push(lines[index].to_string());
+                content.push(lines[index]);
                 if closes_fence(&lines[index], marker, length) {
                     break;
                 }
@@ -44,7 +45,7 @@ pub fn extract(lines: &[&str]) -> (Vec<String>, References) {
         }
 
         if line.starts_with("    ") {
-            content.push(line.to_string());
+            content.push(line);
             index += 1;
             previous_was_reference = false;
             continue;
@@ -53,7 +54,7 @@ pub fn extract(lines: &[&str]) -> (Vec<String>, References) {
         if let Some(quoted) = blockquote_reference_line(line) {
             if let Some((label, reference, _)) = read_reference_definition(&[quoted], 0) {
                 references.entry(normalize_reference(&label)).or_insert(reference);
-                content.push(">".to_string());
+                content.push(">");
                 previous_was_reference = true;
                 index += 1;
                 continue;
@@ -65,7 +66,7 @@ pub fn extract(lines: &[&str]) -> (Vec<String>, References) {
             || previous_was_reference
             || is_reference_start_after_block(&lines[index - 1]);
         if !can_start {
-            content.push(line.to_string());
+            content.push(line);
             previous_was_reference = false;
             index += 1;
             continue;
@@ -78,7 +79,7 @@ pub fn extract(lines: &[&str]) -> (Vec<String>, References) {
                 previous_was_reference = true;
             }
             None => {
-                content.push(line.to_string());
+                content.push(line);
                 previous_was_reference = false;
                 index += 1;
             }
