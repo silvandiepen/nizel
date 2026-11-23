@@ -219,7 +219,11 @@ function parseBlocks(
       const quoteLines: string[] = [];
       let allowLazyContinuation = false;
       while (index < lines.length) {
-        const quoteMarker = /^( {0,3}> ?)(.*)$/.exec(lines[index]);
+        // `[^]*`, not `.*`: the rest of a quoted line is its content, line
+        // separators (U+2028/U+2029) included. With `.*` such a line failed
+        // here after the branch was entered, nothing was consumed, and the
+        // outer loop came back to it forever (NIZEL-002).
+        const quoteMarker = /^( {0,3}> ?)([^]*)$/.exec(lines[index]);
         if (quoteMarker) {
           const markerColumn = quoteMarker[1].endsWith(' ') ? quoteMarker[1].length : quoteMarker[1].length + 1;
           const quoteLine = expandLeadingTabsFromColumn(quoteMarker[2], markerColumn);
@@ -250,11 +254,9 @@ function parseBlocks(
       if (quoteLines[quoteLines.length - 1] === '') {
         quoteLines.pop();
       }
-      if (index > 0) {
-        index -= 1;
-      } else {
-        index += 1;
-      }
+      // The loop consumed at least the opening line; the for loop's
+      // `index += 1` lands on the first line after the quote.
+      index -= 1;
       children.push({
         type: 'blockquote',
         children: parseBlocks(quoteLines, options, seenSlugs, state),

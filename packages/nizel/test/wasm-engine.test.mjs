@@ -67,12 +67,10 @@ test('engine never differs from JavaScript on 20,000 fuzzed documents', async ()
   assert.equal(output.match(/ 0 differences/g)?.length, 5, output);
 }, 240000);
 
-test('engine declines the blockquote input that never terminates in JavaScript (NIZEL-002)', async () => {
-  assert.equal(engineRender('x\n\n> a\u2028b', 1 | 2 | 4), undefined);
-  // The fuzzer's variant: a quoted list line after other content.
-  assert.equal(engineRender('<b>\n  indented*h\n    - \n> - \u2028)<span a=1><!X', 1 | 2 | 4), undefined);
-  // At the start of a document the JavaScript does terminate: an empty quote, and the next line is skipped.
-  assert.equal(engineRender('> a\u2028b\nskipped\nkept', 1 | 2 | 4), await stock.useNizel().html('> a\u2028b\nskipped\nkept'));
+test('quoted lines with line separators render on the engine, as in JavaScript (NIZEL-002)', async () => {
+  for (const source of ['x\n\n> a\u2028b', '> a\u2028b\nskipped\nkept', '<b>\n  indented*h\n    - \n> - \u2028)<span a=1><!X', '> one\n> two\u2029three\nlazy']) {
+    assert.equal(engineRender(source, 1 | 2 | 4), await stock.useNizel().html(source), JSON.stringify(source));
+  }
 });
 
 test('lone surrogates go through the engine and match JavaScript in every direction', async () => {

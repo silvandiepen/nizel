@@ -208,12 +208,8 @@ for (let i = 0; i < count; i += 1) {
     const reference = parseMarkdown(source, parseOptions);
     if (!isDeepStrictEqual(decoded, reference)) astDiffs.push({ markdown: source, expected: reference, actual: decoded });
   }
-  // The plugin and hook steps run with safe (default) options: compare them
-  // only where the engine accepts the document with those options, as
-  // everywhere else (it declines exactly the input JavaScript never
-  // finishes, NIZEL-002).
-  const acceptedWithDefaults = engineRender(extractFrontmatter(markdown).markdown, 1 | 2 | 4) !== undefined;
-  if (i % 4 === 1 && acceptedWithDefaults) {
+  // The plugin and hook steps run with safe (default) options.
+  if (i % 4 === 1) {
     mark(`${i} plugin html`, markdown);
     if (process.env.FUZZ_DUMP) traceFs?.appendFileSync(process.env.FUZZ_DUMP, JSON.stringify(markdown) + '\n');
     const pluginHtml = await pluginStock.html(markdown);
@@ -224,7 +220,7 @@ for (let i = 0; i < count; i += 1) {
     if (process.env.FUZZ_TRACE) (await import('node:fs')).writeFileSync(process.env.FUZZ_TRACE, JSON.stringify({ i, soup }));
     checkPluginReverse(soup);
   }
-  if (i % 4 === 0 && acceptedWithDefaults) {
+  if (i % 4 === 0) {
     hookCompared += 1;
     const viaWasm = await hookWasm.html(markdown);
     const viaJs = await hookStock.html(markdown);

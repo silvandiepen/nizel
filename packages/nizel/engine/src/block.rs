@@ -1,9 +1,7 @@
 //! `parseMarkdown` / `parseBlocks` from `parse.ts`.
 //!
-//! Every branch the JavaScript loop takes is checked in the same order.
-//! Branches whose constructs are not ported yet return `UNSUPPORTED` at
-//! exactly the point the JavaScript would enter them, so a document either
-//! comes out byte-identical or is declined — never different.
+//! Every branch the JavaScript loop takes is checked in the same order, so a
+//! document comes out byte-identical.
 
 use crate::ast::{strip_inline, Block, ListItem};
 use crate::common::decode_string_content;
@@ -13,7 +11,6 @@ use crate::inline::{parse_inline, parse_inline_owned, Ctx};
 use crate::refs::{self, References};
 use crate::js;
 use crate::slug::{slugify, unique_slug};
-use crate::status::UNSUPPORTED;
 use std::collections::HashMap;
 
 pub struct Options {
@@ -285,7 +282,6 @@ fn parse_blocks(lines: &[&str], ctx: &Ctx, seen: &mut HashMap<String, usize>) ->
         }
 
         if !letter_start && blockquote_start(line) {
-            let start = index;
             let mut quote_lines: Vec<String> = Vec::new();
             let mut allow_lazy = false;
             while index < lines.len() {
@@ -311,15 +307,8 @@ fn parse_blocks(lines: &[&str], ctx: &Ctx, seen: &mut HashMap<String, usize>) ->
             if quote_lines.last().is_some_and(String::is_empty) {
                 quote_lines.pop();
             }
-            // `if (index > 0) index -= 1; else index += 1;` then the loop's `+= 1`.
-            if index > 0 {
-                if index == start {
-                    // Nothing was consumed: the JavaScript revisits this line forever (NIZEL-002).
-                    return Err(UNSUPPORTED);
-                }
-            } else {
-                index += 2;
-            }
+            // The loop consumed at least the opening line (`index -= 1` then the
+            // JavaScript loop's `+= 1`): `index` is the first line after the quote.
             children.push(Block::Blockquote { children: parse_blocks(&as_strs(&quote_lines), ctx, seen)? });
             continue;
         }
@@ -912,8 +901,8 @@ fn quote_marker(line: &str) -> Option<(usize, bool, &str)> {
     if space {
         marker_len += 1;
     }
-    let rest = &line[marker_len..];
-    rest.chars().all(js::is_dot).then_some((marker_len, space, rest))
+    // `([^]*)$`: the rest of the line, line separators included (NIZEL-002).
+    Some((marker_len, space, &line[marker_len..]))
 }
 
 /// `expandLeadingTabsFromColumn` (columns count code points).

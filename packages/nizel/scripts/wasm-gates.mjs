@@ -140,8 +140,7 @@ if (!onlySection) {
   }
   console.log(fallbacks);
   const [fallbackSummary, ...fallbackReasons] = fallbacks.split('\n');
-  const onlyNizel002 = fallbackReasons.every((line) => line.includes('NIZEL-002'));
-  const gate6 = `${fallbackSummary.replace(/^fallbacks: /, '')}${fallbackReasons.length ? `: ${fallbackReasons.map((line) => line.slice(0, line.indexOf('  e.g. ')).trim().replace(/\s{2,}/g, ' ')).join('; ')}` : ''}${fallbackReasons.length && onlyNizel002 ? ' — only input the JavaScript never finishes on' : ''}`;
+  const gate6 = `${fallbackSummary.replace(/^fallbacks: /, '')}${fallbackReasons.length ? `: ${fallbackReasons.map((line) => line.slice(0, line.indexOf('  e.g. ')).trim().replace(/\s{2,}/g, ' ')).join('; ')}` : ''}`;
 
   // Speed: the raw engine (encode, render, decode) against useNizel().html.
   const { performance } = await import('node:perf_hooks');

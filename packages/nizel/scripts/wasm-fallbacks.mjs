@@ -30,7 +30,6 @@ WebAssembly.Instance = class extends Instance {
 };
 
 const wasm = await import('../dist/wasm.js');
-const { renderWasm } = await import('../dist/wasm/backend.js');
 const { extractFrontmatter } = await import('../dist/frontmatter.js');
 const kit = await import('nizel-kit/wasm');
 
@@ -48,7 +47,6 @@ const random = (n) => {
 
 /** The engine's reason for its last status. */
 const statusReason = (status) => ({
-  [-1]: 'NIZEL-002: the JavaScript never finishes',
   [-2]: 'invalid UTF-8',
   [-3]: 'engine asked for JavaScript',
 }[status] ?? `status ${status}`);
@@ -71,8 +69,6 @@ const engineCalls = () => calls.render + calls.parse;
 const forward = async (label, convert, markdown, frontmatter = true) => {
   const source = frontmatter ? extractFrontmatter(markdown).markdown : markdown;
   if (source.length > 1024 * 1024) return fallback(label, 'forward', 'over the size limit', source);
-  // The engine reports the input the JavaScript never finishes on; don't hand that to JavaScript.
-  if (renderWasm(source, {}) === undefined && lastStatus === -1) return fallback(label, 'forward', statusReason(-1), source);
   const before = engineCalls();
   await convert(markdown);
   if (engineCalls() > before) {
