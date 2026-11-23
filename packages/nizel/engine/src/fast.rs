@@ -32,6 +32,17 @@ use crate::inline::Ctx;
 use crate::js::escape_html_into;
 use crate::refs::References;
 
+thread_local! {
+    /// Bytes of the last document that tier 1 handed to the full engine
+    /// (coverage reporting; see examples/coverage.rs).
+    static HANDED_OVER: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Bytes of the last rendered document that tier 1 handed to the full engine.
+pub fn handed_over_bytes() -> usize {
+    HANDED_OVER.with(std::cell::Cell::get)
+}
+
 /// Renders `source` into `out` when every construct is in the subset.
 /// Returns false (with `out` restored) when it declines.
 pub fn render(source: &str, options: &Options, out: &mut String) -> bool {
@@ -49,6 +60,7 @@ fn line_end(b: &[u8], from: usize) -> usize {
 
 fn render_inner(source: &str, options: &Options, out: &mut String) -> Option<()> {
     let b = source.as_bytes();
+    HANDED_OVER.with(|handed| handed.set(0));
     // Document-wide: CR changes how lines split, and reference definitions
     // are extracted from the whole document before any block is parsed.
     // A document with either stays whole with the full engine. Whether it
@@ -98,6 +110,7 @@ fn render_inner(source: &str, options: &Options, out: &mut String) -> Option<()>
                     }
                     references_checked = true;
                 }
+                HANDED_OVER.with(|handed| handed.set(handed.get() + end - pos));
                 let blocks = block::parse_markdown_with_seen(&source[pos..end], options, &mut seen, false).ok()?;
                 if blocks.is_empty() {
                     out.truncate(before_separator);
