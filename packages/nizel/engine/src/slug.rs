@@ -84,6 +84,21 @@ pub fn unique_slug(base: String, seen: &mut Seen) -> String {
     slug
 }
 
+/// `n` in decimal, without `fmt`.
+fn push_decimal(out: &mut String, mut n: usize) {
+    let mut digits = [0u8; 20];
+    let mut at = digits.len();
+    loop {
+        at -= 1;
+        digits[at] = b'0' + (n % 10) as u8;
+        n /= 10;
+        if n == 0 {
+            break;
+        }
+    }
+    out.push_str(std::str::from_utf8(&digits[at..]).expect("digits"));
+}
+
 /// `uniqueSlug` on `slug` in place (`section` for an empty one, `-N` for a
 /// repeat). The key is cloned only the first time a slug is seen.
 pub fn unique_slug_in_place(slug: &mut String, seen: &mut Seen) {
@@ -93,8 +108,8 @@ pub fn unique_slug_in_place(slug: &mut String, seen: &mut Seen) {
     if let Some(count) = seen.get_mut(slug.as_str()) {
         let previous = *count;
         *count += 1;
-        use std::fmt::Write;
-        let _ = write!(slug, "-{}", previous + 1);
+        slug.push('-');
+        push_decimal(slug, previous + 1);
         return;
     }
     seen.insert(slug.clone(), 1);
@@ -212,39 +227,34 @@ fn ascii_slug_case(text: &str) -> String {
 
 /// `ascii_slug_case` appended to `slug`.
 fn ascii_slug_case_into(text: &str, slug: &mut String) {
+    // Bytes in, bytes out (all ASCII): the string's buffer, taken without a
+    // copy and checked once on the way back.
+    let mut out = std::mem::take(slug).into_bytes();
     let bytes = text.as_bytes();
-    let class = |c: u8| if c.is_ascii_alphanumeric() { c } else { b' ' };
-    let start = slug.len();
+    let start = out.len();
     let mut pending = false;
-    let mut i = 0;
-    while i < bytes.len() {
-        let c = class(bytes[i]);
-        if c == b' ' {
-            pending = slug.len() > start;
-            i += 1;
+    for k in 0..bytes.len() {
+        let c = bytes[k];
+        if !c.is_ascii_alphanumeric() {
+            pending = out.len() > start;
             continue;
         }
-        if c.is_ascii_uppercase() {
-            let previous = if i > 0 { class(bytes[i - 1]) } else { b' ' };
-            let next = bytes.get(i + 1).map_or(b' ', |&n| class(n));
-            if (previous.is_ascii_lowercase() || (previous.is_ascii_uppercase() && next.is_ascii_lowercase())) && slug.len() > start {
+        // A case boundary starts a new word: an upper-case letter after a
+        // lower-case one, or ending an upper-case run before a lower-case
+        // letter. (Past the first byte: the slug is not empty then.)
+        if c.is_ascii_uppercase() && !pending && out.len() > start {
+            let previous = bytes[k - 1];
+            if previous.is_ascii_lowercase() || (previous.is_ascii_uppercase() && bytes.get(k + 1).is_some_and(u8::is_ascii_lowercase)) {
                 pending = true;
             }
         }
         if pending {
-            slug.push('-');
+            out.push(b'-');
             pending = false;
         }
-        if c.is_ascii_uppercase() {
-            slug.push(c.to_ascii_lowercase() as char);
-            i += 1;
-            continue;
-        }
-        // Lower-case letters and digits never start a word: copy the run.
-        let run = bytes[i..].iter().take_while(|c| c.is_ascii_lowercase() || c.is_ascii_digit()).count();
-        slug.push_str(&text[i..i + run]);
-        i += run;
+        out.push(c.to_ascii_lowercase());
     }
+    *slug = String::from_utf8(out).expect("an ASCII slug");
 }
 
 /// `.split(' ').filter(Boolean).map(toLowerCase).join('-')` over ASCII bytes, in one pass.

@@ -1453,7 +1453,13 @@ fn heading(line: &str, options: &Options, ctx: &Ctx, seen: &mut crate::slug::See
                     crate::slug::unique_slug_in_place(slug, seen);
                     attribute.clear();
                     attribute.push_str(" id=\"");
-                    escape_html_into(attribute, slug);
+                    if !options.slug_classic && text.is_ascii() {
+                        // The ASCII slug is [a-z0-9-] (or `section`, with a
+                        // `-N` for a repeat): nothing to escape.
+                        attribute.push_str(slug);
+                    } else {
+                        escape_html_into(attribute, slug);
+                    }
                     attribute.push('"');
                     out.insert_str(body_start - 1, attribute);
                 }
