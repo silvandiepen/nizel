@@ -76,26 +76,39 @@ fn slug_case(value: &str) -> String {
     if value.is_empty() {
         return String::new();
     }
-    // `normalize`: per UTF-16 unit, keep [a-zA-Z0-9 -], fold accents, and
-    // turn everything else into `_`. Astral characters are two units, each
-    // becoming `_`; both collapse into the same separator below.
-    let mut normalized = String::with_capacity(value.len());
+    // `normalize` (per UTF-16 unit: keep [a-zA-Z0-9 -], fold accents, anything
+    // else `_`) and `.replace(/[-_]/g, ' ')` in one pass: every byte here is
+    // [A-Za-z0-9 ]. Astral characters are two units, so two separators.
+    let mut spaced: Vec<u8> = Vec::with_capacity(value.len());
+    let mut has_upper = false;
     for c in value.chars() {
-        if c.is_ascii_alphanumeric() || c == ' ' || c == '-' {
-            normalized.push(c);
-            continue;
-        }
-        let units = c.len_utf16();
-        // Every accent-table entry is non-ASCII, so ASCII becomes `_` (its own
-        // upper case, so it stays `_`).
-        let replacement = if c.is_ascii() { '_' } else if units == 1 { fold_accent(c) } else { '_' };
-        for _ in 0..units {
-            normalized.push(replacement);
+        let byte = if c.is_ascii_alphanumeric() {
+            c as u8
+        } else if c.is_ascii() || c.len_utf16() == 2 {
+            b' '
+        } else {
+            match fold_accent(c) {
+                '_' => b' ',
+                letter => letter as u8,
+            }
+        };
+        has_upper |= byte.is_ascii_uppercase();
+        spaced.push(byte);
+        if c.len_utf16() == 2 {
+            spaced.push(b' ');
         }
     }
-
-    // `.replace(/[-_]/g, ' ')`
-    let spaced: Vec<u8> = normalized.bytes().map(|b| if b == b'-' || b == b'_' { b' ' } else { b }).collect();
+    if !has_upper {
+        // Neither case-boundary replacement can match: split, join with `-`.
+        let mut slug = String::with_capacity(spaced.len());
+        for word in spaced.split(|b| *b == b' ').filter(|word| !word.is_empty()) {
+            if !slug.is_empty() {
+                slug.push('-');
+            }
+            slug.push_str(std::str::from_utf8(word).expect("ASCII"));
+        }
+        return slug;
+    }
     // `.replace(/([a-z])([A-Z])/g, '$1 $2')`
     let mut first = Vec::with_capacity(spaced.len() + 8);
     let mut index = 0;
