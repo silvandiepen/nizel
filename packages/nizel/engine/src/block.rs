@@ -55,7 +55,7 @@ fn scan_source(markdown: &str) -> (bool, bool, bool, bool) {
     let (mut cr, mut tab, mut pipe, mut reference) = (false, false, false, false);
     let b = markdown.as_bytes();
     let mut at = 0;
-    while let Some(i) = crate::scan::find_in_table(b, at, &SOURCE_MARKERS, b"\r\t|]") {
+    while let Some(i) = crate::scan::find_in_table(b, at, &SOURCE_MARKERS) {
         match b[i] {
             b'\r' => cr = true,
             b'\t' => tab = true,

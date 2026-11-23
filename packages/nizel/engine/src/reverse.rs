@@ -878,7 +878,7 @@ fn normalize_document_into(value: &str, out: &mut String) {
             }
             _ => {
                 // Jump to the next space, tab or newline.
-                i = crate::scan::find_in_table(b, i + 1, &DOCUMENT_WHITESPACE, b" \t\n").unwrap_or(b.len());
+                i = crate::scan::find_in_table(b, i + 1, &DOCUMENT_WHITESPACE).unwrap_or(b.len());
             }
         }
     }

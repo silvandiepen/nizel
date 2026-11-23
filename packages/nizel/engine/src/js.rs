@@ -40,7 +40,7 @@ static LINE_TERMINATOR_START: [bool; 256] = {
 pub fn has_line_terminator(text: &str) -> bool {
     let b = text.as_bytes();
     let mut at = 0;
-    while let Some(i) = crate::scan::find_in_table(b, at, &LINE_TERMINATOR_START, b"\n\r\xe2") {
+    while let Some(i) = crate::scan::find_in_table(b, at, &LINE_TERMINATOR_START) {
         if b[i] != 0xe2 || (b.get(i + 1) == Some(&0x80) && matches!(b.get(i + 2), Some(0xa8 | 0xa9))) {
             return true;
         }
@@ -88,7 +88,7 @@ pub fn escape_html_into(out: &mut String, text: &str) {
     let bytes = text.as_bytes();
     out.reserve(bytes.len());
     let mut start = 0;
-    while let Some(special) = crate::scan::find_in_table(bytes, start, &HTML_SPECIAL, b"&<>\"") {
+    while let Some(special) = crate::scan::find_in_table(bytes, start, &HTML_SPECIAL) {
         out.push_str(&text[start..special]);
         out.push_str(match bytes[special] {
             b'&' => "&amp;",
@@ -109,10 +109,9 @@ static INLINE_SYNTAX_AUTOLINKS: [bool; 256] = byte_table(b"\\`<&\n[]*_~@h");
 /// `http://` or `https://` (case-sensitive, as the JavaScript checks them).
 pub fn has_inline_syntax(source: &str, autolinks: bool) -> bool {
     let b = source.as_bytes();
-    let (table, needles): (&[bool; 256], &[u8]) =
-        if autolinks { (&INLINE_SYNTAX_AUTOLINKS, b"\\`<&\n[]*_~@h") } else { (&INLINE_SYNTAX, b"\\`<&\n[]*_~") };
+    let table = if autolinks { &INLINE_SYNTAX_AUTOLINKS } else { &INLINE_SYNTAX };
     let mut at = 0;
-    while let Some(i) = crate::scan::find_in_table(b, at, table, needles) {
+    while let Some(i) = crate::scan::find_in_table(b, at, table) {
         if b[i] != b'h' || b[i..].starts_with(b"http://") || b[i..].starts_with(b"https://") {
             return true;
         }

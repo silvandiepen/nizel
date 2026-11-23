@@ -26,7 +26,6 @@ execFileSync(process.execPath, [
   '--enable-nontrapping-float-to-int',
   '--enable-sign-ext',
   '--enable-mutable-globals',
-  '--enable-simd',
   '-o', fileURLToPath(optimized),
 ], { stdio: 'inherit' });
 await writeFile(new URL('engine-bytes.js', output), 'export default ' + JSON.stringify((await readFile(optimized)).toString('base64')) + ';\n');

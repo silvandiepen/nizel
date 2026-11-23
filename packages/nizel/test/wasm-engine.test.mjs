@@ -130,3 +130,12 @@ test('a handler that throws throws through the entry point, and the engine keeps
   assert.equal(backend.reverseWasm('<p><b>x</b></p>'), '**x**');
   assert.equal(backend.renderWasm('*x*', {}), '<p><em>x</em></p>');
 });
+
+test('the engine scans paragraphs with @ (a table without a needle list) safely', async () => {
+  // A Wasm SIMD build of the scans indexed the empty needle list here and
+  // panicked on 16+ bytes after the scan position.
+  for (const source of ['mail a@b.c and then quite a lot more text after it', '@'.repeat(40), 'x@y '.repeat(30) + '*z*']) {
+    assert.equal(engineRender(source, 1 | 2 | 4), await stock.useNizel().html(source), source);
+    assert.equal(engineRender(source, 0), await stock.useNizel({ anchors: false, autolinks: false, frontmatter: false, safe: false }).html(source), source);
+  }
+});
