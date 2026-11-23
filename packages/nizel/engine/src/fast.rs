@@ -413,8 +413,27 @@ fn block<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, lines: &
     if lead.is_ascii_alphabetic() {
         return checked_paragraph(source, pos, state, out);
     }
+    // Up to three spaces before a letter: only a paragraph (or a table,
+    // checked on the whole line), whose first line `normalizeParagraphLine`
+    // leaves as the text after the spaces.
+    if lead == b' ' {
+        let spaces = b[pos..].iter().take(3).take_while(|&&c| c == b' ').count();
+        if b.get(pos + spaces).is_some_and(u8::is_ascii_alphabetic) {
+            if table_starts(source, pos) {
+                return Some((checked_table(source, pos, state, out)?, false));
+            }
+            return checked_paragraph(source, pos + spaces, state, out);
+        }
+    }
     let eol = line_end(b, pos);
     let line = &source[pos..eol];
+    // An indented or tilde fence at a block start: its extent by the full
+    // engine's own rules, and the full engine renders it.
+    if matches!(lead, b' ' | b'~') {
+        if let Some(end) = fence_extent(source, pos) {
+            return Some((full_fence(source, pos, end, state, out)?, false));
+        }
+    }
     // Leads that, past the constructs `parseBlocks` tries first (a fence for
     // a backtick; a thematic break and a list for `*` and `_`), can only
     // start a paragraph.
@@ -508,6 +527,46 @@ fn checked_table(source: &str, pos: usize, state: &mut Walk, out: &mut String) -
         return None;
     }
     state.note_block(&source[pos..end]);
+    Some(end)
+}
+
+/// Where the fence opening at `pos` ends (after its closing line, or the
+/// input's end), when `pos` starts one by `parseBlocks`' rule: `openingFence`
+/// with an info string `parseFenceInfo` takes; it closes at the first line
+/// `closesFence` takes. At a tier-1 block start no list item or quote is
+/// open, so this is the fence the full engine reads there.
+fn fence_extent(source: &str, pos: usize) -> Option<usize> {
+    let b = source.as_bytes();
+    let eol = line_end(b, pos);
+    let fence = block::opening_fence(&source[pos..eol])?;
+    block::parse_fence_info(fence.info, fence.marker)?;
+    let mut at = eol + 1;
+    while at < b.len() {
+        let end = line_end(b, at);
+        if block::closes_fence(&source[at..end], fence.marker, fence.length) {
+            return Some((end + 1).min(b.len()));
+        }
+        at = end + 1;
+    }
+    Some(b.len())
+}
+
+/// A fence `source[pos..end]` rendered by the full engine on its own (the
+/// same lines give the same code block), after the definition check unless
+/// extraction skips it whole too (see `Walk::in_step`).
+fn full_fence(source: &str, pos: usize, end: usize, state: &mut Walk, out: &mut String) -> Option<usize> {
+    let text = &source[pos..end];
+    if !state.skipped_by_extraction() {
+        state.check_definitions(text)?;
+    }
+    HANDED_OVER.with(|handed| handed.set(handed.get() + text.len()));
+    let blocks = block::parse_markdown_with_references(text, state.options, &mut state.seen, state.ctx.references).ok()?;
+    for (index, block) in blocks.iter().enumerate() {
+        if index > 0 {
+            out.push('\n');
+        }
+        crate::render::render_block(block, out);
+    }
     Some(end)
 }
 
@@ -915,20 +974,29 @@ fn line_continues(b: &[u8], i: usize, pipes: bool) -> Option<bool> {
     }
     // Leads `hasParagraphInterruptCandidate` never looks at: the line
     // continues the paragraph.
-    if b[next].is_ascii_alphabetic() || matches!(b[next], b'[' | b'!' | b'(' | b'"' | b'_') {
+    let plain_lead = |c: u8| c.is_ascii_alphabetic() || matches!(c, b'[' | b'!' | b'(' | b'"' | b'_');
+    // An indented line (the candidate test looks at it trimmed): only the
+    // full engine's paragraph, which normalizes the line, takes it (`pipes`).
+    let spaces = b[next..end].iter().take_while(|&&c| c == b' ').count();
+    if spaces > 0 && !pipes {
+        return None;
+    }
+    let Some(&lead) = b.get(next + spaces) else { return None };
+    if plain_lead(lead) {
         return Some(true);
     }
-    // `canContinueParagraph` on a column-0 line that certainly interrupts:
-    // the paragraph ends and the line starts a block of its own. A setext
-    // underline (it would make the paragraph a heading) and every other
-    // line decline.
-    if !matches!(b[next], b'#' | b'`' | b'-' | b'*' | b'+' | b'>' | b':' | b'0'..=b'9') {
+    // `canContinueParagraph` on a line, at most three spaces in, that
+    // certainly interrupts: the paragraph ends and the line starts a block
+    // of its own (the block tests below allow that indentation). A setext
+    // underline (it would make the paragraph a heading) and every other line
+    // decline.
+    if spaces > 3 || !matches!(lead, b'#' | b'`' | b'-' | b'*' | b'+' | b'>' | b':' | b'0'..=b'9') {
         return None;
     }
     let line = std::str::from_utf8(&b[next..end]).ok()?;
     // A continuation opening with three backticks would be a fence to
     // extraction (see `Walk::in_step`).
-    if line.starts_with("```") && !block::fence_start(line) {
+    if line[spaces..].starts_with("```") && !block::fence_start(line) {
         return None;
     }
     if line.contains(['|', '\t']) || block::setext_underline(line).is_some() {

@@ -49,6 +49,9 @@ const ATOMS: &[&str] = &[
     "\nTitle\n===", "\nTwo\nlines\n---", "\nTrail  \n---", "\nNbsp\u{a0}\n---", "\nTwo \u{a0}\nlines\u{a0}\n===", "\n*Em* &amp; <b>x</b>\n---", "\n[r] text\n-", "\nSame\n---\nSame\n---", "\na\\\nb", "\na <https://e.com> b",
     "\n:::details More\nHidden **x**.\n:::", "\n:: x", "\ntext\n::note\nbody\n::", "\ntext\n:::y", "\n::bad!\n", "\n:x: y", "\n  ::indented\n\n::", "\n\u{a0}::nbsp\n::",
     "\n[a\\]b]: /u", "\n[a\\]\nb]: /u", "\n[multi\nline]: /u", "\n[]: /u", "\n[x] [y]: /u", "\n[link](u) and [r]: no", "\n- [ ] task [r]: /u", "\n[\\]]: /u", "\n> [q\\]]: /u", "\n[r]:\n/u", "\n [s] :/u",
+    "\n ```\n aaa\naaa\n```", "\n  ```\naaa\n  aaa\n  ```", "\n   ~~~ js\nx\n   ~~~", "\n~~~\n[f]: /g\n~~~", "\n ```a`b\nx", "\n  ~~~\nunclosed", "\n ````\n```\n ````", "\n ```\n\t```\n ```", "\n- a\n\n  ```\n  b\n  ```",
+    "\n aaa\n   bbb", "\n   three", "\n  two | x\n|---|---|", "\ntext\n     deep", "\ntext\n  [l](u)", "\ntext\n    - x", "\ntext\n   # h", "\n  a\n  ===", "\ntext\n \u{a0}x", "\n  [r]: /x",
+    "\ntext\n  ```\ncode\n  ```", "\ntext\n  - item", "\ntext\n   > q", "\ntext\n  ***", "\ntext\n  ---", "\ntext\n  -x", "\ntext\n  2. two", "\ntext\n  ::x", "\ntext\n   ```a`b",
     // Just outside: the tier must decline, never differ.
     "*em*", "**strong**", "_u_", "[link](x)", "<b>", "&amp;", "\\*", "~~d~~", "| a | b |", "a@b.co", "http://e.com",
     "> quote", "- item", "1. one", "+ plus", "===", "--", "\t", "\r\n", ":: note", "[r]: /url", "![i](s)",
