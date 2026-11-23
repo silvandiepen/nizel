@@ -375,6 +375,27 @@ impl<'a> Scanner<'a> {
         let table = if self.has_at { &TOKEN_START_WITH_AT } else { &TOKEN_START };
         let mut position = from;
         while let Some(candidate) = crate::scan::find_in_table(bytes, position, table) {
+            // Cheap rejections for the most common start bytes, exactly where
+            // every alternative fails (spaces and `h` are frequent in prose).
+            match bytes[candidate] {
+                // Only a hard break starts with a space: two or more, then `\n`.
+                // If a run fails, every later space in it fails too.
+                b' ' => {
+                    let run = js::run_of(&self.source[candidate..], b' ');
+                    if run < 2 || bytes.get(candidate + run) != Some(&b'\n') {
+                        position = candidate + run;
+                        continue;
+                    }
+                }
+                // Without an `@`, `h` only starts a bare URL, which needs `http`.
+                b'h' | b'H' if !self.has_at => {
+                    if bytes.len() < candidate + 7 || !bytes[candidate..candidate + 4].eq_ignore_ascii_case(b"http") {
+                        position = candidate + 1;
+                        continue;
+                    }
+                }
+                _ => {}
+            }
             if self.source.is_char_boundary(candidate) {
                 if let Some((end, token)) = self.match_at(candidate) {
                     return Some((candidate, end, token));
