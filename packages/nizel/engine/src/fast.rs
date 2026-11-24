@@ -400,15 +400,36 @@ struct Lines<'a> {
 
 impl<'a> Lines<'a> {
     fn new(source: &'a str) -> Self {
-        // `scan::lines` and the starts in one pass.
+        // `scan::lines` and the starts in one pass over the whole document,
+        // eight bytes at a time: every newline in a word, not a search per
+        // line (real documents average some 25 bytes a line).
+        const LOW: u64 = 0x0101_0101_0101_0101;
+        const SEVEN: u64 = 0x7f7f_7f7f_7f7f_7f7f;
         let b = source.as_bytes();
-        let capacity = b.len() / 32 + 1;
+        let capacity = b.len() / 16 + 1;
         let (mut lines, mut starts) = (Vec::with_capacity(capacity), Vec::with_capacity(capacity));
         let mut start = 0;
-        while let Some(end) = crate::scan::find_byte(b, start, b'\n') {
-            lines.push(&source[start..end]);
-            starts.push(start);
-            start = end + 1;
+        let mut i = 0;
+        while i + 8 <= b.len() {
+            let word = u64::from_le_bytes(b[i..i + 8].try_into().expect("eight bytes")) ^ (LOW * u64::from(b'\n'));
+            // The high bit of exactly the zero bytes (the newlines): no
+            // carry crosses a byte.
+            let mut newlines = !(((word & SEVEN) + SEVEN) | word | SEVEN);
+            while newlines != 0 {
+                let end = i + (newlines.trailing_zeros() / 8) as usize;
+                lines.push(&source[start..end]);
+                starts.push(start);
+                start = end + 1;
+                newlines &= newlines - 1;
+            }
+            i += 8;
+        }
+        for (at, &byte) in b.iter().enumerate().skip(i) {
+            if byte == b'\n' {
+                lines.push(&source[start..at]);
+                starts.push(start);
+                start = at + 1;
+            }
         }
         lines.push(&source[start..]);
         starts.push(start);
