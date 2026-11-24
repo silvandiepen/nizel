@@ -195,3 +195,20 @@ test('underscore emphasis and code spans inside emphasis match the JavaScript en
     assert.equal(engineRender(source, 1 | 2 | 4), await stock.useNizel().html(source), JSON.stringify(source));
   }
 });
+
+test('an HTML block handed to the full engine in safe mode keeps reference definitions exact', async () => {
+  // Extraction skips an HTML block by its own rule whatever `safe` is; tier 1
+  // skips its definition check only when that block is exactly what the full
+  // engine took. An unclosed processing instruction runs past the last line
+  // (found by the JS fuzzer: it must not panic).
+  const bare = stock.useNizel({ anchors: false, autolinks: false, frontmatter: false, safe: false });
+  for (const source of [
+    '<p align="center">\n  <img src="a.svg">\n</p>\n\n# T\n\n```\n[x]: /u\n```\n\n[x]\n',
+    '<div>\n[x]: /u\n</div>\n\n[x]\n',
+    ' <?x!',
+    '\n> [q]: /q\n[t](/u "ti")&#99999999;<img src=\'y\' />\n   <!XKHTTP://Up.case',
+  ]) {
+    assert.equal(engineRender(source, 0), await bare.html(source), JSON.stringify(source));
+    assert.equal(engineRender(source, 1 | 2 | 4), await stock.useNizel().html(source), JSON.stringify(source));
+  }
+});

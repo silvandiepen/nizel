@@ -382,21 +382,33 @@ fn walk(source: &str, state: &mut Walk, out: &mut String, mut spans: Option<&mut
                 // stopped (see `parse_blocks_until`). With tabs (it reads
                 // expanded lines) it renders the stretch up to the next point
                 // where it starts afresh.
-                let (end, blocks) = if state.has_tab {
+                let (end, blocks, skipped) = if state.has_tab {
                     let end = segment_end(source, pos, state.options.safe).min(b.len());
                     state.check_definitions(&source[pos..end])?;
                     let blocks = block::parse_markdown_with_references(&source[pos..end], state.options, &mut state.seen, state.ctx.references).ok()?;
-                    (end, blocks)
+                    (end, blocks, false)
                 } else {
                     let table = lines.get_or_insert_with(|| if state.depth == 0 { state.root_lines() } else { std::rc::Rc::new(Lines::new(source)) }).clone();
                     let index = table.index_of(pos);
                     block::set_document_flags(state.has_pipe, false);
                     let (blocks, next) = block::parse_blocks_until(&table.lines, index, state.ctx, &mut state.seen, 1).ok()?;
                     let end = table.starts.get(next).copied().unwrap_or(b.len()).min(b.len());
-                    state.check_definitions(&source[pos..end])?;
-                    (end, blocks)
+                    // Extraction in step reads an HTML block here by its own
+                    // rule (whatever `safe` is): when that is exactly the lines
+                    // the full engine took (a paragraph in safe mode), plus
+                    // empty ones, it skips them, finds no definition in them
+                    // and stays in step.
+                    let skipped = state.skipped_by_extraction()
+                        && b[pos..].iter().take(4).any(|&c| c == b'<')
+                        && crate::html::read_html_block(&table.lines, index).is_some_and(|(_, last)| table.lines.get(last + 1..next).is_some_and(|between| between.iter().all(|line| line.is_empty())));
+                    if !skipped {
+                        state.check_definitions(&source[pos..end])?;
+                    }
+                    (end, blocks, skipped)
                 };
-                state.note_block(&source[pos..end]);
+                if !skipped {
+                    state.note_block(&source[pos..end]);
+                }
                 HANDED_OVER.with(|handed| handed.set(handed.get() + end - pos));
                 TRACE.with(|trace| {
                     if let Some(trace) = trace.borrow_mut().as_mut() {
