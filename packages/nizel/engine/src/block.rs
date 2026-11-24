@@ -117,6 +117,17 @@ pub(crate) fn extracted_content(markdown: &str) -> (String, References) {
     }
 }
 
+/// `extracted_content` for a document without CR or tabs, over `lines` (its
+/// lines): the lines extraction keeps, and what it extracted.
+pub(crate) fn extracted_lines<'a>(markdown: &str, lines: &[&'a str]) -> (Vec<&'a str>, References) {
+    let (_, _, _, has_reference) = scan_source(markdown);
+    if has_reference && has_possible_reference_definition_start(markdown) {
+        refs::extract(lines)
+    } else {
+        (lines.to_vec(), References::new())
+    }
+}
+
 fn parse_markdown_prepared(
     markdown: &str,
     options: &Options,

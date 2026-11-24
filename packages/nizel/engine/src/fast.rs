@@ -124,9 +124,33 @@ fn render_inner(source: &str, options: &Options, out: &mut String) -> Option<()>
     out.truncate(start);
     HANDED_OVER.with(|handed| handed.set(0));
     INLINE_FALLBACK.with(|bytes| bytes.set(0));
-    let (content, references) = block::extracted_content(source);
+    if has_tab {
+        let (content, references) = block::extracted_content(source);
+        let ctx = Ctx { options, references: &references };
+        let mut state = Walk::new(&content, options, &ctx, crate::scan::find_byte(content.as_bytes(), 0, b'\t').is_some(), has_pipe, true);
+        NO_REFERENCES.with(|flag| flag.set(references.is_empty()));
+        return walk(&content, &mut state, out, None);
+    }
+    // Without tabs, extraction reads the document's own lines (the table the
+    // first walk built), and the kept lines' table comes with their join.
+    let root = state.root_lines();
+    let (kept, references) = block::extracted_lines(source, &root.lines);
+    let mut content = String::with_capacity(source.len());
+    let mut starts = Vec::with_capacity(kept.len());
+    for (index, line) in kept.iter().enumerate() {
+        if index > 0 {
+            content.push('\n');
+        }
+        starts.push(content.len());
+        content.push_str(line);
+    }
+    if starts.is_empty() {
+        // No line kept: the content is one empty line.
+        starts.push(0);
+    }
     let ctx = Ctx { options, references: &references };
-    let mut state = Walk::new(&content, options, &ctx, crate::scan::find_byte(content.as_bytes(), 0, b'\t').is_some(), has_pipe, true);
+    let mut state = Walk::new(&content, options, &ctx, false, has_pipe, true);
+    state.root_lines = Some(std::rc::Rc::new(Lines::from_starts(&content, starts)));
     NO_REFERENCES.with(|flag| flag.set(references.is_empty()));
     walk(&content, &mut state, out, None)
 }
@@ -444,6 +468,16 @@ impl<'a> Lines<'a> {
         }
         lines.push(&source[start..]);
         starts.push(start);
+        Lines { lines, starts }
+    }
+
+    /// The table of `source` given where each of its lines starts.
+    fn from_starts(source: &'a str, starts: Vec<usize>) -> Self {
+        let lines = starts
+            .iter()
+            .enumerate()
+            .map(|(index, &start)| &source[start..starts.get(index + 1).map_or(source.len(), |next| next - 1)])
+            .collect();
         Lines { lines, starts }
     }
 
