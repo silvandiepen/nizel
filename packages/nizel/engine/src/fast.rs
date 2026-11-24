@@ -1000,8 +1000,14 @@ fn paragraph(source: &str, start: usize, out: &mut String) -> Option<(usize, boo
     // for reference definitions).
     let mut bracket = false;
     let end = loop {
-        // Eight bytes at a time while none of them needs a look.
+        // Eight bytes at a time while none of them needs a look: first the
+        // common case (lower-case letters and spaces) in arithmetic, then the
+        // class table.
         while i + 8 <= b.len() {
+            if lower_or_space(u64::from_le_bytes(b[i..i + 8].try_into().expect("eight bytes"))) {
+                i += 8;
+                continue;
+            }
             let w = &b[i..i + 8];
             let any = CLASS[w[0] as usize] | CLASS[w[1] as usize] | CLASS[w[2] as usize] | CLASS[w[3] as usize]
                 | CLASS[w[4] as usize] | CLASS[w[5] as usize] | CLASS[w[6] as usize] | CLASS[w[7] as usize];
@@ -1637,6 +1643,25 @@ fn emphasis(source: &str, pair: &EmphasisPair, out: &mut String, text: Option<&m
     }
 }
 
+/// Are all eight bytes of `word` ASCII lower-case letters or spaces (both
+/// `PLAIN`)? Exact per byte: with no high bit set no addition carries into
+/// the next byte.
+fn lower_or_space(word: u64) -> bool {
+    const HIGH: u64 = 0x8080_8080_8080_8080;
+    const LOW7: u64 = 0x7f7f_7f7f_7f7f_7f7f;
+    if word & HIGH != 0 {
+        return false;
+    }
+    // A byte's high bit after adding 0x1f: it is at least `a`; after 0x05: past `z`.
+    let at_least_a = word.wrapping_add(0x1f1f_1f1f_1f1f_1f1f);
+    let past_z = word.wrapping_add(0x0505_0505_0505_0505);
+    let lower = at_least_a & !past_z & HIGH;
+    // A space XOR 0x20 is zero: its high bit stays clear after the add.
+    let spaced = word ^ 0x2020_2020_2020_2020;
+    let space = !((spaced & LOW7).wrapping_add(LOW7) | spaced) & HIGH;
+    lower | space == HIGH
+}
+
 /// An inline link in the subset: the label and destination ranges.
 struct Link {
     label: (usize, usize),
@@ -1916,4 +1941,26 @@ fn fenced_code(source: &str, start: usize, eol: usize, out: &mut String) -> Opti
     }
     out.push_str("</code></pre>");
     next.map(|n| n.min(b.len()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::lower_or_space;
+
+    #[test]
+    fn lower_or_space_matches_a_byte_test() {
+        // Every byte value at every position, among lower-case letters.
+        for position in 0..8 {
+            for value in 0..=255u8 {
+                let mut bytes = *b"abcdwxyz";
+                bytes[position] = value;
+                let expected = bytes.iter().all(|&c| c.is_ascii_lowercase() || c == b' ');
+                assert_eq!(lower_or_space(u64::from_le_bytes(bytes)), expected, "{bytes:?}");
+                let mut spaced = *b"    a  z";
+                spaced[position] = value;
+                let expected = spaced.iter().all(|&c| c.is_ascii_lowercase() || c == b' ');
+                assert_eq!(lower_or_space(u64::from_le_bytes(spaced)), expected, "{spaced:?}");
+            }
+        }
+    }
 }
