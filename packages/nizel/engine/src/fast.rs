@@ -933,7 +933,8 @@ fn nested_list<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, li
     // left its own there.
     block::set_document_flags(state.has_pipe, false);
     let opening = block::parse_list_marker(lines.lines[start_index])?;
-    let mut items: Vec<(Option<bool>, String)> = Vec::new();
+    // An item of one line is that line (or part of it); longer ones are joined.
+    let mut items: Vec<(Option<bool>, std::borrow::Cow<str>)> = Vec::new();
     let mut tight = true;
     let mut index = start_index;
     // The next item's marker, when collecting the item before it parsed it.
@@ -946,12 +947,22 @@ fn nested_list<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, li
         if marker.ordered != opening.ordered || marker.marker != opening.marker {
             break;
         }
-        let (checked, body) = block::task_box(&marker.body);
-        let (item_lines, end, loose, after) = block::collect_list_item(body, &lines.lines, index, &opening, marker.content_indent, state.options);
+        // A marker body borrowed from the line lives as long as the lines,
+        // so a one-line item can be that line; otherwise the item is joined.
+        let (checked, text, end, loose, after) = if let std::borrow::Cow::Borrowed(line) = marker.body {
+            let (checked, body) = block::task_box(line);
+            let (item_lines, end, loose, after) = block::collect_list_item(body, &lines.lines, index, &opening, marker.content_indent, state.options);
+            let text = if let [only] = item_lines[..] { std::borrow::Cow::Borrowed(only) } else { item_lines.join("\n").into() };
+            (checked, text, end, loose, after)
+        } else {
+            let (checked, body) = block::task_box(&marker.body);
+            let (item_lines, end, loose, after) = block::collect_list_item(body, &lines.lines, index, &opening, marker.content_indent, state.options);
+            (checked, item_lines.join("\n").into(), end, loose, after)
+        };
         if loose {
             tight = false;
         }
-        items.push((checked, item_lines.join("\n")));
+        items.push((checked, text));
         next_marker = after;
         index = end + 1;
     }
