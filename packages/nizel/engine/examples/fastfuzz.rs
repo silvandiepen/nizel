@@ -59,6 +59,7 @@ const ATOMS: &[&str] = &[
     "\n>\u{3000} [qe]: /u", "\n>\u{a0}[qf]: /u", "\n- a\n>\u{3000}[qg]: /u", "\n> > [qh]: /u", "\n>\t[qi]: /u",
     "\ntitle: X\nicon: y\n---", "\nOne\n===", "\nA *b*\nc `d`\n---", "\nA `x\ny`\n---", "\nTrail \nnext\n---", "\nSame\n---\n\nSame\n---", "\n[l](u)\nz\n===",
     " `[x]`", " `[a` b](c)", " `[[toc]]` and [l](u)", " `x][y`", " `[^id]`", "\n`a\n[r]: /u`", " `]` (p)", " `[` ](q)", "# `[h]`", "\n| `[c]` | d |\n|---|---|",
+    "\n- a\n  ```\n  [d]: /e\n  ```\n\n```\n[f]: /g\n```", "\n- a\n  ```\n\n```\n[h]: /i\n```", "\n1. b\n   ~~~\n   x\n   ~~~", "\n- c\n  <div>\n\n```\n[j]: /k\n```",
     // Just outside: the tier must decline, never differ.
     "*em*", "**strong**", "_u_", "[link](x)", "<b>", "&amp;", "\\*", "~~d~~", "| a | b |", "a@b.co", "http://e.com",
     "> quote", "- item", "1. one", "+ plus", "===", "--", "\t", "\r\n", ":: note", "[r]: /url", "![i](s)",

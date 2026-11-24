@@ -153,7 +153,7 @@ fn blockquote_reference_line(line: &str) -> Option<&str> {
 }
 
 /// `isReferenceStartAfterBlock`.
-fn is_reference_start_after_block(line: &str) -> bool {
+pub(crate) fn is_reference_start_after_block(line: &str) -> bool {
     let rest = &line[js::up_to_three_spaces(line)..];
     let hashes = js::run_of(rest, b'#');
     let atx = (1..=hashes.min(6)).any(|n| rest[n..].is_empty() || rest[n..].chars().next().is_some_and(js::is_space));

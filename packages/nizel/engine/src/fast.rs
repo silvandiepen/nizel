@@ -209,29 +209,50 @@ impl<'a> Walk<'a> {
     }
 }
 
-/// Does `b` hold a line on which extraction would open a fence (three or
-/// more backticks or tildes) or try an HTML block (`<`), after up to three
-/// spaces?
-fn opens_for_extraction(b: &[u8]) -> bool {
+/// Reading the lines of `b` from outside any fence, as extraction does, does
+/// it end outside one again, without reaching a line that starts an HTML
+/// block on the way? Its
+/// fence rule: three or more backticks or tildes after up to three spaces
+/// open one, `closesFence` ends it.
+fn extraction_ends_clear(b: &[u8]) -> bool {
+    let mut fence: Option<(u8, usize)> = None;
     let mut at = 0;
     while at < b.len() {
-        let spaces = b[at..].iter().take(3).take_while(|&&c| c == b' ').count();
-        let lead = at + spaces;
-        match b.get(lead) {
-            Some(b'<') => return true,
-            Some(&marker @ (b'`' | b'~')) if b[lead..].iter().take(3).take_while(|&&c| c == marker).count() == 3 => return true,
-            _ => {}
+        let end = crate::scan::find_byte(b, at, b'\n').unwrap_or(b.len());
+        let line = &b[at..end];
+        match fence {
+            Some((marker, length)) => {
+                if std::str::from_utf8(line).is_ok_and(|line| block::closes_fence(line, marker, length)) {
+                    fence = None;
+                }
+            }
+            None => {
+                let spaces = line.iter().take(3).take_while(|&&c| c == b' ').count();
+                match line.get(spaces) {
+                    // Extraction reads an HTML block only where one starts
+                    // (decided by that line alone); other `<` lines are text.
+                    Some(b'<') if std::str::from_utf8(line).map_or(true, crate::html::starts_html_block) => return false,
+                    Some(&marker @ (b'`' | b'~')) => {
+                        let length = line[spaces..].iter().take_while(|&&c| c == marker).count();
+                        if length >= 3 {
+                            fence = Some((marker, length));
+                        }
+                    }
+                    _ => {}
+                }
+            }
         }
-        at = crate::scan::find_byte(b, at, b'\n').map_or(b.len(), |n| n + 1);
+        at = end + 1;
     }
-    false
+    fence.is_none()
 }
 
 impl Walk<'_> {
     /// A root block tier 1 rendered without reading it as extraction does:
-    /// extraction may have fallen out of step if it holds such a line.
+    /// extraction stays in step if, read its way, the block's lines leave it
+    /// outside any fence again (and never at an HTML block).
     fn note_block(&mut self, text: &str) {
-        if self.depth == 0 && self.in_step && opens_for_extraction(text.as_bytes()) {
+        if self.depth == 0 && self.in_step && !extraction_ends_clear(text.as_bytes()) {
             self.in_step = false;
         }
     }
@@ -379,13 +400,18 @@ struct Lines<'a> {
 
 impl<'a> Lines<'a> {
     fn new(source: &'a str) -> Self {
-        let lines = crate::scan::lines(source);
-        let mut starts = Vec::with_capacity(lines.len());
-        let mut at = 0;
-        for line in &lines {
-            starts.push(at);
-            at += line.len() + 1;
+        // `scan::lines` and the starts in one pass.
+        let b = source.as_bytes();
+        let capacity = b.len() / 32 + 1;
+        let (mut lines, mut starts) = (Vec::with_capacity(capacity), Vec::with_capacity(capacity));
+        let mut start = 0;
+        while let Some(end) = crate::scan::find_byte(b, start, b'\n') {
+            lines.push(&source[start..end]);
+            starts.push(start);
+            start = end + 1;
         }
+        lines.push(&source[start..]);
+        starts.push(start);
         Lines { lines, starts }
     }
 
@@ -429,7 +455,7 @@ fn block<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, lines: &
     let lead = b[pos];
     // `isTableStart` comes before paragraphs and lists (and after every
     // construct that cannot hold a `|` line at a block start).
-    if (lead == b'|' || lead.is_ascii_alphabetic()) && table_starts(source, pos) {
+    if (lead == b'|' || lead.is_ascii_alphabetic()) && table_starts(source, pos, state.has_pipe) {
         return Some((checked_table(source, pos, state, out)?, false));
     }
     if lead.is_ascii_alphabetic() {
@@ -441,7 +467,7 @@ fn block<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, lines: &
     if lead == b' ' {
         let spaces = b[pos..].iter().take(3).take_while(|&&c| c == b' ').count();
         if b.get(pos + spaces).is_some_and(u8::is_ascii_alphabetic) {
-            if table_starts(source, pos) {
+            if table_starts(source, pos, state.has_pipe) {
                 return Some((checked_table(source, pos, state, out)?, false));
             }
             return checked_paragraph(source, pos + spaces, state, out);
@@ -480,7 +506,7 @@ fn block<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, lines: &
     }
     if lead == b'>' {
         // `isTableStart` comes before blockquotes.
-        if table_starts(source, pos) {
+        if table_starts(source, pos, state.has_pipe) {
             return Some((checked_table(source, pos, state, out)?, false));
         }
         return Some((blockquote(source, pos, state, lines, out)?, false));
@@ -500,7 +526,7 @@ fn block<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, lines: &
             return Some((end, false));
         }
         b'-' | b'*' | b'_' if block::is_thematic_break(line) => out.push_str("<hr />"),
-        b'-' | b'*' | b'+' | b'0'..=b'9' if table_starts(source, pos) => return Some((checked_table(source, pos, state, out)?, false)),
+        b'-' | b'*' | b'+' | b'0'..=b'9' if table_starts(source, pos, state.has_pipe) => return Some((checked_table(source, pos, state, out)?, false)),
         b'-' | b'*' | b'+' | b'0'..=b'9' => {
             let mark = out.len();
             let next = match list(source, pos, out) {
@@ -546,11 +572,58 @@ fn checked_paragraph(source: &str, pos: usize, state: &mut Walk, out: &mut Strin
             (end, source[pos..after].contains('['), setext.is_none())
         }
     };
-    if bracket && state.check_definitions(&source[pos..end.min(source.len())]).is_none() {
-        out.truncate(mark);
-        return None;
+    if bracket {
+        // In step at the root, extraction reaches the paragraph afresh, so its
+        // own start test and reader over the paragraph's lines decide
+        // (`>` lines interrupt a paragraph), without reading the whole
+        // document.
+        let local = state.depth == 0 && state.in_step && !state.has_tab && !state.references_checked;
+        let defines = if local { defines_at_paragraph(source, pos, end) } else { state.check_definitions(&source[pos..end.min(source.len())]).is_none() };
+        if defines {
+            if local {
+                state.found_definitions = true;
+            }
+            out.truncate(mark);
+            return None;
+        }
     }
     Some((end, paragraph))
+}
+
+/// Does extraction read a definition in the paragraph starting at `pos`,
+/// reached in step with tier 1 and outside any fence? Its own test for
+/// where one can start (after a blank line, or after a line it reads as a
+/// heading or break) and its reader, from each of the block's lines
+/// (`pos..block_end`) over the lines up to the next blank line (where both
+/// of its readers stop).
+fn defines_at_paragraph(source: &str, pos: usize, block_end: usize) -> bool {
+    let b = source.as_bytes();
+    let first_can_start = pos == 0 || {
+        let previous_start = b[..pos - 1].iter().rposition(|&c| c == b'\n').map_or(0, |n| n + 1);
+        let previous = &source[previous_start..pos - 1];
+        crate::js::trim(previous).is_empty() || crate::refs::is_reference_start_after_block(previous)
+    };
+    let mut lines = Vec::new();
+    let mut at = pos;
+    while at < b.len() {
+        let end = line_end(b, at);
+        let line = &source[at..end];
+        if crate::js::trim(line).is_empty() {
+            break;
+        }
+        lines.push(line);
+        at = end + 1;
+    }
+    // A later line of the block can start one too when the line before it
+    // reads as a heading or a break to extraction (`   # h` continues a
+    // paragraph). Past the block extraction reads other blocks' lines (a
+    // fence, say): only the block's own lines are start positions, though a
+    // definition may read on to the blank line.
+    let own = source[pos..block_end.min(source.len())].trim_end_matches('\n').split('\n').count();
+    (0..lines.len().min(own)).any(|k| {
+        let can_start = if k == 0 { first_can_start } else { crate::refs::is_reference_start_after_block(lines[k - 1]) };
+        can_start && lines[k].contains('[') && crate::refs::read_reference_definition(&lines, k).is_some()
+    })
 }
 
 /// A table, after checking its rows for lines that could start a reference
@@ -658,10 +731,18 @@ fn blockquote<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, lin
 }
 
 /// `isTableStart` at `pos`: the line holds `|` and the next is a delimiter row.
-fn table_starts(source: &str, pos: usize) -> bool {
+fn table_starts(source: &str, pos: usize, has_pipe: bool) -> bool {
+    if !has_pipe {
+        return false;
+    }
     let b = source.as_bytes();
-    let eol = line_end(b, pos);
-    if !source[pos..eol].contains('|') || eol >= b.len() {
+    // A `|` before the line's end, in one scan.
+    let Some(at) = crate::scan::find_any_n(b, pos, *b"|\n") else { return false };
+    if b[at] == b'\n' {
+        return false;
+    }
+    let eol = line_end(b, at);
+    if eol >= b.len() {
         return false;
     }
     let next = &source[eol + 1..line_end(b, eol + 1)];
