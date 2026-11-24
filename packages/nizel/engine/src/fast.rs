@@ -94,14 +94,23 @@ fn render_inner(source: &str, options: &Options, out: &mut String) -> Option<()>
     // definitions is decided lazily, by the full engine's own extraction
     // (which skips fenced code and HTML blocks); with none, it leaves every
     // line as is, and with some, tier 1 starts over on what it leaves.
-    if crate::scan::find_byte(b, 0, b'\r').is_some() {
-        return None;
-    }
+    // CR and tabs in one scan (the full engine expands tabs in every line
+    // before reading lists).
+    let has_tab = match crate::scan::find_any_n(b, 0, *b"\r\t") {
+        None => false,
+        Some(at) if b[at] == b'\r' => return None,
+        Some(at) => {
+            if crate::scan::find_byte(b, at, b'\r').is_some() {
+                return None;
+            }
+            true
+        }
+    };
     let has_pipe = crate::scan::find_byte(b, 0, b'|').is_some();
     let start = out.len();
     let none = References::new();
     let plain = Ctx { options, references: &none };
-    let mut state = Walk::new(source, options, &plain, has_pipe, false);
+    let mut state = Walk::new(source, options, &plain, has_tab, has_pipe, false);
     NO_REFERENCES.with(|flag| flag.set(true));
     if walk(source, &mut state, out, None).is_some() {
         return Some(());
@@ -117,19 +126,18 @@ fn render_inner(source: &str, options: &Options, out: &mut String) -> Option<()>
     INLINE_FALLBACK.with(|bytes| bytes.set(0));
     let (content, references) = block::extracted_content(source);
     let ctx = Ctx { options, references: &references };
-    let mut state = Walk::new(&content, options, &ctx, has_pipe, true);
+    let mut state = Walk::new(&content, options, &ctx, crate::scan::find_byte(content.as_bytes(), 0, b'\t').is_some(), has_pipe, true);
     NO_REFERENCES.with(|flag| flag.set(references.is_empty()));
     walk(&content, &mut state, out, None)
 }
 
 impl<'a> Walk<'a> {
-    fn new(root: &'a str, options: &'a Options, ctx: &'a Ctx<'a>, has_pipe: bool, extracted: bool) -> Self {
+    fn new(root: &'a str, options: &'a Options, ctx: &'a Ctx<'a>, has_tab: bool, has_pipe: bool, extracted: bool) -> Self {
         Walk {
             root,
             options,
             ctx,
-            // The full engine expands tabs in every line before reading lists.
-            has_tab: crate::scan::find_byte(root.as_bytes(), 0, b'\t').is_some(),
+            has_tab,
             has_pipe,
             seen: crate::slug::Seen::default(),
             text: String::new(),
