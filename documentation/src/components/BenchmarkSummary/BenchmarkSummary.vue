@@ -3,12 +3,24 @@
     <header :class="bemm('head')">
       <p :class="bemm('eyebrow')">Measured performance</p>
       <h1 :class="bemm('title')">Benchmarks</h1>
-      <p :class="bemm('lede')">Results from the repository benchmark suite. These are local measurements, not guarantees; compare relative results and reproduce them on your target runtime.</p>
-      <dl :class="bemm('metadata')"><div><dt>Run</dt><dd>1 September 2026</dd></div><div><dt>Runtime</dt><dd>Node 22.23 · Apple silicon</dd></div><div><dt>Fixtures</dt><dd>5 documents · 2 modes</dd></div><div><dt>Profile</dt><dd>700 ms · 300 ms warmup</dd></div></dl>
+      <p :class="bemm('lede')">With its WebAssembly engine, Nizel renders real Markdown documents to HTML about 10× faster than markdown-it, 8× faster than marked and 200× faster than remark. The output is the same as Nizel's JavaScript engine. These are local measurements, not guarantees; reproduce them on your target runtime.</p>
+      <dl :class="bemm('metadata')"><div><dt>Run</dt><dd>24 November 2026</dd></div><div><dt>Runtime</dt><dd>Node 22.23 · Apple M3</dd></div><div><dt>Fixtures</dt><dd>5 documents</dd></div><div><dt>Profile</dt><dd>15 interleaved rounds</dd></div></dl>
     </header>
 
+    <section :class="bemm('section')" aria-labelledby="speedup-title">
+      <div :class="bemm('section-head')"><h2 id="speedup-title">Faster than the common renderers</h2><p>Geometric mean of Nizel's speedup over five documents.</p></div>
+      <div :class="bemm('claim-grid')">
+        <div v-for="claim in claims" :key="claim.engine" :class="bemm('claim')"><strong :class="bemm('claim-value')">{{ claim.speedup }}</strong><span>faster than {{ claim.engine }}</span></div>
+      </div>
+    </section>
+
+    <section :class="bemm('section')" aria-labelledby="documents-title">
+      <div :class="bemm('section-head')"><h2 id="documents-title">Throughput by document</h2><p>Markdown to HTML, MiB of input per CPU second. Higher is better.</p></div>
+      <div :class="bemm('table-wrap')"><table :class="bemm('table')"><thead><tr><th>Document</th><th>Nizel (Wasm)</th><th>markdown-it</th><th>marked</th><th>remark</th></tr></thead><tbody><tr v-for="row in documents" :key="row.name"><th>{{ row.name }}</th><td>{{ row.nizel }}</td><td>{{ row.markdownIt }}</td><td>{{ row.marked }}</td><td>{{ row.remark }}</td></tr></tbody></table></div>
+    </section>
+
     <section :class="bemm('section')" aria-labelledby="rankings-title">
-      <div :class="bemm('section-head')"><h2 id="rankings-title">Engine rankings</h2><p>Geometric mean of relative speed. 100 means fastest for every fixture.</p></div>
+      <div :class="bemm('section-head')"><h2 id="rankings-title">JavaScript engine</h2><p>The standard <code>nizel</code> import, 1 September 2026. Geometric mean of relative speed; 100 means fastest for every fixture.</p></div>
       <div :class="bemm('ranking-grid')">
         <div v-for="ranking in rankings" :key="ranking.mode" :class="bemm('ranking')">
           <h3>{{ ranking.mode }}</h3>
@@ -21,7 +33,7 @@
     </section>
 
     <section :class="bemm('section')" aria-labelledby="fixtures-title">
-      <div :class="bemm('section-head')"><h2 id="fixtures-title">Nizel throughput</h2><p>Operations per second for the local Nizel build. Higher is better.</p></div>
+      <div :class="bemm('section-head')"><h2 id="fixtures-title">JavaScript engine throughput</h2><p>Operations per second, 1 September 2026 (700 ms per task, 300 ms warmup). Higher is better.</p></div>
       <div :class="bemm('table-wrap')"><table :class="bemm('table')"><thead><tr><th>Fixture</th><th>Parse</th><th>Render HTML</th></tr></thead><tbody><tr v-for="fixture in fixtures" :key="fixture.name"><th>{{ fixture.name }}</th><td>{{ fixture.parse }}</td><td>{{ fixture.render }}</td></tr></tbody></table></div>
     </section>
 
@@ -31,9 +43,10 @@
     </section>
 
     <section :class="bemm('method')" aria-labelledby="method-title">
-      <div :class="bemm('method-copy')"><h2 id="method-title">Methodology</h2><p>Each engine receives the same source fixture. Parsers are initialized once before measurement. Parse mode returns the engine's document or token tree; render mode includes parsing and HTML generation. Shiki and other expensive presentation plugins are not enabled.</p></div>
+      <div :class="bemm('method-copy')"><h2 id="method-title">Methodology</h2><p>The WebAssembly comparison renders each document through <code>useNizel().html()</code> from <code>nizel/wasm</code> with default options (heading IDs, autolinks, safe HTML), markdown-it and marked with their defaults, and remark with remark-parse, remark-gfm and remark-html. The engines run in turn within each round, in alternating order, and each figure is the median of 15 rounds. The documents are an AI code review, a README, a collection of READMEs, a documentation set and the CommonMark specification.</p><p>For the JavaScript engine comparison, each engine receives the same source fixture. Parsers are initialized once before measurement. Parse mode returns the engine's document or token tree; render mode includes parsing and HTML generation. Shiki and other expensive presentation plugins are not enabled.</p></div>
       <dl :class="bemm('method-list')"><div><dt>Measurement</dt><dd>700 ms per task</dd></div><div><dt>Warmup</dt><dd>300 ms per task</dd></div><div><dt>Score</dt><dd>Geometric mean of relative throughput</dd></div><div><dt>Direction</dt><dd>Higher throughput and score are better</dd></div></dl>
-      <div :class="bemm('reproduce')"><div><strong>Reproduce the comparison</strong><span>Run from the repository root after installing dependencies.</span></div><code>npm run benchmark -- --fixture=small,readme,large,gfm,code-heavy --mode=parse,render</code></div>
+      <div :class="bemm('reproduce')"><div><strong>Reproduce the WebAssembly comparison</strong><span>Run in <code>apps/benchmarks</code> after <code>npm run build</code>.</span></div><code>npm run compare -- --platforms</code></div>
+      <div :class="bemm('reproduce')"><div><strong>Reproduce the JavaScript engine comparison</strong><span>Run from the repository root after installing dependencies.</span></div><code>npm run benchmark -- --fixture=small,readme,large,gfm,code-heavy --mode=parse,render</code></div>
     </section>
   </article>
 </template>
@@ -42,6 +55,14 @@
 import { useBemm } from "bemm";
 import type { BenchmarkEngine, BenchmarkFixture } from "./BenchmarkSummary.model";
 const bemm = useBemm("benchmark-summary", { includeBaseClass: true });
+const claims = [{ engine: "markdown-it", speedup: "10×" }, { engine: "marked", speedup: "8×" }, { engine: "remark", speedup: "200×" }];
+const documents = [
+  { name: "AI code review, 5.2 KiB", nizel: "193.5", markdownIt: "20.3", marked: "19.1", remark: "1.5" },
+  { name: "README, 1 KiB", nizel: "307.0", markdownIt: "13.5", marked: "20.9", remark: "1.3" },
+  { name: "READMEs, 61 KiB", nizel: "229.2", markdownIt: "20.3", marked: "25.7", remark: "0.7" },
+  { name: "Documentation, 181 KiB", nizel: "137.7", markdownIt: "13.3", marked: "19.1", remark: "0.5" },
+  { name: "CommonMark spec, 44 KiB", nizel: "23.3", markdownIt: "4.7", marked: "8.7", remark: "0.2" },
+];
 const rankings: { mode: string; engines: BenchmarkEngine[] }[] = [
   { mode: "Parse", engines: [{ name: "Nizel", score: 86.4, wins: 2 }, { name: "markdown-it", score: 82.3, wins: 2 }, { name: "marked", score: 58.4, wins: 1 }, { name: "Comark", score: 31.6, wins: 0 }, { name: "remark", score: 1.1, wins: 0 }] },
   { mode: "Render", engines: [{ name: "markdown-it", score: 94.6, wins: 3 }, { name: "Nizel", score: 83.7, wins: 2 }, { name: "marked", score: 64, wins: 0 }, { name: "Comark", score: 23, wins: 0 }, { name: "remark", score: 1.6, wins: 0 }] },
@@ -68,6 +89,11 @@ const fixtures: BenchmarkFixture[] = [
   &__section-head h2, &__section-head p, &__ranking h3, &__costs h2, &__costs p { margin: 0; }
   &__section-head h2, &__costs h2 { font-size: 1.75rem; }
   &__section-head p, &__costs p { color: tone.muted(); }
+  &__claim-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+  &__claim { display: flex; flex-direction: column; gap: .4rem; padding: 1.5rem; border-radius: 1rem; background: tone.surface(); color: tone.muted(); }
+  &__claim-value { color: var(--color-primary); font-size: clamp(2.5rem, 5vw, 3.5rem); letter-spacing: -.03em; line-height: 1; }
+  &__method-copy p + p { margin-top: .75rem; }
+  &__reproduce + &__reproduce { margin-top: 1rem; }
   &__ranking-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
   &__ranking { padding: 1.5rem; border-radius: 1rem; background: tone.surface(); }
   &__ranking h3 { margin-bottom: 1.5rem; }
@@ -97,5 +123,5 @@ const fixtures: BenchmarkFixture[] = [
   &__reproduce span { margin-top: .35rem; color: tone.muted(); font-size: .85rem; }
   &__reproduce code { overflow-x: auto; padding: 1rem; border-radius: .7rem; background: #0d1117; color: #e6edf3; font-family: var(--font-family-mono); font-size: .78rem; white-space: nowrap; }
 }
-@media (max-width: 48rem) { .benchmark-summary { &__ranking-grid, &__method-list, &__reproduce { grid-template-columns: 1fr; } &__section-head, &__costs { align-items: flex-start; flex-direction: column; } &__cost-list { grid-template-columns: 1fr; } } }
+@media (max-width: 48rem) { .benchmark-summary { &__claim-grid, &__ranking-grid, &__method-list, &__reproduce { grid-template-columns: 1fr; } &__section-head, &__costs { align-items: flex-start; flex-direction: column; } &__cost-list { grid-template-columns: 1fr; } } }
 </style>

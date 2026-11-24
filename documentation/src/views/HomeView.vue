@@ -6,12 +6,14 @@
       <p :class="bemm('summary')">
         Nizel parses CommonMark into safe HTML and a structured result containing
         metadata, headings, links, images, text, reading time, and a stable AST.
-        It runs in Node.js, browsers, Workers, and native WebViews.
+        It runs in Node.js, browsers, Workers, and native WebViews. Its WebAssembly
+        engine renders HTML about 10× faster than markdown-it and 8× faster than marked.
       </p>
       <div :class="bemm('intro-links')">
         <RouterLink :class="bemm('primary-link')" to="/guides/getting-started">Getting started</RouterLink>
         <RouterLink :class="bemm('text-link')" to="/features">Features</RouterLink>
         <RouterLink :class="bemm('text-link')" to="/play">Playground</RouterLink>
+        <RouterLink :class="bemm('text-link')" to="/guides/benchmarks">Benchmarks</RouterLink>
       </div>
     </header>
 

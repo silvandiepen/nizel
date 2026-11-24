@@ -6,14 +6,14 @@ order: 12
 
 # WebAssembly
 
-Nizel has an optional first-party WebAssembly backend for Markdown to HTML and HTML to Markdown. The Wasm entry points share Nizel’s JavaScript API and use its existing renderer whenever a document needs features outside the accelerated subset.
+Nizel has an optional first-party WebAssembly backend for Markdown to HTML and HTML to Markdown. The Wasm entry points share Nizel’s JavaScript API and fall back to the JavaScript renderer when the options need it.
 
 ## Use the optional build
 
-The first Wasm release is Nizel 0.1.16. If the npm registry cannot resolve the version, install the [release archive](https://github.com/silvandiepen/nizel/releases/tag/nizel%400.1.16):
+The Wasm engine ships in the `nizel` package:
 
 ~~~sh
-npm install https://github.com/silvandiepen/nizel/releases/download/nizel%400.1.16/nizel-0.1.16.tgz
+npm install nizel
 ~~~
 
 For Node.js, import from the Wasm entry point:
@@ -30,8 +30,12 @@ In a browser bundle, use the equivalent helpers from `nizel/browser/wasm`. This 
 
 The Wasm bytes travel with the optional build. The first eligible call initializes the module locally. Browsers that block compilation, including under a restrictive Content Security Policy, use the JavaScript fallback. Standard imports continue to use JavaScript.
 
-## What it accelerates
+## Speed
 
-The forward path covers ASCII paragraphs, soft and hard line breaks, simple ATX headings and heading IDs, inline code, and simple emphasis. The reverse path covers corresponding semantic HTML and common named entities. Complex syntax, custom rendering rules, AST-dependent plugins, reverse plugin handlers, and inputs over 1,048,576 UTF-16 code units use JavaScript. Before-parse and after-render hooks run on either path. APIs that return ASTs, document objects, metadata, or collected text continue through the existing pipeline.
+With default options, the Wasm engine renders real documents about 10× faster than markdown-it, 8× faster than marked and 200× faster than remark. See [Benchmarks](/guides/benchmarks) for the documents, the method and the command that reproduces it.
 
-Coverage depends on the document and plugin settings. Benchmark both conversions on representative inputs and check the fallback path before enabling it in an application.
+## What it covers
+
+The engine renders the same Markdown as the JavaScript engine, with identical output: it passes the CommonMark and GFM spec suites and Nizel's own test suite through the Wasm entry points. Plugins that can change the output, transforms, custom element rules and block renderers parse with the engine and render through the JavaScript renderer. Inputs over 1,048,576 UTF-16 code units use JavaScript. Before-parse and after-render hooks run on either path.
+
+Benchmark on representative inputs and check the fallback path before enabling it in an application.

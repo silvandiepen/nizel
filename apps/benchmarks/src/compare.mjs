@@ -5,6 +5,10 @@
 //   npm run compare -- --pairs  Nizel's Wasm engine against Words alone, warmed
 //                               (the ratio is the median of per-round ratios;
 //                               on large documents the two alternate call by call)
+//   npm run compare -- --platforms
+//                               nizel/wasm with default options against
+//                               markdown-it, marked and remark, interleaved;
+//                               the figures the documentation site quotes
 //
 // The interleaved table runs ten engines in one process, so garbage the
 // JavaScript ones leave is collected in whichever slot comes next; --pairs
@@ -15,6 +19,10 @@ import { marked } from 'marked';
 import * as words from '@pierre/words';
 import * as md4xNapi from 'md4x/napi';
 import * as md4xWasm from 'md4x/wasm';
+import { unified } from 'unified';
+import remarkParse from 'remark-parse';
+import remarkGfm from 'remark-gfm';
+import remarkHtml from 'remark-html';
 
 const nizel = new URL('../../../packages/nizel/dist/', import.meta.url);
 const stock = await import(new URL('index.js', nizel));
@@ -100,7 +108,32 @@ const measure = async (fns, text, rounds, warmup) => {
 const texts = {};
 for (const [name, path] of Object.entries(docs)) texts[name] = await readFile(new URL(path, fixtures), 'utf8');
 
-if (process.argv.includes('--pairs')) {
+if (process.argv.includes('--platforms')) {
+  // The default nizel/wasm API (heading IDs, autolinks, safe mode) against
+  // the widely used JavaScript renderers. The tier-1 subset is left out: it
+  // was cut from the documentation fixture to exercise Nizel's fast path.
+  const remark = unified().use(remarkParse).use(remarkGfm).use(remarkHtml);
+  const platforms = {
+    Nizel: (s) => nizelWasm.html(s),
+    'markdown-it': (s) => md.render(s),
+    marked: (s) => marked.parse(s),
+    remark: (s) => String(remark.processSync(s)),
+  };
+  const names = Object.keys(platforms);
+  const others = names.slice(1);
+  console.log(['document', ...names.map((n) => `${n} MiB/s`), ...others.map((n) => `vs ${n}`)].join(' | '));
+  const speedups = Object.fromEntries(others.map((n) => [n, []]));
+  for (const [name, text] of Object.entries(texts)) {
+    if (name.startsWith('tier-1 subset')) continue;
+    const bytes = Buffer.byteLength(text);
+    const { times } = await measure(platforms, text, 15, 30);
+    const ratios = others.map((n) => times[n] / times.Nizel);
+    ratios.forEach((r, i) => speedups[others[i]].push(r));
+    console.log([name, ...names.map((n) => mib(bytes, times[n])), ...ratios.map((r) => `${r.toFixed(1)}x`)].join(' | '));
+  }
+  const geomean = (values) => Math.exp(values.reduce((sum, v) => sum + Math.log(v), 0) / values.length);
+  console.log(['geometric mean', ...names.map(() => ''), ...others.map((n) => `${geomean(speedups[n]).toFixed(1)}x`)].join(' | '));
+} else if (process.argv.includes('--pairs')) {
   const pair = { 'Nizel Wasm engine, bare options': engines['Nizel Wasm engine, bare options'], 'Words (string)': engines['Words (string)'] };
   console.log('document | Nizel bare | Words (string) | Nizel / Words');
   for (const [name, text] of Object.entries(texts)) {
