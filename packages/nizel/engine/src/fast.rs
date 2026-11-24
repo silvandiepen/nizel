@@ -472,6 +472,13 @@ fn block<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, lines: &
     if lead == b'<' && !state.options.safe {
         return Some((html_block(source, pos, state, lines, out)?, false));
     }
+    if lead == b'>' {
+        // `isTableStart` comes before blockquotes.
+        if table_starts(source, pos) {
+            return Some((checked_table(source, pos, state, out)?, false));
+        }
+        return Some((blockquote(source, pos, state, lines, out)?, false));
+    }
     match lead {
         b'#' => heading(line, state.options, state.ctx, &mut state.seen, &mut state.text, (&mut state.slug, &mut state.attribute), out)?,
         b'`' => {
@@ -605,6 +612,38 @@ fn html_block<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, lin
     Some(lines.starts.get(end + 1).copied().unwrap_or(source.len()))
 }
 
+/// A blockquote: its lines by the full engine's own rules
+/// (`collect_blockquote`: markers, lazy continuations), rendered by tier 1 as
+/// a document of their own, as `renderBlock` wraps them. Tabs anywhere leave
+/// it to the full engine (it expands them from the marker's column).
+fn blockquote<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, lines: &mut Option<std::rc::Rc<Lines<'a>>>, out: &mut String) -> Option<usize> {
+    if state.has_tab {
+        return None;
+    }
+    let table = lines.get_or_insert_with(|| if state.depth == 0 { state.root_lines() } else { std::rc::Rc::new(Lines::new(source)) }).clone();
+    let index = table.index_of(pos);
+    block::set_document_flags(state.has_pipe, false);
+    let (quote_lines, next) = block::collect_blockquote(&table.lines, index, state.options);
+    let end = table.starts.get(next).copied().unwrap_or(source.len());
+    let text = quote_lines.join("\n");
+    // Extraction reads the document's own lines (`>` and all): the check
+    // looks at those.
+    let raw = &source[pos..end.min(source.len())];
+    state.check_definitions(raw)?;
+    state.note_block(raw);
+    out.push_str("<blockquote>\n");
+    let mark = out.len();
+    state.depth += 1;
+    let walked = walk(&text, state, out, None);
+    state.depth -= 1;
+    walked?;
+    if out.len() > mark {
+        out.push('\n');
+    }
+    out.push_str("</blockquote>");
+    Some(end)
+}
+
 /// `isTableStart` at `pos`: the line holds `|` and the next is a delimiter row.
 fn table_starts(source: &str, pos: usize) -> bool {
     let b = source.as_bytes();
@@ -651,6 +690,10 @@ fn nested_list<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, li
         items.push((checked, item_lines));
         index = end + 1;
     }
+    // Extraction reads the document's own lines: check those as well as each
+    // item's de-indented text.
+    let list_end = lines.starts.get(index).copied().unwrap_or(source.len());
+    state.check_definitions(&source[pos..list_end])?;
     let tag = if opening.ordered { "ol" } else { "ul" };
     out.push('<');
     out.push_str(tag);

@@ -339,33 +339,8 @@ pub(crate) fn parse_blocks_until(lines: &[&str], start: usize, ctx: &Ctx, seen: 
         }
 
         if !letter_start && blockquote_start(line) {
-            let mut quote_lines: Vec<String> = Vec::new();
-            let mut allow_lazy = false;
-            while index < lines.len() {
-                if let Some((marker_len, marker_ends_space, rest)) = quote_marker(&lines[index]) {
-                    let column = if marker_ends_space { marker_len } else { marker_len + 1 };
-                    let quote_line = expand_leading_tabs_from_column(rest, column);
-                    quote_lines.push(quote_line);
-                    // Only the last quoted line matters to the table check there (it looks one line ahead).
-                    let last = quote_lines[quote_lines.len() - 1].as_str();
-                    allow_lazy = can_start_lazy_continuation(last, options, &[last], 0);
-                    index += 1;
-                    continue;
-                }
-                if allow_lazy && can_continue_lazily(&lines[index], options, lines, index) {
-                    let l = &lines[index];
-                    quote_lines.push(if setext_underline(l).is_some() { format!("\\{l}") } else { l.to_string() });
-                    allow_lazy = true;
-                    index += 1;
-                    continue;
-                }
-                break;
-            }
-            if quote_lines.last().is_some_and(String::is_empty) {
-                quote_lines.pop();
-            }
-            // The loop consumed at least the opening line (`index -= 1` then the
-            // JavaScript loop's `+= 1`): `index` is the first line after the quote.
+            let (quote_lines, next) = collect_blockquote(lines, index, options);
+            index = next;
             children.push(Block::Blockquote { children: parse_blocks(&as_strs(&quote_lines), ctx, seen)? });
             continue;
         }
@@ -1073,6 +1048,39 @@ fn parse_list_item_blocks(
 /// index of its last line, and whether it makes the list loose: the half of
 /// `parseListItemBlocks` before the item's blocks are parsed (tier 1 renders
 /// them itself).
+/// The lines of the blockquote opening at `index` (markers removed, lazy
+/// continuations kept) and the index of the first line after it: the half
+/// of `parseBlocks`' blockquote branch before its content is parsed (tier 1
+/// renders that itself).
+pub(crate) fn collect_blockquote(lines: &[&str], mut index: usize, options: &Options) -> (Vec<String>, usize) {
+    let mut quote_lines: Vec<String> = Vec::new();
+    let mut allow_lazy = false;
+    while index < lines.len() {
+        if let Some((marker_len, marker_ends_space, rest)) = quote_marker(&lines[index]) {
+            let column = if marker_ends_space { marker_len } else { marker_len + 1 };
+            let quote_line = expand_leading_tabs_from_column(rest, column);
+            quote_lines.push(quote_line);
+            // Only the last quoted line matters to the table check there (it looks one line ahead).
+            let last = quote_lines[quote_lines.len() - 1].as_str();
+            allow_lazy = can_start_lazy_continuation(last, options, &[last], 0);
+            index += 1;
+            continue;
+        }
+        if allow_lazy && can_continue_lazily(&lines[index], options, lines, index) {
+            let l = &lines[index];
+            quote_lines.push(if setext_underline(l).is_some() { format!("\\{l}") } else { l.to_string() });
+            allow_lazy = true;
+            index += 1;
+            continue;
+        }
+        break;
+    }
+    if quote_lines.last().is_some_and(String::is_empty) {
+        quote_lines.pop();
+    }
+    (quote_lines, index)
+}
+
 pub(crate) fn collect_list_item(
     first_line: &str,
     lines: &[&str],

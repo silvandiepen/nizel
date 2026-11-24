@@ -53,7 +53,10 @@ const ATOMS: &[&str] = &[
     "\n aaa\n   bbb", "\n   three", "\n  two | x\n|---|---|", "\ntext\n     deep", "\ntext\n  [l](u)", "\ntext\n    - x", "\ntext\n   # h", "\n  a\n  ===", "\ntext\n \u{a0}x", "\n  [r]: /x",
     "\ntext\n  ```\ncode\n  ```", "\ntext\n  - item", "\ntext\n   > q", "\ntext\n  ***", "\ntext\n  ---", "\ntext\n  -x", "\ntext\n  2. two", "\ntext\n  ::x", "\ntext\n   ```a`b",
     " **Verdict:** go", " *Minor:* x", " **a.**", " *b?*\n", " **c)** d", " **d:**,", " *e!*.", " **f,**x", " *(g)* h", " **h;**", " **i:**\n**j**",
-    " ~2%", " a~b", " ~~s~~", " ~~", " a~ ~b", " ~x~", "~", " ~`c`~", " *a~b*", " [a~](b)", " ~~a~b~~",
+    " ~2%", " a~b", " ~~s~~", " ~~", " a~ ~b", " ~x~", "~", " ~`c`~", " *a~b*", " [a~](b)",  " ~~a~b~~",
+    "\n> quote\nlazy", "\n> a\n> b", "\n>no space", "\n> # h\n> - i", "\n> ```\n> code\n> ```", "\n> > nested", "\n>\n> after empty", "\n> a\n---", "\n> a\n===", "\n> [q]: /d\n\n[q]",
+    "\n> - a\nb", "\n> | t | u |\n> |---|---|", "\n> a\n\n> b", "\n  > indented", "\n> <div>\nx", "\n>     code",
+    "\n>\u{3000} [qe]: /u", "\n>\u{a0}[qf]: /u", "\n- a\n>\u{3000}[qg]: /u", "\n> > [qh]: /u", "\n>\t[qi]: /u",
     // Just outside: the tier must decline, never differ.
     "*em*", "**strong**", "_u_", "[link](x)", "<b>", "&amp;", "\\*", "~~d~~", "| a | b |", "a@b.co", "http://e.com",
     "> quote", "- item", "1. one", "+ plus", "===", "--", "\t", "\r\n", ":: note", "[r]: /url", "![i](s)",
