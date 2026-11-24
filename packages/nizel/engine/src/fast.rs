@@ -1012,6 +1012,9 @@ fn paragraph(source: &str, start: usize, out: &mut String) -> Option<(usize, boo
             let any = CLASS[w[0] as usize] | CLASS[w[1] as usize] | CLASS[w[2] as usize] | CLASS[w[3] as usize]
                 | CLASS[w[4] as usize] | CLASS[w[5] as usize] | CLASS[w[6] as usize] | CLASS[w[7] as usize];
             if any != PLAIN {
+                // Straight to the chunk's first byte that needs a look (the
+                // plain ones before it would each repeat this test).
+                i += w.iter().position(|&c| CLASS[c as usize] != PLAIN).unwrap_or(0);
                 break;
             }
             i += 8;
