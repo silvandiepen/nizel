@@ -3,7 +3,8 @@
 //
 //   npm run compare             every engine interleaved per round
 //   npm run compare -- --pairs  Nizel's Wasm engine against Words alone, warmed
-//                               (the ratio is the median of per-round ratios)
+//                               (the ratio is the median of per-round ratios;
+//                               on large documents the two alternate call by call)
 //
 // The interleaved table runs ten engines in one process, so garbage the
 // JavaScript ones leave is collected in whichever slot comes next; --pairs
@@ -69,11 +70,26 @@ const measure = async (fns, text, rounds, warmup) => {
   for (const name of names) for (let i = 0; i < warmup; i++) await fns[name](text);
   const samples = Object.fromEntries(names.map((name) => [name, []]));
   const ratios = [];
+  const large = names.length === 2 && Buffer.byteLength(text) > 20_000;
   for (let round = 0; round < rounds; round++) {
-    for (const name of round % 2 ? [...names].reverse() : names) {
-      const start = cpu();
-      for (let i = 0; i < reps; i++) await fns[name](text);
-      samples[name].push((cpu() - start) / reps);
+    if (large) {
+      // A pair on a large document alternates call by call, so both see
+      // the same load within the round.
+      const spent = [0, 0];
+      for (let i = 0; i < reps; i++) {
+        for (const k of (round + i) % 2 ? [1, 0] : [0, 1]) {
+          const start = cpu();
+          await fns[names[k]](text);
+          spent[k] += cpu() - start;
+        }
+      }
+      names.forEach((name, k) => samples[name].push(spent[k] / reps));
+    } else {
+      for (const name of round % 2 ? [...names].reverse() : names) {
+        const start = cpu();
+        for (let i = 0; i < reps; i++) await fns[name](text);
+        samples[name].push((cpu() - start) / reps);
+      }
     }
     if (names.length === 2) ratios.push(samples[names[1]].at(-1) / samples[names[0]].at(-1));
   }
