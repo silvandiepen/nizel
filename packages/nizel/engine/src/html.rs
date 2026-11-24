@@ -171,12 +171,34 @@ enum Closing {
 }
 
 impl Closing {
+    /// Byte searches (a line is short; no searcher to set up, no lowered
+    /// copy): `</tag>` matches ASCII-case-insensitively, as lowering the line
+    /// and the needle did (the tag name is ASCII).
     fn test(&self, line: &str) -> bool {
+        let b = line.as_bytes();
         match self {
-            Closing::Literal(text) => line.contains(text),
+            Closing::Literal(text) => {
+                let needle = text.as_bytes();
+                let mut from = 0;
+                while let Some(at) = crate::scan::find_byte(b, from, needle[0]) {
+                    if b[at..].starts_with(needle) {
+                        return true;
+                    }
+                    from = at + 1;
+                }
+                false
+            }
             Closing::Tag(tag) => {
-                let needle = format!("</{tag}>").to_ascii_lowercase();
-                line.to_ascii_lowercase().contains(&needle)
+                let tag = tag.as_bytes();
+                let mut from = 0;
+                while let Some(at) = crate::scan::find_byte(b, from, b'<') {
+                    let name = at + 2;
+                    if b.get(at + 1) == Some(&b'/') && b.get(name + tag.len()) == Some(&b'>') && b[name..name + tag.len()].eq_ignore_ascii_case(tag) {
+                        return true;
+                    }
+                    from = at + 1;
+                }
+                false
             }
         }
     }

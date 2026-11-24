@@ -60,24 +60,24 @@ Through the entry points (test/wasm-spec-corpora.test.mjs): pass CommonMark spec
 
 | Fixture | Bytes | Identical | JavaScript CPU ms | Engine CPU ms | Speedup |
 | --- | --- | --- | --- | --- | --- |
-| commonmark | 44210 | yes | 6.040 | 1.467 | 4.1x |
-| gfm | 559 | yes | 0.034 | 0.008 | 4.3x |
-| readme | 997 | yes | 0.034 | 0.004 | 8.8x |
-| large | 2093 | yes | 0.156 | 0.042 | 3.8x |
-| code-heavy | 700 | yes | 0.016 | 0.002 | 6.5x |
-| 46 KB GFM | 45838 | yes | 2.834 | 0.488 | 5.8x |
-| emphasis draft | 56800 | yes | 4.150 | 0.183 | 22.6x |
-| plain draft | 54600 | yes | 1.009 | 0.073 | 13.7x |
+| commonmark | 44210 | yes | 7.566 | 1.708 | 4.4x |
+| gfm | 559 | yes | 0.048 | 0.010 | 5.0x |
+| readme | 997 | yes | 0.052 | 0.003 | 15.0x |
+| large | 2093 | yes | 0.208 | 0.059 | 3.5x |
+| code-heavy | 700 | yes | 0.019 | 0.004 | 5.2x |
+| 46 KB GFM | 45838 | yes | 3.808 | 0.456 | 8.3x |
+| emphasis draft | 56800 | yes | 5.331 | 0.177 | 30.2x |
+| plain draft | 54600 | yes | 1.045 | 0.067 | 15.5x |
 
 ## Speed: reverse, raw engine vs `htmlToMarkdown` (Node, CPU time, warm median)
 
 | Fixture (as HTML) | Bytes | Identical | JavaScript CPU ms | Engine CPU ms | Speedup |
 | --- | --- | --- | --- | --- | --- |
-| commonmark | 63766 | yes | 4.455 | 1.223 | 3.6x |
-| gfm | 921 | yes | 0.055 | 0.014 | 3.9x |
-| readme | 1423 | yes | 0.067 | 0.020 | 3.2x |
-| large | 3008 | yes | 0.131 | 0.042 | 3.1x |
-| code-heavy | 992 | yes | 0.030 | 0.011 | 2.7x |
-| 46 KB GFM | 76073 | yes | 4.641 | 1.098 | 4.2x |
-| emphasis draft | 77599 | yes | 5.319 | 1.108 | 4.8x |
-| plain draft | 62999 | yes | 3.339 | 0.760 | 4.4x |
+| commonmark | 63766 | yes | 5.640 | 1.286 | 4.4x |
+| gfm | 921 | yes | 0.079 | 0.021 | 3.8x |
+| readme | 1423 | yes | 0.100 | 0.021 | 4.8x |
+| large | 3008 | yes | 0.195 | 0.054 | 3.6x |
+| code-heavy | 992 | yes | 0.045 | 0.011 | 4.2x |
+| 46 KB GFM | 76073 | yes | 6.422 | 1.333 | 4.8x |
+| emphasis draft | 77599 | yes | 6.565 | 1.144 | 5.7x |
+| plain draft | 62999 | yes | 4.175 | 0.745 | 5.6x |

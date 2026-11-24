@@ -33,6 +33,7 @@ const ATOMS: &[&str] = &[
     "\n  a | b\n  --|--\n", "\na | `b`\n-|-\n", "\nx\na|b\n-|-\n", "\n a|b\n -|-", "\n   x | *y*\n---|---", "\nab | c\n:-|-:\n1|2", "\ntext |\nnext", "\n[a] | b\n-|-",
     "\n- a\u{2028}b", "\n1. x\u{2029}", "\n- [ ] \u{2028}", "\n  - n\u{2028}\n- m", "\n-\u{2028}x", "\n> - q\u{2029}", "\n- a\n  b\u{2028}c\n- d", "\n10)\u{2028}",
     "\n<div>\nx\n\u{a0}\ny\n", "\n<span>a</span>\n", "\n<script>\n\nx\n</script>\ny", "\n<!-- a\n\nb -->", "\n<div>", "\n<div>\n", "\n<pre>x</pre>z\n\n",
+    "\n<SCRIPT>\nx</Script>\ny", "\n<pre>\n</pre", "\n<style>a</STYLE >b\n", "\n<textarea>\n</textarea>", "\n<!-- a -- >\n-->", "\n<?x ?\n?>", "\n<!X\n>", "\n<![CDATA[\n]]\n]]>", "\n<pre-x>\n</pre-x>",
     " _a\nb_", " _x_y", " __x_", " _x__", " ___x___", " _x_)", " (_x_)", " _1_", " _x_ _y_", " *x* _y_", " _x *y* z_", " __init__", " a_b_ c", " _a`b`_", " _a `` c_",
     "\n1. item\n\n   ```swift\n   code\n\n   ```\n", "\n- a\n  ```\n\ntext\n  ```", "\n  ```\nx\n    ```", "\n- ```js", "\n   ~~~\n", "\n      ```", "\n  ````\n  ```\n  ````",
     "\n- [x] ```js", "\n- [ ] ```\n\nlazy", "\n- [X]\u{3000}```", "\n> - [x] ```", "\n1. [ ] ~~~",
