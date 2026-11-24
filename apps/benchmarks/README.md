@@ -35,7 +35,10 @@ BENCHMARK_LABEL=after-inline-cache npm run benchmark
 ```bash
 npm run compare             # every engine, interleaved per round
 npm run compare -- --pairs  # Nizel's Wasm engine against @pierre/words alone
+npm run compare -- --platforms  # nizel/wasm (default options) against markdown-it, marked and remark
 ```
+
+`--platforms` is what the documentation site's Benchmarks page quotes: each engine's MiB/s, Nizel's speedup over each, and the geometric mean of the speedups over the realistic fixtures and the CommonMark spec (the tier-1 subset is left out).
 
 Input MiB per CPU second, the median of interleaved rounds, on the realistic fixtures plus the CommonMark spec and `fixtures/realistic/tier1-subset.md` (the blocks of the documentation fixture that the engine's tier 1 renders on its own, from `packages/nizel/engine/examples/subset.rs`). The interleaved table runs ten engines in one process, so garbage the JavaScript engines leave is collected in whichever engine's slot comes next; `--pairs` measures each Nizel/Words pair on its own, warmed up, and its Nizel / Words column is the median of the per-round ratios (both engines run back to back in each round, and on documents over 20 KB they alternate call by call, so it holds steady when other work loads the machine). Report both. Build Nizel first (`npm run build --workspace nizel`): the script loads `packages/nizel/dist`.
 
