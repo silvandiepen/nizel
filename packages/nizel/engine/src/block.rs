@@ -1040,7 +1040,7 @@ fn parse_list_item_blocks(
     ctx: &Ctx,
     seen: &mut crate::slug::Seen,
 ) -> Result<(Vec<Block>, usize, bool)> {
-    let (item_lines, end, loose) = collect_list_item(first_line, lines, index, opening, content_indent, ctx.options);
+    let (item_lines, end, loose, _) = collect_list_item(first_line, lines, index, opening, content_indent, ctx.options);
     Ok((parse_blocks(&item_lines, ctx, seen)?, end, loose))
 }
 
@@ -1081,24 +1081,35 @@ pub(crate) fn collect_blockquote(lines: &[&str], mut index: usize, options: &Opt
     (quote_lines, index)
 }
 
-pub(crate) fn collect_list_item<'x>(
-    first_line: &'x str,
+pub(crate) fn collect_list_item<'f, 'x: 'f>(
+    first_line: &'f str,
     lines: &[&'x str],
     index: usize,
     opening: &ListMarker,
     content_indent: usize,
     options: &Options,
-) -> (Vec<&'x str>, usize, bool) {
-    let mut item_lines: Vec<&'x str> = vec![first_line];
+) -> (Vec<&'f str>, usize, bool, Option<ListMarker<'x>>) {
+    let mut item_lines: Vec<&'f str> = vec![first_line];
     let mut cursor = index + 1;
     let mut loose = false;
     let mut saw_blank = false;
     let mut open_fence = opening_fence_close(first_line);
+    // The marker parsed on a line looked at ahead (after blank lines), for
+    // when the loop reaches that line.
+    let mut ahead: Option<(usize, Option<ListMarker<'x>>)> = None;
     while cursor < lines.len() {
         let line = lines[cursor];
-        if let Some(marker) = parse_list_marker(line) {
+        let marker = match ahead.take() {
+            Some((at, marker)) if at == cursor => marker,
+            other => {
+                ahead = other;
+                parse_list_marker(line)
+            }
+        };
+        if let Some(marker) = marker {
             if same_list(opening, &marker) && count_leading_spaces(line) < content_indent {
-                break;
+                // The next item's marker: the caller need not parse it again.
+                return (trimmed(item_lines), cursor - 1, loose, Some(marker));
             }
         }
         if js::trim(line).is_empty() {
@@ -1108,8 +1119,11 @@ pub(crate) fn collect_list_item<'x>(
                 continue;
             }
             let Some(next_content) = (cursor + 1..lines.len()).find(|&i| !js::trim(&lines[i]).is_empty()) else { break };
-            if let Some(next_marker) = parse_list_marker(&lines[next_content]) {
-                if same_list(opening, &next_marker) && count_leading_spaces(&lines[next_content]) < content_indent {
+            let next_marker = parse_list_marker(lines[next_content]);
+            let same = next_marker.as_ref().is_some_and(|next_marker| same_list(opening, next_marker));
+            ahead = Some((next_content, next_marker));
+            if same {
+                if count_leading_spaces(lines[next_content]) < content_indent {
                     item_lines.push("");
                     loose = true;
                     saw_blank = true;
@@ -1145,10 +1159,15 @@ pub(crate) fn collect_list_item<'x>(
         }
         break;
     }
+    (trimmed(item_lines), cursor - 1, loose, None)
+}
+
+/// An item's lines without trailing blank ones.
+fn trimmed(mut item_lines: Vec<&str>) -> Vec<&str> {
     while item_lines.last().is_some_and(|line| line.is_empty()) {
         item_lines.pop();
     }
-    (item_lines, cursor - 1, loose)
+    item_lines
 }
 
 /// `hasNestedListMarkerBeforeBlank`.

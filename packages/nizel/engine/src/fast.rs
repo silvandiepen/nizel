@@ -860,20 +860,23 @@ fn nested_list<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, li
     let mut items: Vec<(Option<bool>, String)> = Vec::new();
     let mut tight = true;
     let mut index = start_index;
+    // The next item's marker, when collecting the item before it parsed it.
+    let mut next_marker = None;
     while index < lines.lines.len() {
         if !items.is_empty() && block::is_thematic_break(lines.lines[index]) {
             break;
         }
-        let Some(marker) = block::parse_list_marker(lines.lines[index]) else { break };
+        let Some(marker) = next_marker.take().or_else(|| block::parse_list_marker(lines.lines[index])) else { break };
         if marker.ordered != opening.ordered || marker.marker != opening.marker {
             break;
         }
         let (checked, body) = block::task_box(&marker.body);
-        let (item_lines, end, loose) = block::collect_list_item(body, &lines.lines, index, &opening, marker.content_indent, state.options);
+        let (item_lines, end, loose, after) = block::collect_list_item(body, &lines.lines, index, &opening, marker.content_indent, state.options);
         if loose {
             tight = false;
         }
         items.push((checked, item_lines.join("\n")));
+        next_marker = after;
         index = end + 1;
     }
     // Extraction reads the document's own lines: check those as well as each

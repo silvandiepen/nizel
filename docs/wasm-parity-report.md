@@ -49,7 +49,7 @@ Through the entry points (test/wasm-spec-corpora.test.mjs): pass CommonMark spec
 | Gate | Status |
 | --- | --- |
 | 2. GFM spec | pass: all 672 GFM 0.29 spec examples, forward and reverse (Nizel's HTML and the spec's), identical through nizel/wasm and produced by the engine, with default, bare, GFM-plugin and task-list+autolink options (6 passed (6)) |
-| 3. Nizel suite through Wasm entry points | 28/28 suites, 435 tests passed |
+| 3. Nizel suite through Wasm entry points | 28/28 suites, 440 tests passed |
 | 4. nizel-kit parity, every profile | pass: every supportedPlugins profile, both option sets (nizel-kit suite: 9 passed (9)) |
 | 5. Differential fuzzer (seed 7) | forward: 200000 generated, 200000 compared, 0 declined, 0 differences; reverse: 400000 compared, 0 deferred to JavaScript, 0 differences; ast: 200000 compared, 0 differences; hooks through nizel/wasm: 50000 compared, 0 differences; plugin reverse through nizel/wasm: 100000 compared, 0 differences |
 | 6. Fallbacks (nizel/wasm and every nizel-kit/wasm profile, fixtures + 20k fuzz) | 0 of 91612 conversions left to JavaScript |
@@ -60,24 +60,24 @@ Through the entry points (test/wasm-spec-corpora.test.mjs): pass CommonMark spec
 
 | Fixture | Bytes | Identical | JavaScript CPU ms | Engine CPU ms | Speedup |
 | --- | --- | --- | --- | --- | --- |
-| commonmark | 44210 | yes | 7.117 | 1.388 | 5.1x |
-| gfm | 559 | yes | 0.044 | 0.011 | 4.0x |
-| readme | 997 | yes | 0.043 | 0.009 | 4.6x |
-| large | 2093 | yes | 0.193 | 0.038 | 5.1x |
-| code-heavy | 700 | yes | 0.018 | 0.004 | 4.1x |
-| 46 KB GFM | 45838 | yes | 3.908 | 0.750 | 5.2x |
-| emphasis draft | 56800 | yes | 5.165 | 0.895 | 5.8x |
-| plain draft | 54600 | yes | 1.375 | 0.229 | 6.0x |
+| commonmark | 44210 | yes | 4.981 | 1.202 | 4.1x |
+| gfm | 559 | yes | 0.029 | 0.006 | 4.7x |
+| readme | 997 | yes | 0.028 | 0.004 | 7.7x |
+| large | 2093 | yes | 0.128 | 0.036 | 3.6x |
+| code-heavy | 700 | yes | 0.013 | 0.002 | 6.4x |
+| 46 KB GFM | 45838 | yes | 2.351 | 0.413 | 5.7x |
+| emphasis draft | 56800 | yes | 3.196 | 0.158 | 20.2x |
+| plain draft | 54600 | yes | 0.887 | 0.065 | 13.6x |
 
 ## Speed: reverse, raw engine vs `htmlToMarkdown` (Node, CPU time, warm median)
 
 | Fixture (as HTML) | Bytes | Identical | JavaScript CPU ms | Engine CPU ms | Speedup |
 | --- | --- | --- | --- | --- | --- |
-| commonmark | 63766 | yes | 5.858 | 1.439 | 4.1x |
-| gfm | 921 | yes | 0.069 | 0.016 | 4.4x |
-| readme | 1423 | yes | 0.088 | 0.020 | 4.4x |
-| large | 3008 | yes | 0.175 | 0.040 | 4.4x |
-| code-heavy | 992 | yes | 0.039 | 0.014 | 2.9x |
-| 46 KB GFM | 76073 | yes | 6.227 | 1.078 | 5.8x |
-| emphasis draft | 77599 | yes | 6.458 | 1.316 | 4.9x |
-| plain draft | 62999 | yes | 3.782 | 0.775 | 4.9x |
+| commonmark | 63766 | yes | 3.625 | 1.003 | 3.6x |
+| gfm | 921 | yes | 0.044 | 0.012 | 3.5x |
+| readme | 1423 | yes | 0.054 | 0.017 | 3.2x |
+| large | 3008 | yes | 0.108 | 0.035 | 3.1x |
+| code-heavy | 992 | yes | 0.025 | 0.009 | 2.7x |
+| 46 KB GFM | 76073 | yes | 3.767 | 0.905 | 4.2x |
+| emphasis draft | 77599 | yes | 4.079 | 0.928 | 4.4x |
+| plain draft | 62999 | yes | 2.694 | 0.639 | 4.2x |
