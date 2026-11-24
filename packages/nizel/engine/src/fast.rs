@@ -603,7 +603,7 @@ fn block<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, lines: &
         return None;
     }
     if lead == b'<' && !state.options.safe {
-        return Some((html_block(source, pos, state, lines, out)?, false));
+        return Some((html_block(source, pos, state, out)?, false));
     }
     if lead == b'>' {
         // `isTableStart` comes before blockquotes.
@@ -791,19 +791,19 @@ fn full_fence(source: &str, pos: usize, end: usize, state: &mut Walk, out: &mut 
 /// `readHtmlBlock` at this line, as `parseBlocks` tries it first. Its lines
 /// get the reference-definition check (extraction skips HTML blocks by a
 /// rule of its own).
-fn html_block<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, lines: &mut Option<std::rc::Rc<Lines<'a>>>, out: &mut String) -> Option<usize> {
-    let lines = lines.get_or_insert_with(|| if state.depth == 0 { state.root_lines() } else { std::rc::Rc::new(Lines::new(source)) }).clone();
-    let index = lines.index_of(pos);
-    let (value, end) = crate::html::read_html_block(&lines.lines, index)?;
+fn html_block(source: &str, pos: usize, state: &mut Walk, out: &mut String) -> Option<usize> {
+    // Read from the source (no line table): `read_html_block` reads forward
+    // from the block's first line.
+    let (value, next) = crate::html::read_html_block_from(source, pos)?;
     // The full engine reads the block from tab-expanded lines.
-    if value.contains('\t') {
+    if state.has_tab && value.contains('\t') {
         return None;
     }
     if !state.skipped_by_extraction() {
-        state.check_definitions(&value)?;
+        state.check_definitions(value)?;
     }
-    out.push_str(&value);
-    Some(lines.starts.get(end + 1).copied().unwrap_or(source.len()))
+    out.push_str(value);
+    Some(next)
 }
 
 /// A blockquote: its lines by the full engine's own rules

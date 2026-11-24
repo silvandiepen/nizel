@@ -258,6 +258,48 @@ pub fn read_html_block(lines: &[&str], start: usize) -> Option<(String, usize)> 
     None
 }
 
+/// `read_html_block` over the lines of `source` (split at `\n`) from the line
+/// starting at `pos`, without a line table: the block's text (its lines are
+/// contiguous in the source) and the position after its last line (the
+/// source's end when it runs to the end).
+pub(crate) fn read_html_block_from(source: &str, pos: usize) -> Option<(&str, usize)> {
+    let b = source.as_bytes();
+    let line_end = |at: usize| crate::scan::find_byte(b, at, b'\n').unwrap_or(b.len());
+    let line = &source[pos..line_end(pos)];
+    if !html_line_start(line) {
+        return None;
+    }
+    let trimmed = js::trim_start(line);
+    if let Some(closing) = closing_pattern(trimmed) {
+        // To the line that closes it, or (unclosed) every line to the end.
+        let mut at = pos;
+        loop {
+            let end = line_end(at);
+            if closing.test(&source[at..end]) || end >= b.len() {
+                return Some((&source[pos..end], if end < b.len() { end + 1 } else { b.len() }));
+            }
+            at = end + 1;
+        }
+    }
+    if is_block_tag_start(trimmed) || is_valid_inline_html_tag(trimmed) {
+        // To the line before the first blank one, or to the end.
+        let mut at = pos;
+        let mut last_end = pos;
+        loop {
+            let end = line_end(at);
+            if js::trim(&source[at..end]).is_empty() {
+                return Some((&source[pos..last_end], at));
+            }
+            if end >= b.len() {
+                return Some((&source[pos..end], b.len()));
+            }
+            last_end = end;
+            at = end + 1;
+        }
+    }
+    None
+}
+
 /// Whether `readHtmlBlock` reads a block starting at `line` (it decides on
 /// that line alone).
 pub fn starts_html_block(line: &str) -> bool {
