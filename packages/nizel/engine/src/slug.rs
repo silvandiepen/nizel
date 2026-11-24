@@ -2,14 +2,83 @@
 //! `@sil/case` (the default "github" style).
 
 use crate::js;
-use std::collections::HashMap;
-use std::hash::{BuildHasherDefault, Hasher};
+use std::hash::Hasher;
 
-/// The heading IDs seen in one document. Only looked up (never iterated),
-/// so the hasher does not affect output; a small multiplicative hash is much
-/// cheaper than SipHash for these short keys, and a per-document map needs
-/// no flooding resistance.
-pub type Seen = HashMap<String, usize, BuildHasherDefault<FxHasher>>;
+/// The heading IDs seen in one document and how often. Only looked up
+/// (never iterated), so the hash does not affect output; a small
+/// multiplicative hash is much cheaper than SipHash for these short keys,
+/// and a per-document table needs no flooding resistance. Every distinct
+/// slug is kept back to back in one string and found through an
+/// open-addressing table, so a new slug costs one hash and no allocation of
+/// its own.
+#[derive(Default)]
+pub struct Seen {
+    keys: String,
+    slots: Vec<Slot>,
+    used: usize,
+}
+
+/// A slug's place in `Seen::keys` and its count; empty while the count is 0.
+#[derive(Clone, Copy, Default)]
+struct Slot {
+    hash: u64,
+    start: usize,
+    len: usize,
+    count: usize,
+}
+
+impl Seen {
+    fn hash(key: &str) -> u64 {
+        let mut hasher = FxHasher::default();
+        hasher.write(key.as_bytes());
+        hasher.finish()
+    }
+
+    /// The slot for `hash` in a table of `slots.len()` (a power of two):
+    /// the multiplicative hash's high bits.
+    fn home(hash: u64, slots: usize) -> usize {
+        (hash.wrapping_mul(0x9e37_79b9_7f4a_7c15) >> 32) as usize & (slots - 1)
+    }
+
+    /// Counts `key` once more: its count before (None when it is new).
+    fn bump(&mut self, key: &str) -> Option<usize> {
+        if (self.used + 1) * 2 > self.slots.len() {
+            self.grow();
+        }
+        let hash = Self::hash(key);
+        let mut at = Self::home(hash, self.slots.len());
+        loop {
+            let slot = &mut self.slots[at];
+            if slot.count == 0 {
+                let start = self.keys.len();
+                self.keys.push_str(key);
+                *slot = Slot { hash, start, len: key.len(), count: 1 };
+                self.used += 1;
+                return None;
+            }
+            if slot.hash == hash && &self.keys.as_bytes()[slot.start..slot.start + slot.len] == key.as_bytes() {
+                let previous = slot.count;
+                slot.count += 1;
+                return Some(previous);
+            }
+            at = (at + 1) & (self.slots.len() - 1);
+        }
+    }
+
+    /// Twice the slots (64 to start: room for a document's headings).
+    fn grow(&mut self) {
+        let size = (self.slots.len() * 2).max(64);
+        let mut slots = vec![Slot::default(); size];
+        for slot in self.slots.iter().filter(|slot| slot.count != 0) {
+            let mut at = Self::home(slot.hash, size);
+            while slots[at].count != 0 {
+                at = (at + 1) & (size - 1);
+            }
+            slots[at] = *slot;
+        }
+        self.slots = slots;
+    }
+}
 
 /// The FxHash function (as in rustc): rotate, xor, multiply, a word at a time.
 #[derive(Default)]
@@ -110,21 +179,9 @@ pub fn unique_slug_in_place(slug: &mut String, seen: &mut Seen) {
     if slug.is_empty() {
         slug.push_str("section");
     }
-    // Room for a document's headings up front, rather than growing step by step.
-    if seen.capacity() == 0 {
-        seen.reserve(32);
-    }
-    // One hash and probe (a repeat, the rare case, drops its key copy).
-    match seen.entry(slug.clone()) {
-        std::collections::hash_map::Entry::Occupied(mut entry) => {
-            let previous = *entry.get();
-            *entry.get_mut() += 1;
-            slug.push('-');
-            push_decimal(slug, previous + 1);
-        }
-        std::collections::hash_map::Entry::Vacant(entry) => {
-            entry.insert(1);
-        }
+    if let Some(previous) = seen.bump(slug) {
+        slug.push('-');
+        push_decimal(slug, previous + 1);
     }
 }
 
@@ -384,3 +441,32 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod seen_tests {
+    use super::Seen;
+    use std::collections::HashMap;
+
+    #[test]
+    fn seen_counts_like_a_hash_map() {
+        // Slugs from a small alphabet, so repeats and probe collisions are
+        // common, past several growths.
+        let mut state = 0x2545_f491_4f6c_dd1du64;
+        let mut next = || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        let mut seen = Seen::default();
+        let mut reference: HashMap<String, usize> = HashMap::new();
+        for _ in 0..20_000 {
+            let len = (next() % 4) as usize;
+            let key: String = (0..len).map(|_| (b'a' + (next() % 5) as u8) as char).collect::<String>() + &(next() % 300).to_string();
+            let expected = reference.get(&key).copied();
+            *reference.entry(key.clone()).or_insert(0) += 1;
+            assert_eq!(seen.bump(&key), expected, "{key}");
+        }
+    }
+}
+
