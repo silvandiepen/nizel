@@ -3,6 +3,7 @@
 //
 //   npm run compare             every engine interleaved per round
 //   npm run compare -- --pairs  Nizel's Wasm engine against Words alone, warmed
+//                               (the ratio is the median of per-round ratios)
 //
 // The interleaved table runs ten engines in one process, so garbage the
 // JavaScript ones leave is collected in whichever slot comes next; --pairs
@@ -57,20 +58,27 @@ const cpu = () => {
 const median = (values) => values.sort((a, b) => a - b)[values.length >> 1];
 const mib = (bytes, seconds) => (bytes / 1048576 / seconds).toFixed(1);
 
-/** Median seconds per call for each engine, run interleaved, alternating order. */
+/**
+ * Median seconds per call for each engine, run interleaved, alternating
+ * order; with two engines, also the median of the per-round ratios (each
+ * round runs both back to back, so load that drifts between rounds cancels).
+ */
 const measure = async (fns, text, rounds, warmup) => {
   const names = Object.keys(fns);
   const reps = Math.max(3, Math.ceil(2_000_000 / Buffer.byteLength(text)));
   for (const name of names) for (let i = 0; i < warmup; i++) await fns[name](text);
   const samples = Object.fromEntries(names.map((name) => [name, []]));
+  const ratios = [];
   for (let round = 0; round < rounds; round++) {
     for (const name of round % 2 ? [...names].reverse() : names) {
       const start = cpu();
       for (let i = 0; i < reps; i++) await fns[name](text);
       samples[name].push((cpu() - start) / reps);
     }
+    if (names.length === 2) ratios.push(samples[names[1]].at(-1) / samples[names[0]].at(-1));
   }
-  return Object.fromEntries(names.map((name) => [name, median(samples[name])]));
+  const times = Object.fromEntries(names.map((name) => [name, median([...samples[name]])]));
+  return { times, ratio: ratios.length ? median(ratios) : undefined };
 };
 
 const texts = {};
@@ -82,16 +90,16 @@ if (process.argv.includes('--pairs')) {
   for (const [name, text] of Object.entries(texts)) {
     const bytes = Buffer.byteLength(text);
     await measure(pair, text, 30, 200);
-    const times = await measure(pair, text, 21, 0);
+    const { times, ratio } = await measure(pair, text, 41, 0);
     const [nizelTime, wordsTime] = Object.values(times);
-    console.log(`${name} | ${mib(bytes, nizelTime)} | ${mib(bytes, wordsTime)} | ${(wordsTime / nizelTime).toFixed(2)}`);
+    console.log(`${name} | ${mib(bytes, nizelTime)} | ${mib(bytes, wordsTime)} | ${ratio.toFixed(2)}`);
   }
 } else {
   const names = Object.keys(engines);
   console.log(['document', ...names].join(' | '));
   for (const [name, text] of Object.entries(texts)) {
     const bytes = Buffer.byteLength(text);
-    const times = await measure(engines, text, 15, 50);
+    const { times } = await measure(engines, text, 15, 50);
     console.log([name, ...names.map((engine) => mib(bytes, times[engine]))].join(' | '));
   }
 }
