@@ -1977,9 +1977,9 @@ fn heading(line: &str, options: &Options, ctx: &Ctx, seen: &mut crate::slug::See
     let b = line.as_bytes();
     let hashes = b.iter().take_while(|&&c| c == b'#').count();
     let simple = (1..=6).contains(&hashes)
-        && b.is_ascii()
-        // JavaScript's \s also trims vertical tabs and form feeds.
-        && !b.iter().any(|c| (0x09..=0x0d).contains(c))
+        // ASCII, without the controls JavaScript's \s also trims (vertical
+        // tabs, form feeds), in one pass.
+        && b.iter().all(|&c| c < 0x80 && !(0x09..=0x0d).contains(&c))
         && (hashes == b.len() || b[hashes] == b' ')
         && !line.trim_end_matches(' ').ends_with('#');
     if simple {
@@ -2008,13 +2008,13 @@ fn heading_content(depth: u8, content: &str, options: &Options, seen: &mut crate
                 close_heading(depth, out);
                 return Some(());
             }
-        } else if content.bytes().all(|c| matches!(CLASS[c as usize], PLAIN | GREATER | QUOTE)) {
+        } else if let kinds @ 0..HEAD_SYNTAX = content.bytes().fold(0, |kinds, c| kinds | HEAD_KIND[c as usize]) {
             // No inline syntax: `inline` would succeed, its text is the
             // content itself, and it only escapes `>` and `"`. The ID comes
             // from the content, then the content, in one pass.
             let (slug, _) = buffers;
             slug.clear();
-            let ascii = content.is_ascii();
+            let ascii = kinds & HEAD_NON_ASCII == 0;
             crate::slug::slugify_known_into(content, options.slug_classic, ascii, slug);
             crate::slug::unique_slug_in_place(slug, seen);
             out.push_str(" id=\"");
@@ -2024,7 +2024,11 @@ fn heading_content(depth: u8, content: &str, options: &Options, seen: &mut crate
                 escape_html_into(out, slug);
             }
             out.push_str("\">");
-            escape_html_into(out, content);
+            if kinds & HEAD_ESCAPED == 0 {
+                out.push_str(content);
+            } else {
+                escape_html_into(out, content);
+            }
             close_heading(depth, out);
             return Some(());
         } else {
@@ -2061,6 +2065,34 @@ fn heading_content(depth: u8, content: &str, options: &Options, seen: &mut crate
     }
     None
 }
+
+/// What a heading's content byte means to its one-pass path: a byte that
+/// escapes (`>`, `"`), a non-ASCII one, or inline syntax (`CLASS` other than
+/// plain, `>` and `"`), the highest so a fold of the kinds is below
+/// `HEAD_SYNTAX` exactly when there is none.
+const HEAD_ESCAPED: u8 = 1;
+const HEAD_NON_ASCII: u8 = 2;
+const HEAD_SYNTAX: u8 = 4;
+
+static HEAD_KIND: [u8; 256] = {
+    let mut table = [0; 256];
+    let mut c = 0;
+    while c < 256 {
+        table[c] = match CLASS[c] {
+            PLAIN => {
+                if c >= 0x80 {
+                    HEAD_NON_ASCII
+                } else {
+                    0
+                }
+            }
+            GREATER | QUOTE => HEAD_ESCAPED,
+            _ => HEAD_SYNTAX,
+        };
+        c += 1;
+    }
+    table
+};
 
 fn close_heading(depth: u8, out: &mut String) {
     out.push_str("</h");
