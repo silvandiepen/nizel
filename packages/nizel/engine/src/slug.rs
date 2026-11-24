@@ -70,7 +70,12 @@ pub fn slugify(value: &str, classic: bool) -> String {
 
 /// `slugify` appended to `slug` (ASCII text without a scratch string).
 pub fn slugify_into(value: &str, classic: bool, slug: &mut String) {
-    if !classic && value.is_ascii() {
+    slugify_known_into(value, classic, value.is_ascii(), slug);
+}
+
+/// `slugify_into` when the caller already knows whether `value` is ASCII.
+pub fn slugify_known_into(value: &str, classic: bool, ascii: bool, slug: &mut String) {
+    if !classic && ascii {
         ascii_slug_case_into(value, slug);
     } else {
         slug.push_str(&slugify(value, classic));
@@ -100,7 +105,7 @@ fn push_decimal(out: &mut String, mut n: usize) {
 }
 
 /// `uniqueSlug` on `slug` in place (`section` for an empty one, `-N` for a
-/// repeat). The key is cloned only the first time a slug is seen.
+/// repeat).
 pub fn unique_slug_in_place(slug: &mut String, seen: &mut Seen) {
     if slug.is_empty() {
         slug.push_str("section");
@@ -109,14 +114,18 @@ pub fn unique_slug_in_place(slug: &mut String, seen: &mut Seen) {
     if seen.capacity() == 0 {
         seen.reserve(32);
     }
-    if let Some(count) = seen.get_mut(slug.as_str()) {
-        let previous = *count;
-        *count += 1;
-        slug.push('-');
-        push_decimal(slug, previous + 1);
-        return;
+    // One hash and probe (a repeat, the rare case, drops its key copy).
+    match seen.entry(slug.clone()) {
+        std::collections::hash_map::Entry::Occupied(mut entry) => {
+            let previous = *entry.get();
+            *entry.get_mut() += 1;
+            slug.push('-');
+            push_decimal(slug, previous + 1);
+        }
+        std::collections::hash_map::Entry::Vacant(entry) => {
+            entry.insert(1);
+        }
     }
-    seen.insert(slug.clone(), 1);
 }
 
 /// `value.toLowerCase().replace(/[^\w\s-]/g, '').replace(/[\s_]+/g, '-').replace(/^-+|-+$/g, '')`.
@@ -256,37 +265,44 @@ static SLUG_KIND: [u8; 256] = {
 };
 
 fn ascii_slug_case_into(text: &str, slug: &mut String) {
-    // Bytes in, bytes out (all ASCII): the string's buffer, taken without a
-    // copy and checked once on the way back.
-    let mut out = std::mem::take(slug).into_bytes();
     let bytes = text.as_bytes();
-    let start = out.len();
-    out.reserve(bytes.len() + 8);
+    let start = slug.len();
+    slug.reserve(bytes.len() + 8);
     let mut pending = false;
-    for k in 0..bytes.len() {
+    let mut k = 0;
+    while k < bytes.len() {
         let c = bytes[k];
         let kind = SLUG_KIND[c as usize];
         if kind == OTHER {
-            pending = out.len() > start;
+            pending = slug.len() > start;
+            k += 1;
             continue;
         }
         // A case boundary starts a new word: an upper-case letter after a
         // lower-case one, or ending an upper-case run before a lower-case
         // letter. (Past the first byte: the slug is not empty then.)
-        if kind == UPPER && !pending && out.len() > start {
+        if kind == UPPER && !pending && slug.len() > start {
             let previous = SLUG_KIND[bytes[k - 1] as usize];
             if previous == LOWER || (previous == UPPER && bytes.get(k + 1).is_some_and(|&next| SLUG_KIND[next as usize] == LOWER)) {
                 pending = true;
             }
         }
         if pending {
-            out.push(b'-');
+            slug.push('-');
             pending = false;
         }
-        // Upper-case to lower-case is the 0x20 bit.
-        out.push(if kind == UPPER { c | 0x20 } else { c });
+        if kind == UPPER {
+            // Upper-case to lower-case is the 0x20 bit.
+            slug.push(char::from(c | 0x20));
+            k += 1;
+            continue;
+        }
+        // A run of lower-case letters and digits is copied as is: no case
+        // boundary falls inside one (only an upper-case letter starts one).
+        let end = k + 1 + bytes[k + 1..].iter().take_while(|&&b| matches!(SLUG_KIND[b as usize], LOWER | DIGIT)).count();
+        slug.push_str(&text[k..end]);
+        k = end;
     }
-    *slug = String::from_utf8(out).expect("an ASCII slug");
 }
 
 /// `.split(' ').filter(Boolean).map(toLowerCase).join('-')` over ASCII bytes, in one pass.

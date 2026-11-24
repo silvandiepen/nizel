@@ -1996,6 +1996,25 @@ fn heading_content(depth: u8, content: &str, options: &Options, seen: &mut crate
                 close_heading(depth, out);
                 return Some(());
             }
+        } else if content.bytes().all(|c| matches!(CLASS[c as usize], PLAIN | GREATER | QUOTE)) {
+            // No inline syntax: `inline` would succeed, its text is the
+            // content itself, and it only escapes `>` and `"`. The ID comes
+            // from the content, then the content, in one pass.
+            let (slug, _) = buffers;
+            slug.clear();
+            let ascii = content.is_ascii();
+            crate::slug::slugify_known_into(content, options.slug_classic, ascii, slug);
+            crate::slug::unique_slug_in_place(slug, seen);
+            out.push_str(" id=\"");
+            if !options.slug_classic && ascii {
+                out.push_str(slug);
+            } else {
+                escape_html_into(out, slug);
+            }
+            out.push_str("\">");
+            escape_html_into(out, content);
+            close_heading(depth, out);
+            return Some(());
         } else {
             // The body goes straight into the output; the ID, which comes
             // first, is inserted once the text is known.
@@ -2007,11 +2026,12 @@ fn heading_content(depth: u8, content: &str, options: &Options, seen: &mut crate
                     // The slug and the ` id="…"` attribute, in reused buffers.
                     let (slug, attribute) = buffers;
                     slug.clear();
-                    crate::slug::slugify_into(text, options.slug_classic, slug);
+                    let ascii = text.is_ascii();
+                    crate::slug::slugify_known_into(text, options.slug_classic, ascii, slug);
                     crate::slug::unique_slug_in_place(slug, seen);
                     attribute.clear();
                     attribute.push_str(" id=\"");
-                    if !options.slug_classic && text.is_ascii() {
+                    if !options.slug_classic && ascii {
                         // The ASCII slug is [a-z0-9-] (or `section`, with a
                         // `-N` for a repeat): nothing to escape.
                         attribute.push_str(slug);
