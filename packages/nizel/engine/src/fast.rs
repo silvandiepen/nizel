@@ -797,6 +797,9 @@ fn nested_list<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, li
         out.push('"');
     }
     out.push_str(">\n");
+    // One body buffer and span list for all the items (each is cleared first).
+    let mut body = String::new();
+    let mut spans: Vec<Span> = Vec::new();
     for (item_index, (checked, item_lines)) in items.iter().enumerate() {
         if item_index > 0 {
             out.push('\n');
@@ -807,11 +810,8 @@ fn nested_list<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, li
         }
         out.push('>');
         let item = item_lines.join("\n");
-        // Item lines can hold anything, so the line-start argument that keeps
-        // tier 1's own blocks clear of definitions does not hold here.
-        state.check_definitions(&item)?;
-        let mut body = String::with_capacity(item.len() + 16);
-        let mut spans = Vec::new();
+        body.clear();
+        spans.clear();
         state.depth += 1;
         let walked = walk(&item, state, &mut body, Some(&mut spans));
         state.depth -= 1;
@@ -841,25 +841,19 @@ fn list_item_children(body: &str, spans: &[Span], tight: bool, out: &mut String)
     let has_block_child = spans.iter().any(|&(_, _, paragraph)| !paragraph);
     let first_paragraph = spans[0].2;
     let last_paragraph = spans[spans.len() - 1].2;
-    let mut joined = String::with_capacity(body.len());
+    // A newline before the children when a block child is first or a
+    // paragraph is last, after them when a block child is last.
+    if has_block_child && (last_paragraph || !first_paragraph) {
+        out.push('\n');
+    }
     for (index, &(start, end, paragraph)) in spans.iter().enumerate() {
         if index > 0 {
-            joined.push('\n');
+            out.push('\n');
         }
         // A paragraph renders as `<p>…</p>`: its inline content is inside.
-        joined.push_str(if paragraph { &body[start + 3..end - 4] } else { &body[start..end] });
+        out.push_str(if paragraph { &body[start + 3..end - 4] } else { &body[start..end] });
     }
-    if !has_block_child {
-        out.push_str(&joined);
-    } else if last_paragraph {
-        out.push('\n');
-        out.push_str(&joined);
-    } else if first_paragraph {
-        out.push_str(&joined);
-        out.push('\n');
-    } else {
-        out.push('\n');
-        out.push_str(&joined);
+    if has_block_child && !last_paragraph {
         out.push('\n');
     }
 }
