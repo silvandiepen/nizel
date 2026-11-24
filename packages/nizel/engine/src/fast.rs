@@ -73,7 +73,10 @@ pub fn handed_over_bytes() -> usize {
 /// Returns false (with `out` restored) when it declines.
 pub fn render(source: &str, options: &Options, out: &mut String) -> bool {
     let start = out.len();
+    // Set only once this document's line table says so (see `root_lines`).
+    block::set_lines_without_terminators(false);
     let handled = render_inner(source, options, out).is_some();
+    block::set_lines_without_terminators(false);
     if !handled {
         out.truncate(start);
     }
@@ -150,7 +153,7 @@ fn render_inner(source: &str, options: &Options, out: &mut String) -> Option<()>
     }
     let ctx = Ctx { options, references: &references };
     let mut state = Walk::new(&content, options, &ctx, false, has_pipe, true);
-    state.root_lines = Some(std::rc::Rc::new(Lines::from_starts(&content, starts)));
+    state.root_lines = Some(std::rc::Rc::new(Lines::from_starts(&content, starts, root.separators)));
     NO_REFERENCES.with(|flag| flag.set(references.is_empty()));
     walk(&content, &mut state, out, None)
 }
@@ -222,7 +225,11 @@ impl<'a> Walk<'a> {
     /// The document's lines (see `root_lines`).
     fn root_lines(&mut self) -> std::rc::Rc<Lines<'a>> {
         let root = self.root;
-        self.root_lines.get_or_insert_with(|| std::rc::Rc::new(Lines::new(root))).clone()
+        let lines = self.root_lines.get_or_insert_with(|| std::rc::Rc::new(Lines::new(root))).clone();
+        // Every line the full engine's rules read from here on is one of
+        // this document's (or cut from one), and the document has no CR.
+        block::set_lines_without_terminators(!lines.separators);
+        lines
     }
 
     /// Tier 1 renders `text` itself: if it holds a line that could start a
@@ -443,6 +450,9 @@ fn walk(source: &str, state: &mut Walk, out: &mut String, mut spans: Option<&mut
 struct Lines<'a> {
     lines: Vec<&'a str>,
     starts: Vec<usize>,
+    /// Whether the text holds U+2028 or U+2029 (a JavaScript line terminator
+    /// that is not a line break here).
+    separators: bool,
 }
 
 impl<'a> Lines<'a> {
@@ -457,8 +467,19 @@ impl<'a> Lines<'a> {
         let (mut lines, mut starts) = (Vec::with_capacity(capacity), Vec::with_capacity(capacity));
         let mut start = 0;
         let mut i = 0;
+        let mut separators = false;
+        // U+2028 and U+2029 are E2 80 A8 and E2 80 A9.
+        let separator_at = |at: usize| b[at] == 0xe2 && b.get(at + 1) == Some(&0x80) && matches!(b.get(at + 2), Some(0xa8 | 0xa9));
         while i + 8 <= b.len() {
-            let word = u64::from_le_bytes(b[i..i + 8].try_into().expect("eight bytes")) ^ (LOW * u64::from(b'\n'));
+            let raw = u64::from_le_bytes(b[i..i + 8].try_into().expect("eight bytes"));
+            // Any 0xE2 in the word (no false negatives), until one is found.
+            if !separators {
+                let e2 = raw ^ (LOW * 0xe2);
+                if e2.wrapping_sub(LOW) & !e2 & (LOW * 0x80) != 0 {
+                    separators = (i..i + 8).any(separator_at);
+                }
+            }
+            let word = raw ^ (LOW * u64::from(b'\n'));
             // The high bit of exactly the zero bytes (the newlines): no
             // carry crosses a byte.
             let mut newlines = !(((word & SEVEN) + SEVEN) | word | SEVEN);
@@ -477,20 +498,22 @@ impl<'a> Lines<'a> {
                 starts.push(start);
                 start = at + 1;
             }
+            separators |= separator_at(at);
         }
         lines.push(&source[start..]);
         starts.push(start);
-        Lines { lines, starts }
+        Lines { lines, starts, separators }
     }
 
     /// The table of `source` given where each of its lines starts.
-    fn from_starts(source: &'a str, starts: Vec<usize>) -> Self {
+    /// `separators` as the text it was cut from holds them.
+    fn from_starts(source: &'a str, starts: Vec<usize>, separators: bool) -> Self {
         let lines = starts
             .iter()
             .enumerate()
             .map(|(index, &start)| &source[start..starts.get(index + 1).map_or(source.len(), |next| next - 1)])
             .collect();
-        Lines { lines, starts }
+        Lines { lines, starts, separators }
     }
 
     fn index_of(&self, pos: usize) -> usize {

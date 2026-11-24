@@ -212,3 +212,17 @@ test('an HTML block handed to the full engine in safe mode keeps reference defin
     assert.equal(engineRender(source, 1 | 2 | 4), await stock.useNizel().html(source), JSON.stringify(source));
   }
 });
+
+test('a document with U+2028 in list items after one without keeps list markers exact', async () => {
+  // Tier 1 tells the list rules a document has no line terminators besides
+  // its newlines; that must not outlive the document it was found for.
+  const bare = stock.useNizel({ anchors: false, autolinks: false, frontmatter: false, safe: false });
+  for (const source of [
+    '1. one\n   - nested\n2. two\n',
+    '1. one\n   - a b\n2. two \n- c \n',
+    '- x\n  - y\n\ntext\n\n- [ ]  task\n',
+  ]) {
+    assert.equal(engineRender(source, 0), await bare.html(source), JSON.stringify(source));
+    assert.equal(engineRender(source, 1 | 2 | 4), await stock.useNizel().html(source), JSON.stringify(source));
+  }
+});

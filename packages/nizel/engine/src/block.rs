@@ -27,6 +27,21 @@ thread_local! {
     /// the per-line searches for them can be skipped.
     static DOC_HAS_PIPE: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
     static DOC_HAS_TAB: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+    /// Set (by tier 1 only) when every line the rules read is a line of a
+    /// document holding no U+2028 or U+2029 and no CR, split at `\n`: no
+    /// line can then hold a JavaScript line terminator. Off by default and
+    /// whenever `parse_markdown` starts.
+    static LINES_WITHOUT_TERMINATORS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Sets `LINES_WITHOUT_TERMINATORS` (see there).
+pub(crate) fn set_lines_without_terminators(value: bool) {
+    LINES_WITHOUT_TERMINATORS.with(|flag| flag.set(value));
+}
+
+/// Can `text`, a line or part of one, hold a JavaScript line terminator?
+fn line_has_terminator(text: &str) -> bool {
+    !LINES_WITHOUT_TERMINATORS.with(std::cell::Cell::get) && js::has_line_terminator(text)
 }
 
 fn doc_has_pipe() -> bool {
@@ -138,6 +153,7 @@ fn parse_markdown_prepared(
     let (has_cr, has_tab, has_pipe, has_reference) = scan_source(markdown);
     DOC_HAS_PIPE.with(|flag| flag.set(has_pipe));
     DOC_HAS_TAB.with(|flag| flag.set(has_tab));
+    set_lines_without_terminators(false);
     let normalized: std::borrow::Cow<str> = if has_cr { normalize_line_endings(markdown).into() } else { markdown.into() };
     // Lines borrow the source unless tabs had to be expanded.
     let expanded: Vec<String>;
@@ -619,7 +635,7 @@ fn parse_expanded_list_marker(line: &str) -> Option<ListMarker<'_>> {
         let padding = after.bytes().take_while(|b| *b == b' ' || *b == b'\t').count();
         let body = &after[padding..];
         // `(.*)$` without the `m` flag: a line terminator in the body fails the whole match.
-        if (padding > 0 || body.is_empty()) && !js::has_line_terminator(body) {
+        if (padding > 0 || body.is_empty()) && !line_has_terminator(body) {
             return Some(ListMarker {
                 body: list_marker_body(&after[..padding], body),
                 content_indent: list_content_indent(indent, 1, padding),
@@ -636,7 +652,7 @@ fn parse_expanded_list_marker(line: &str) -> Option<ListMarker<'_>> {
             let after = &rest[digits + 1..];
             let padding = after.bytes().take_while(|b| *b == b' ' || *b == b'\t').count();
             let body = &after[padding..];
-            if (padding > 0 || body.is_empty()) && !js::has_line_terminator(body) {
+            if (padding > 0 || body.is_empty()) && !line_has_terminator(body) {
                 return Some(ListMarker {
                     body: list_marker_body(&after[..padding], body),
                     content_indent: list_content_indent(indent, digits + 1, padding),
