@@ -143,6 +143,7 @@ impl<'a> Walk<'a> {
             text: String::new(),
             slug: String::new(),
             attribute: String::new(),
+            quote: String::new(),
             references_checked: extracted,
             found_definitions: false,
             in_step: true,
@@ -168,6 +169,8 @@ struct Walk<'a> {
     /// A heading's slug and its ID attribute, reused across headings.
     slug: String,
     attribute: String,
+    /// A blockquote's content, reused from quote to quote.
+    quote: String,
     /// Whether the document defines references is decided lazily (see
     /// `defines_references`), the first time a stretch, a nested list item
     /// a table or a fence holds a line that could start one. Tier 1's
@@ -735,12 +738,29 @@ fn blockquote<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, lin
     if state.has_tab {
         return None;
     }
-    let table = lines.get_or_insert_with(|| if state.depth == 0 { state.root_lines() } else { std::rc::Rc::new(Lines::new(source)) }).clone();
-    let index = table.index_of(pos);
-    block::set_document_flags(state.has_pipe, false);
-    let (quote_lines, next) = block::collect_blockquote(&table.lines, index, state.options);
-    let end = table.starts.get(next).copied().unwrap_or(source.len());
-    let text = quote_lines.join("\n");
+    // The common shape first: every line quoted, then a blank line or the
+    // end. `collect_blockquote` reads those lines alike (no tabs to expand),
+    // and a blank line never continues a quote lazily; any other line after
+    // the quoted ones leaves it to `collect_blockquote`.
+    let mut text = std::mem::take(&mut state.quote);
+    text.clear();
+    let end = match simple_quote(source, pos, &mut text) {
+        Some(end) => end,
+        None => {
+            let table = lines.get_or_insert_with(|| if state.depth == 0 { state.root_lines() } else { std::rc::Rc::new(Lines::new(source)) }).clone();
+            let index = table.index_of(pos);
+            block::set_document_flags(state.has_pipe, false);
+            let (quote_lines, next) = block::collect_blockquote(&table.lines, index, state.options);
+            text.clear();
+            for (index, line) in quote_lines.iter().enumerate() {
+                if index > 0 {
+                    text.push('\n');
+                }
+                text.push_str(line);
+            }
+            table.starts.get(next).copied().unwrap_or(source.len())
+        }
+    };
     // Extraction reads the document's own lines (`>` and all): the check
     // looks at those.
     let raw = &source[pos..end.min(source.len())];
@@ -751,11 +771,54 @@ fn blockquote<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, lin
     state.depth += 1;
     let walked = walk(&text, state, out, None);
     state.depth -= 1;
+    state.quote = text;
     walked?;
     if out.len() > mark {
         out.push('\n');
     }
     out.push_str("</blockquote>");
+    Some(end)
+}
+
+/// `collect_blockquote` for a quote whose every line starts with `>` (after
+/// up to three spaces) and that a blank line or the end follows: its
+/// lines' content after the marker and one space, joined, into `text`, and
+/// the position after the last of them. None for any other shape. The
+/// document has no tabs.
+fn simple_quote(source: &str, pos: usize, text: &mut String) -> Option<usize> {
+    let b = source.as_bytes();
+    let mut at = pos;
+    let mut last_start = 0;
+    let mut last_empty = false;
+    let end = loop {
+        if at >= b.len() {
+            break b.len();
+        }
+        let eol = line_end(b, at);
+        let indent = b[at..eol].iter().take(3).take_while(|&&c| c == b' ').count();
+        if b.get(at + indent) == Some(&b'>') && at + indent < eol {
+            let mut content = at + indent + 1;
+            if content < eol && b[content] == b' ' {
+                content += 1;
+            }
+            last_start = text.len();
+            if at > pos {
+                text.push('\n');
+            }
+            text.push_str(&source[content..eol]);
+            last_empty = content == eol;
+            at = eol + 1;
+            continue;
+        }
+        if is_blank_from(b, at) {
+            break at;
+        }
+        return None;
+    };
+    // A last line that is empty after its marker is dropped.
+    if last_empty {
+        text.truncate(last_start);
+    }
     Some(end)
 }
 
