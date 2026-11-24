@@ -765,7 +765,7 @@ fn nested_list<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, li
     // left its own there.
     block::set_document_flags(state.has_pipe, false);
     let opening = block::parse_list_marker(lines.lines[start_index])?;
-    let mut items: Vec<(Option<bool>, Vec<String>)> = Vec::new();
+    let mut items: Vec<(Option<bool>, String)> = Vec::new();
     let mut tight = true;
     let mut index = start_index;
     while index < lines.lines.len() {
@@ -781,7 +781,7 @@ fn nested_list<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, li
         if loose {
             tight = false;
         }
-        items.push((checked, item_lines));
+        items.push((checked, item_lines.join("\n")));
         index = end + 1;
     }
     // Extraction reads the document's own lines: check those as well as each
@@ -800,7 +800,7 @@ fn nested_list<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, li
     // One body buffer and span list for all the items (each is cleared first).
     let mut body = String::new();
     let mut spans: Vec<Span> = Vec::new();
-    for (item_index, (checked, item_lines)) in items.iter().enumerate() {
+    for (item_index, (checked, item)) in items.iter().enumerate() {
         if item_index > 0 {
             out.push('\n');
         }
@@ -809,11 +809,10 @@ fn nested_list<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, li
             out.push_str(" data-checked");
         }
         out.push('>');
-        let item = item_lines.join("\n");
         body.clear();
         spans.clear();
         state.depth += 1;
-        let walked = walk(&item, state, &mut body, Some(&mut spans));
+        let walked = walk(item, state, &mut body, Some(&mut spans));
         state.depth -= 1;
         walked?;
         list_item_children(&body, &spans, tight, out);

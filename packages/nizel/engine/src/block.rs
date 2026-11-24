@@ -1041,7 +1041,7 @@ fn parse_list_item_blocks(
     seen: &mut crate::slug::Seen,
 ) -> Result<(Vec<Block>, usize, bool)> {
     let (item_lines, end, loose) = collect_list_item(first_line, lines, index, opening, content_indent, ctx.options);
-    Ok((parse_blocks(&as_strs(&item_lines), ctx, seen)?, end, loose))
+    Ok((parse_blocks(&item_lines, ctx, seen)?, end, loose))
 }
 
 /// The lines of the list item opening at `index` (content de-indented), the
@@ -1081,21 +1081,21 @@ pub(crate) fn collect_blockquote(lines: &[&str], mut index: usize, options: &Opt
     (quote_lines, index)
 }
 
-pub(crate) fn collect_list_item(
-    first_line: &str,
-    lines: &[&str],
+pub(crate) fn collect_list_item<'x>(
+    first_line: &'x str,
+    lines: &[&'x str],
     index: usize,
     opening: &ListMarker,
     content_indent: usize,
     options: &Options,
-) -> (Vec<String>, usize, bool) {
-    let mut item_lines: Vec<String> = vec![first_line.to_string()];
+) -> (Vec<&'x str>, usize, bool) {
+    let mut item_lines: Vec<&'x str> = vec![first_line];
     let mut cursor = index + 1;
     let mut loose = false;
     let mut saw_blank = false;
     let mut open_fence = opening_fence_close(first_line);
     while cursor < lines.len() {
-        let line = &lines[cursor];
+        let line = lines[cursor];
         if let Some(marker) = parse_list_marker(line) {
             if same_list(opening, &marker) && count_leading_spaces(line) < content_indent {
                 break;
@@ -1103,14 +1103,14 @@ pub(crate) fn collect_list_item(
         }
         if js::trim(line).is_empty() {
             if open_fence.is_some() {
-                item_lines.push(String::new());
+                item_lines.push("");
                 cursor += 1;
                 continue;
             }
             let Some(next_content) = (cursor + 1..lines.len()).find(|&i| !js::trim(&lines[i]).is_empty()) else { break };
             if let Some(next_marker) = parse_list_marker(&lines[next_content]) {
                 if same_list(opening, &next_marker) && count_leading_spaces(&lines[next_content]) < content_indent {
-                    item_lines.push(String::new());
+                    item_lines.push("");
                     loose = true;
                     saw_blank = true;
                     cursor += 1;
@@ -1124,34 +1124,34 @@ pub(crate) fn collect_list_item(
             if next_indent < content_indent {
                 break;
             }
-            item_lines.push(String::new());
+            item_lines.push("");
             loose = !has_nested_list_marker_before_blank(&item_lines, next_indent - content_indent);
             saw_blank = true;
             cursor += 1;
             continue;
         }
         if count_leading_spaces(line) >= content_indent {
-            let item_line = line[content_indent..].to_string();
-            open_fence = update_open_fence(open_fence, &item_line);
+            let item_line = &line[content_indent..];
+            open_fence = update_open_fence(open_fence, item_line);
             item_lines.push(item_line);
             cursor += 1;
             continue;
         }
         if !saw_blank && !is_block_start(line, options, lines, cursor) {
             open_fence = update_open_fence(open_fence, line);
-            item_lines.push(line.to_string());
+            item_lines.push(line);
             cursor += 1;
             continue;
         }
         break;
     }
-    while item_lines.last().is_some_and(String::is_empty) {
+    while item_lines.last().is_some_and(|line| line.is_empty()) {
         item_lines.pop();
     }
     (item_lines, cursor - 1, loose)
 }
 
 /// `hasNestedListMarkerBeforeBlank`.
-fn has_nested_list_marker_before_blank(item_lines: &[String], relative_next_indent: usize) -> bool {
+fn has_nested_list_marker_before_blank(item_lines: &[&str], relative_next_indent: usize) -> bool {
     item_lines.iter().any(|line| parse_list_marker(line).is_some() && count_leading_spaces(line) < relative_next_indent)
 }
