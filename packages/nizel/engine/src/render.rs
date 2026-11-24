@@ -13,7 +13,7 @@ pub fn render_blocks(blocks: &[Block], out: &mut String) {
     }
 }
 
-fn render_block(block: &Block, out: &mut String) {
+pub(crate) fn render_block(block: &Block, out: &mut String) {
     match block {
         Block::Heading { depth, id, children } => {
             out.push_str("<h");
@@ -164,7 +164,7 @@ fn render_list_item_children(children: &[Block], tight: bool, out: &mut String) 
     }
 }
 
-fn render_inline(nodes: &[Inline], out: &mut String) {
+pub(crate) fn render_inline(nodes: &[Inline], out: &mut String) {
     for node in nodes {
         match node {
             Inline::Text { value, .. } => escape_html_into(out, value),

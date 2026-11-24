@@ -171,12 +171,34 @@ enum Closing {
 }
 
 impl Closing {
+    /// Byte searches (a line is short; no searcher to set up, no lowered
+    /// copy): `</tag>` matches ASCII-case-insensitively, as lowering the line
+    /// and the needle did (the tag name is ASCII).
     fn test(&self, line: &str) -> bool {
+        let b = line.as_bytes();
         match self {
-            Closing::Literal(text) => line.contains(text),
+            Closing::Literal(text) => {
+                let needle = text.as_bytes();
+                let mut from = 0;
+                while let Some(at) = crate::scan::find_byte(b, from, needle[0]) {
+                    if b[at..].starts_with(needle) {
+                        return true;
+                    }
+                    from = at + 1;
+                }
+                false
+            }
             Closing::Tag(tag) => {
-                let needle = format!("</{tag}>").to_ascii_lowercase();
-                line.to_ascii_lowercase().contains(&needle)
+                let tag = tag.as_bytes();
+                let mut from = 0;
+                while let Some(at) = crate::scan::find_byte(b, from, b'<') {
+                    let name = at + 2;
+                    if b.get(at + 1) == Some(&b'/') && b.get(name + tag.len()) == Some(&b'>') && b[name..name + tag.len()].eq_ignore_ascii_case(tag) {
+                        return true;
+                    }
+                    from = at + 1;
+                }
+                false
             }
         }
     }
@@ -256,6 +278,54 @@ pub fn read_html_block(lines: &[&str], start: usize) -> Option<(String, usize)> 
         return Some((lines[start..end].join("\n"), end - 1));
     }
     None
+}
+
+/// `read_html_block` over the lines of `source` (split at `\n`) from the line
+/// starting at `pos`, without a line table: the block's text (its lines are
+/// contiguous in the source) and the position after its last line (the
+/// source's end when it runs to the end).
+pub(crate) fn read_html_block_from(source: &str, pos: usize) -> Option<(&str, usize)> {
+    let b = source.as_bytes();
+    let line_end = |at: usize| crate::scan::find_byte(b, at, b'\n').unwrap_or(b.len());
+    let line = &source[pos..line_end(pos)];
+    if !html_line_start(line) {
+        return None;
+    }
+    let trimmed = js::trim_start(line);
+    if let Some(closing) = closing_pattern(trimmed) {
+        // To the line that closes it, or (unclosed) every line to the end.
+        let mut at = pos;
+        loop {
+            let end = line_end(at);
+            if closing.test(&source[at..end]) || end >= b.len() {
+                return Some((&source[pos..end], if end < b.len() { end + 1 } else { b.len() }));
+            }
+            at = end + 1;
+        }
+    }
+    if is_block_tag_start(trimmed) || is_valid_inline_html_tag(trimmed) {
+        // To the line before the first blank one, or to the end.
+        let mut at = pos;
+        let mut last_end = pos;
+        loop {
+            let end = line_end(at);
+            if js::trim(&source[at..end]).is_empty() {
+                return Some((&source[pos..last_end], at));
+            }
+            if end >= b.len() {
+                return Some((&source[pos..end], b.len()));
+            }
+            last_end = end;
+            at = end + 1;
+        }
+    }
+    None
+}
+
+/// Whether `readHtmlBlock` reads a block starting at `line` (it decides on
+/// that line alone).
+pub fn starts_html_block(line: &str) -> bool {
+    read_html_block(&[line], 0).is_some()
 }
 
 /// `isInterruptingHtmlBlockStart`.

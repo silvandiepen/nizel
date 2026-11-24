@@ -11,7 +11,6 @@ use crate::inline::{parse_inline, parse_inline_owned, Ctx};
 use crate::refs::{self, References};
 use crate::js;
 use crate::slug::{slugify, unique_slug};
-use std::collections::HashMap;
 
 pub struct Options {
     pub anchors: bool,
@@ -28,6 +27,21 @@ thread_local! {
     /// the per-line searches for them can be skipped.
     static DOC_HAS_PIPE: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
     static DOC_HAS_TAB: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+    /// Set (by tier 1 only) when every line the rules read is a line of a
+    /// document holding no U+2028 or U+2029 and no CR, split at `\n`: no
+    /// line can then hold a JavaScript line terminator. Off by default and
+    /// whenever `parse_markdown` starts.
+    static LINES_WITHOUT_TERMINATORS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Sets `LINES_WITHOUT_TERMINATORS` (see there).
+pub(crate) fn set_lines_without_terminators(value: bool) {
+    LINES_WITHOUT_TERMINATORS.with(|flag| flag.set(value));
+}
+
+/// Can `text`, a line or part of one, hold a JavaScript line terminator?
+fn line_has_terminator(text: &str) -> bool {
+    !LINES_WITHOUT_TERMINATORS.with(std::cell::Cell::get) && js::has_line_terminator(text)
 }
 
 fn doc_has_pipe() -> bool {
@@ -67,10 +81,79 @@ fn scan_source(markdown: &str) -> (bool, bool, bool, bool) {
     (cr, tab, pipe, reference)
 }
 
+/// Sets the document-wide flags the line rules read (`|` and tab present),
+/// for callers that use those rules outside `parse_markdown` (tier 1).
+pub(crate) fn set_document_flags(has_pipe: bool, has_tab: bool) {
+    DOC_HAS_PIPE.with(|flag| flag.set(has_pipe));
+    DOC_HAS_TAB.with(|flag| flag.set(has_tab));
+}
+
 pub fn parse_markdown(markdown: &str, options: &Options) -> Result<Vec<Block>> {
+    parse_markdown_with_seen(markdown, options, &mut crate::slug::Seen::default(), true)
+}
+
+/// `parseMarkdown` with the heading IDs already taken in the document, for a
+/// stretch of a document that tier 1 hands over (see `fast`). Such a stretch
+/// comes from a document already known to define no references, so
+/// `extract_references` is false: a stretch on its own could see a line as a
+/// definition that the whole document does not (definitions depend on the
+/// line before them).
+pub fn parse_markdown_with_seen(markdown: &str, options: &Options, seen: &mut crate::slug::Seen, extract_references: bool) -> Result<Vec<Block>> {
+    parse_markdown_prepared(markdown, options, seen, extract_references, None)
+}
+
+/// `parseMarkdown` of a stretch of a document whose definitions were already
+/// extracted from the whole (tier 1 renders the extracted content lines):
+/// the stretch resolves them and extracts none of its own.
+pub fn parse_markdown_with_references(markdown: &str, options: &Options, seen: &mut crate::slug::Seen, references: &References) -> Result<Vec<Block>> {
+    parse_markdown_prepared(markdown, options, seen, false, Some(references))
+}
+
+/// The document's lines after `parseMarkdown`'s preparation, joined, and the
+/// references it extracted: line endings normalized, leading tabs expanded,
+/// and definitions extracted when the document-wide gate lets it (`]:` and a
+/// line that could start one), exactly as `parse_markdown` does before
+/// parsing blocks.
+pub(crate) fn extracted_content(markdown: &str) -> (String, References) {
+    let (has_cr, has_tab, _, has_reference) = scan_source(markdown);
+    let normalized: std::borrow::Cow<str> = if has_cr { normalize_line_endings(markdown).into() } else { markdown.into() };
+    let expanded: Vec<String>;
+    let base: Vec<&str> = if has_tab {
+        expanded = normalized.split('\n').map(expand_leading_tabs_in_line).collect();
+        as_strs(&expanded)
+    } else {
+        crate::scan::lines(&normalized)
+    };
+    if has_reference && has_possible_reference_definition_start(&normalized) {
+        let (content, references) = refs::extract(&base);
+        (content.join("\n"), references)
+    } else {
+        (base.join("\n"), References::new())
+    }
+}
+
+/// `extracted_content` for a document without CR or tabs, over `lines` (its
+/// lines): the lines extraction keeps, and what it extracted.
+pub(crate) fn extracted_lines<'a>(markdown: &str, lines: &[&'a str]) -> (Vec<&'a str>, References) {
+    let (_, _, _, has_reference) = scan_source(markdown);
+    if has_reference && has_possible_reference_definition_start(markdown) {
+        refs::extract(lines)
+    } else {
+        (lines.to_vec(), References::new())
+    }
+}
+
+fn parse_markdown_prepared(
+    markdown: &str,
+    options: &Options,
+    seen: &mut crate::slug::Seen,
+    extract_references: bool,
+    given: Option<&References>,
+) -> Result<Vec<Block>> {
     let (has_cr, has_tab, has_pipe, has_reference) = scan_source(markdown);
     DOC_HAS_PIPE.with(|flag| flag.set(has_pipe));
     DOC_HAS_TAB.with(|flag| flag.set(has_tab));
+    set_lines_without_terminators(false);
     let normalized: std::borrow::Cow<str> = if has_cr { normalize_line_endings(markdown).into() } else { markdown.into() };
     // Lines borrow the source unless tabs had to be expanded.
     let expanded: Vec<String>;
@@ -80,16 +163,15 @@ pub fn parse_markdown(markdown: &str, options: &Options) -> Result<Vec<Block>> {
     } else {
         crate::scan::lines(&normalized)
     };
-    let (content, references) = if has_reference && has_possible_reference_definition_start(&normalized) {
+    let (content, references) = if extract_references && has_reference && has_possible_reference_definition_start(&normalized) {
         let (content, references) = refs::extract(&base);
         (Some(content), references)
     } else {
         (None, References::new())
     };
     let lines: &[&str] = content.as_deref().unwrap_or(&base);
-    let ctx = Ctx { options, references: &references };
-    let mut seen = HashMap::new();
-    parse_blocks(lines, &ctx, &mut seen)
+    let ctx = Ctx { options, references: given.unwrap_or(&references) };
+    parse_blocks(lines, &ctx, seen)
 }
 
 /// `markdown.replace(/\r\n?/g, '\n')`
@@ -133,7 +215,7 @@ fn expand_leading_tabs_in_line(line: &str) -> String {
 }
 
 /// `/(^|\n)(?: {0,3}> ?| {0,3})\[/`
-fn has_possible_reference_definition_start(markdown: &str) -> bool {
+pub(crate) fn has_possible_reference_definition_start(markdown: &str) -> bool {
     markdown.split('\n').any(|line| {
         let after = &line[js::up_to_three_spaces(line)..];
         if after.starts_with('[') {
@@ -151,11 +233,20 @@ fn as_strs(lines: &[String]) -> Vec<&str> {
     lines.iter().map(String::as_str).collect()
 }
 
-fn parse_blocks(lines: &[&str], ctx: &Ctx, seen: &mut HashMap<String, usize>) -> Result<Vec<Block>> {
+fn parse_blocks(lines: &[&str], ctx: &Ctx, seen: &mut crate::slug::Seen) -> Result<Vec<Block>> {
+    Ok(parse_blocks_until(lines, 0, ctx, seen, usize::MAX)?.0)
+}
+
+/// `parseBlocks` from line `start`, stopping before a block once `limit`
+/// blocks are parsed: the blocks and the line index it stopped at. Each turn
+/// of the loop starts at a block of `lines` with nothing carried over but
+/// the index (and the shared IDs and references), so tier 1 can hand the
+/// full engine one block and go on where it stopped.
+pub(crate) fn parse_blocks_until(lines: &[&str], start: usize, ctx: &Ctx, seen: &mut crate::slug::Seen, limit: usize) -> Result<(Vec<Block>, usize)> {
     let options = ctx.options;
     let mut children = Vec::new();
-    let mut index = 0;
-    while index < lines.len() {
+    let mut index = start;
+    while index < lines.len() && children.len() < limit {
         let line = lines[index];
         let trimmed = js::trim(line);
         if trimmed.is_empty() {
@@ -275,33 +366,8 @@ fn parse_blocks(lines: &[&str], ctx: &Ctx, seen: &mut HashMap<String, usize>) ->
         }
 
         if !letter_start && blockquote_start(line) {
-            let mut quote_lines: Vec<String> = Vec::new();
-            let mut allow_lazy = false;
-            while index < lines.len() {
-                if let Some((marker_len, marker_ends_space, rest)) = quote_marker(&lines[index]) {
-                    let column = if marker_ends_space { marker_len } else { marker_len + 1 };
-                    let quote_line = expand_leading_tabs_from_column(rest, column);
-                    quote_lines.push(quote_line);
-                    // Only the last quoted line matters to the table check there (it looks one line ahead).
-                    let last = quote_lines[quote_lines.len() - 1].as_str();
-                    allow_lazy = can_start_lazy_continuation(last, options, &[last], 0);
-                    index += 1;
-                    continue;
-                }
-                if allow_lazy && can_continue_lazily(&lines[index], options, lines, index) {
-                    let l = &lines[index];
-                    quote_lines.push(if setext_underline(l).is_some() { format!("\\{l}") } else { l.to_string() });
-                    allow_lazy = true;
-                    index += 1;
-                    continue;
-                }
-                break;
-            }
-            if quote_lines.last().is_some_and(String::is_empty) {
-                quote_lines.pop();
-            }
-            // The loop consumed at least the opening line (`index -= 1` then the
-            // JavaScript loop's `+= 1`): `index` is the first line after the quote.
+            let (quote_lines, next) = collect_blockquote(lines, index, options);
+            index = next;
             children.push(Block::Blockquote { children: parse_blocks(&as_strs(&quote_lines), ctx, seen)? });
             continue;
         }
@@ -348,10 +414,10 @@ fn parse_blocks(lines: &[&str], ctx: &Ctx, seen: &mut HashMap<String, usize>) ->
         children.push(Block::Paragraph { children: parse_inline_owned(source, ctx)? });
         index += 1;
     }
-    Ok(children)
+    Ok((children, index))
 }
 
-fn heading(depth: u8, source: &str, ctx: &Ctx, seen: &mut HashMap<String, usize>) -> Result<Block> {
+pub(crate) fn heading(depth: u8, source: &str, ctx: &Ctx, seen: &mut crate::slug::Seen) -> Result<Block> {
     let options = ctx.options;
     let children = parse_inline(source, ctx)?;
     let text = strip_inline(&children);
@@ -416,13 +482,13 @@ fn atx_start(line: &str) -> bool {
 }
 
 /// `/^(#{1,6})\s+/` (no leading spaces).
-fn atx_at_line_start(line: &str) -> bool {
+pub(crate) fn atx_at_line_start(line: &str) -> bool {
     let hashes = js::run_of(line, b'#');
     (1..=hashes.min(6)).any(|count| line[count..].chars().next().is_some_and(js::is_space))
 }
 
 /// `/^ {0,3}(#{1,6})(?:\s+(.*?))?\s*$/` → (depth, group 2 or "").
-fn atx_heading(line: &str) -> Option<(u8, &str)> {
+pub(crate) fn atx_heading(line: &str) -> Option<(u8, &str)> {
     let rest = &line[js::up_to_three_spaces(line)..];
     let hashes = js::run_of(rest, b'#');
     if hashes == 0 || hashes > 6 {
@@ -444,7 +510,7 @@ fn atx_heading(line: &str) -> Option<(u8, &str)> {
 }
 
 /// `trimClosingHeadingHashes`.
-fn trim_closing_heading_hashes(source: &str) -> String {
+pub(crate) fn trim_closing_heading_hashes(source: &str) -> String {
     let without_trailing = js::trim_end(source);
     if !source.is_empty() && without_trailing.bytes().all(|b| b == b'#') && !without_trailing.is_empty() {
         return String::new();
@@ -480,7 +546,7 @@ pub fn is_thematic_break(line: &str) -> bool {
 }
 
 /// `isSetextUnderline`: `/^ {0,3}(=+|-+)\s*$/` → 1 for `=`, 2 for `-`.
-fn setext_underline(line: &str) -> Option<u8> {
+pub(crate) fn setext_underline(line: &str) -> Option<u8> {
     let rest = &line[js::up_to_three_spaces(line)..];
     let marker = rest.bytes().next().filter(|b| *b == b'=' || *b == b'-')?;
     let run = js::run_of(rest, marker);
@@ -488,18 +554,18 @@ fn setext_underline(line: &str) -> Option<u8> {
 }
 
 /// `/^ {0,3}(`{3,}|~{3,})/`
-fn fence_start(line: &str) -> bool {
+pub(crate) fn fence_start(line: &str) -> bool {
     let rest = &line[js::up_to_three_spaces(line)..];
     js::run_of(rest, b'`') >= 3 || js::run_of(rest, b'~') >= 3
 }
 
 /// `/^ {0,3}> ?/`
-fn blockquote_start(line: &str) -> bool {
+pub(crate) fn blockquote_start(line: &str) -> bool {
     line[js::up_to_three_spaces(line)..].starts_with('>')
 }
 
 /// `/^::[A-Za-z][\w-]*/` on the trimmed line.
-fn custom_block_start(trimmed: &str) -> bool {
+pub(crate) fn custom_block_start(trimmed: &str) -> bool {
     trimmed.strip_prefix("::").is_some_and(|rest| rest.bytes().next().is_some_and(|b| b.is_ascii_alphabetic()))
 }
 
@@ -523,7 +589,7 @@ fn is_table_start(lines: &[&str], index: usize) -> bool {
 }
 
 /// `/^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/`
-fn is_table_delimiter_row(line: &str) -> bool {
+pub(crate) fn is_table_delimiter_row(line: &str) -> bool {
     let mut rest = js::trim_start(line);
     rest = rest.strip_prefix('|').unwrap_or(rest);
     let cells: Vec<&str> = rest.split('|').collect();
@@ -569,7 +635,7 @@ fn parse_expanded_list_marker(line: &str) -> Option<ListMarker<'_>> {
         let padding = after.bytes().take_while(|b| *b == b' ' || *b == b'\t').count();
         let body = &after[padding..];
         // `(.*)$` without the `m` flag: a line terminator in the body fails the whole match.
-        if (padding > 0 || body.is_empty()) && !js::has_line_terminator(body) {
+        if (padding > 0 || body.is_empty()) && !line_has_terminator(body) {
             return Some(ListMarker {
                 body: list_marker_body(&after[..padding], body),
                 content_indent: list_content_indent(indent, 1, padding),
@@ -586,7 +652,7 @@ fn parse_expanded_list_marker(line: &str) -> Option<ListMarker<'_>> {
             let after = &rest[digits + 1..];
             let padding = after.bytes().take_while(|b| *b == b' ' || *b == b'\t').count();
             let body = &after[padding..];
-            if (padding > 0 || body.is_empty()) && !js::has_line_terminator(body) {
+            if (padding > 0 || body.is_empty()) && !line_has_terminator(body) {
                 return Some(ListMarker {
                     body: list_marker_body(&after[..padding], body),
                     content_indent: list_content_indent(indent, digits + 1, padding),
@@ -611,7 +677,7 @@ fn list_content_indent(indent: usize, marker_length: usize, padding: usize) -> u
 }
 
 /// `isParagraphInterruptingListMarker`.
-fn is_paragraph_interrupting_list_marker(line: &str) -> bool {
+pub(crate) fn is_paragraph_interrupting_list_marker(line: &str) -> bool {
     parse_list_marker(line).is_some_and(|marker| !marker.body.is_empty() && (!marker.ordered || marker.start == Some(1)))
 }
 
@@ -647,13 +713,13 @@ fn is_bare_list_marker(text: &str) -> bool {
 }
 
 /// `normalizeParagraphLine`: `line.replace(/^ {0,3}/, '').trimStart()`.
-fn normalize_paragraph_line(line: &str) -> &str {
+pub(crate) fn normalize_paragraph_line(line: &str) -> &str {
     js::trim_start(&line[js::up_to_three_spaces(line)..])
 }
 
 
 /// `/^::([A-Za-z][\w-]*)(?:\s+(.*))?$/` on the trimmed line → (name, args source).
-fn custom_block_name(trimmed: &str) -> Option<(&str, &str)> {
+pub(crate) fn custom_block_name(trimmed: &str) -> Option<(&str, &str)> {
     let rest = trimmed.strip_prefix("::")?;
     if !rest.bytes().next().is_some_and(|b| b.is_ascii_alphabetic()) {
         return None;
@@ -721,7 +787,7 @@ fn parse_primitive(value: &str) -> crate::ast::Prop {
 }
 
 /// `readCustomBlock` → (content, end index, props).
-fn read_custom_block(lines: &[&str], start: usize) -> (String, usize, Vec<(String, crate::ast::Prop)>) {
+pub(crate) fn read_custom_block(lines: &[&str], start: usize) -> (String, usize, Vec<(String, crate::ast::Prop)>) {
     let find = |from: usize| (from..lines.len()).find(|&i| js::trim(&lines[i]) == "::");
     let Some(first) = find(start + 1) else {
         return (lines[start + 1..].join("\n"), lines.len() - 1, Vec::new());
@@ -746,14 +812,14 @@ fn is_prop_or_blank(line: &str) -> bool {
 }
 
 /// `splitTableRow`: trim, drop one leading and one trailing pipe, split on `|`.
-fn split_table_row(line: &str) -> Vec<&str> {
+pub(crate) fn split_table_row(line: &str) -> Vec<&str> {
     let t = js::trim(line);
     let start = usize::from(t.starts_with('|'));
     let end = if t.len() > start && t.ends_with('|') { t.len() - 1 } else { t.len() };
     t[start..end].split('|').collect()
 }
 
-fn cell_alignment(cell: &str) -> Option<&'static str> {
+pub(crate) fn cell_alignment(cell: &str) -> Option<&'static str> {
     let trimmed = js::trim(cell);
     match (trimmed.starts_with(':'), trimmed.ends_with(':')) {
         (true, true) => Some("center"),
@@ -795,13 +861,13 @@ pub fn closes_fence(line: &str, marker: u8, length: usize) -> bool {
     run >= length && js::trim_end(&rest[run..]).is_empty()
 }
 
-struct FenceInfo {
-    lang: Option<String>,
-    meta: String,
+pub(crate) struct FenceInfo {
+    pub(crate) lang: Option<String>,
+    pub(crate) meta: String,
 }
 
 /// `parseFenceInfo`; `None` when invalid.
-fn parse_fence_info(info: &str, marker: u8) -> Option<FenceInfo> {
+pub(crate) fn parse_fence_info(info: &str, marker: u8) -> Option<FenceInfo> {
     let meta = decode_string_content(js::trim(info));
     if marker == b'`' && meta.contains('`') {
         return None;
@@ -814,13 +880,13 @@ fn parse_fence_info(info: &str, marker: u8) -> Option<FenceInfo> {
 }
 
 /// `stripFenceIndent`.
-fn strip_fence_indent(line: &str, indent: usize) -> &str {
+pub(crate) fn strip_fence_indent(line: &str, indent: usize) -> &str {
     let spaces = line.bytes().take(indent).take_while(|&b| b == b' ').count();
     &line[spaces..]
 }
 
 /// `parseCodeMeta` → (filename, highlight lines).
-fn parse_code_meta(meta: &str) -> (Option<String>, Option<Vec<f64>>) {
+pub(crate) fn parse_code_meta(meta: &str) -> (Option<String>, Option<Vec<f64>>) {
     // Neither `filename=` nor `{…}` can match in less than three bytes.
     if meta.len() < 3 {
         return (None, None);
@@ -959,7 +1025,7 @@ fn can_continue_lazily(line: &str, options: &Options, lines: &[&str], index: usi
 }
 
 /// `/^\[[ xX]\]\s+/` → (checked, body without the box).
-fn task_box(body: &str) -> (Option<bool>, &str) {
+pub(crate) fn task_box(body: &str) -> (Option<bool>, &str) {
     let b = body.as_bytes();
     if b.len() >= 3 && b[0] == b'[' && matches!(b[1], b' ' | b'x' | b'X') && b[2] == b']' {
         let after = &body[3..];
@@ -999,31 +1065,93 @@ fn parse_list_item_blocks(
     opening: &ListMarker,
     content_indent: usize,
     ctx: &Ctx,
-    seen: &mut HashMap<String, usize>,
+    seen: &mut crate::slug::Seen,
 ) -> Result<(Vec<Block>, usize, bool)> {
-    let options = ctx.options;
-    let mut item_lines: Vec<String> = vec![first_line.to_string()];
+    let (item_lines, end, loose, _) = collect_list_item(first_line, lines, index, opening, content_indent, ctx.options);
+    Ok((parse_blocks(&item_lines, ctx, seen)?, end, loose))
+}
+
+/// The lines of the list item opening at `index` (content de-indented), the
+/// index of its last line, and whether it makes the list loose: the half of
+/// `parseListItemBlocks` before the item's blocks are parsed (tier 1 renders
+/// them itself).
+/// The lines of the blockquote opening at `index` (markers removed, lazy
+/// continuations kept) and the index of the first line after it: the half
+/// of `parseBlocks`' blockquote branch before its content is parsed (tier 1
+/// renders that itself).
+pub(crate) fn collect_blockquote(lines: &[&str], mut index: usize, options: &Options) -> (Vec<String>, usize) {
+    let mut quote_lines: Vec<String> = Vec::new();
+    let mut allow_lazy = false;
+    while index < lines.len() {
+        if let Some((marker_len, marker_ends_space, rest)) = quote_marker(&lines[index]) {
+            let column = if marker_ends_space { marker_len } else { marker_len + 1 };
+            let quote_line = expand_leading_tabs_from_column(rest, column);
+            quote_lines.push(quote_line);
+            // Only the last quoted line matters to the table check there (it looks one line ahead).
+            let last = quote_lines[quote_lines.len() - 1].as_str();
+            allow_lazy = can_start_lazy_continuation(last, options, &[last], 0);
+            index += 1;
+            continue;
+        }
+        if allow_lazy && can_continue_lazily(&lines[index], options, lines, index) {
+            let l = &lines[index];
+            quote_lines.push(if setext_underline(l).is_some() { format!("\\{l}") } else { l.to_string() });
+            allow_lazy = true;
+            index += 1;
+            continue;
+        }
+        break;
+    }
+    if quote_lines.last().is_some_and(String::is_empty) {
+        quote_lines.pop();
+    }
+    (quote_lines, index)
+}
+
+pub(crate) fn collect_list_item<'f, 'x: 'f>(
+    first_line: &'f str,
+    lines: &[&'x str],
+    index: usize,
+    opening: &ListMarker,
+    content_indent: usize,
+    options: &Options,
+) -> (Vec<&'f str>, usize, bool, Option<ListMarker<'x>>) {
+    let mut item_lines: Vec<&'f str> = vec![first_line];
     let mut cursor = index + 1;
     let mut loose = false;
     let mut saw_blank = false;
     let mut open_fence = opening_fence_close(first_line);
+    // The marker parsed on a line looked at ahead (after blank lines), for
+    // when the loop reaches that line.
+    let mut ahead: Option<(usize, Option<ListMarker<'x>>)> = None;
     while cursor < lines.len() {
-        let line = &lines[cursor];
-        if let Some(marker) = parse_list_marker(line) {
+        let line = lines[cursor];
+        let marker = match ahead.take() {
+            Some((at, marker)) if at == cursor => marker,
+            other => {
+                ahead = other;
+                parse_list_marker(line)
+            }
+        };
+        if let Some(marker) = marker {
             if same_list(opening, &marker) && count_leading_spaces(line) < content_indent {
-                break;
+                // The next item's marker: the caller need not parse it again.
+                return (trimmed(item_lines), cursor - 1, loose, Some(marker));
             }
         }
         if js::trim(line).is_empty() {
             if open_fence.is_some() {
-                item_lines.push(String::new());
+                item_lines.push("");
                 cursor += 1;
                 continue;
             }
             let Some(next_content) = (cursor + 1..lines.len()).find(|&i| !js::trim(&lines[i]).is_empty()) else { break };
-            if let Some(next_marker) = parse_list_marker(&lines[next_content]) {
-                if same_list(opening, &next_marker) && count_leading_spaces(&lines[next_content]) < content_indent {
-                    item_lines.push(String::new());
+            let next_marker = parse_list_marker(lines[next_content]);
+            let same = next_marker.as_ref().is_some_and(|next_marker| same_list(opening, next_marker));
+            ahead = Some((next_content, next_marker));
+            if same {
+                if count_leading_spaces(lines[next_content]) < content_indent {
+                    item_lines.push("");
                     loose = true;
                     saw_blank = true;
                     cursor += 1;
@@ -1037,34 +1165,39 @@ fn parse_list_item_blocks(
             if next_indent < content_indent {
                 break;
             }
-            item_lines.push(String::new());
+            item_lines.push("");
             loose = !has_nested_list_marker_before_blank(&item_lines, next_indent - content_indent);
             saw_blank = true;
             cursor += 1;
             continue;
         }
         if count_leading_spaces(line) >= content_indent {
-            let item_line = line[content_indent..].to_string();
-            open_fence = update_open_fence(open_fence, &item_line);
+            let item_line = &line[content_indent..];
+            open_fence = update_open_fence(open_fence, item_line);
             item_lines.push(item_line);
             cursor += 1;
             continue;
         }
         if !saw_blank && !is_block_start(line, options, lines, cursor) {
             open_fence = update_open_fence(open_fence, line);
-            item_lines.push(line.to_string());
+            item_lines.push(line);
             cursor += 1;
             continue;
         }
         break;
     }
-    while item_lines.last().is_some_and(String::is_empty) {
+    (trimmed(item_lines), cursor - 1, loose, None)
+}
+
+/// An item's lines without trailing blank ones.
+fn trimmed(mut item_lines: Vec<&str>) -> Vec<&str> {
+    while item_lines.last().is_some_and(|line| line.is_empty()) {
         item_lines.pop();
     }
-    Ok((parse_blocks(&as_strs(&item_lines), ctx, seen)?, cursor - 1, loose))
+    item_lines
 }
 
 /// `hasNestedListMarkerBeforeBlank`.
-fn has_nested_list_marker_before_blank(item_lines: &[String], relative_next_indent: usize) -> bool {
+fn has_nested_list_marker_before_blank(item_lines: &[&str], relative_next_indent: usize) -> bool {
     item_lines.iter().any(|line| parse_list_marker(line).is_some() && count_leading_spaces(line) < relative_next_indent)
 }

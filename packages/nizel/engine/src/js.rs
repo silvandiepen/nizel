@@ -27,26 +27,30 @@ pub fn is_dot(c: char) -> bool {
     !matches!(c, '\n' | '\r' | '\u{2028}' | '\u{2029}')
 }
 
-static LINE_TERMINATOR_START: [bool; 256] = {
-    let mut table = [false; 256];
-    table[b'\n' as usize] = true;
-    table[b'\r' as usize] = true;
-    table[0xe2] = true;
-    table
-};
-
-/// Does `text` hold a JavaScript line terminator (`.` fails on it)? One byte scan;
-/// U+2028 and U+2029 are `E2 80 A8` and `E2 80 A9`.
+/// Does `text` hold a JavaScript line terminator (`.` fails on it)? U+2028
+/// and U+2029 are `E2 80 A8` and `E2 80 A9`. Eight bytes at a time: a word
+/// of ASCII bytes from 0x0E up holds none and is skipped whole; only a
+/// word with a byte below that or a non-ASCII one is read byte by byte.
 pub fn has_line_terminator(text: &str) -> bool {
+    const LOW: u64 = 0x0101_0101_0101_0101;
+    const HIGH: u64 = 0x8080_8080_8080_8080;
     let b = text.as_bytes();
+    let terminator_at = |i: usize| match b[i] {
+        b'\n' | b'\r' => true,
+        0xe2 => b.get(i + 1) == Some(&0x80) && matches!(b.get(i + 2), Some(0xa8 | 0xa9)),
+        _ => false,
+    };
     let mut at = 0;
-    while let Some(i) = crate::scan::find_in_table(b, at, &LINE_TERMINATOR_START) {
-        if b[i] != 0xe2 || (b.get(i + 1) == Some(&0x80) && matches!(b.get(i + 2), Some(0xa8 | 0xa9))) {
+    while at + 8 <= b.len() {
+        let word = u64::from_le_bytes(b[at..at + 8].try_into().expect("eight bytes"));
+        // Some byte is non-ASCII, or below 0x0E (no false negatives: a
+        // borrow only adds flags above a real one).
+        if (word | (word.wrapping_sub(LOW * 0x0e) & !word)) & HIGH != 0 && (at..at + 8).any(terminator_at) {
             return true;
         }
-        at = i + 1;
+        at += 8;
     }
-    false
+    (at..b.len()).any(terminator_at)
 }
 
 pub fn trim(s: &str) -> &str {
@@ -119,3 +123,37 @@ pub fn has_inline_syntax(source: &str, autolinks: bool) -> bool {
     }
     false
 }
+
+#[cfg(test)]
+mod line_terminator_tests {
+    use super::has_line_terminator;
+
+    fn reference(text: &str) -> bool {
+        text.chars().any(|c| matches!(c, '\n' | '\r' | '\u{2028}' | '\u{2029}'))
+    }
+
+    #[test]
+    fn has_line_terminator_matches_a_char_scan() {
+        // Every placement of each interesting character in strings of
+        // filler bytes around the eight-byte boundaries.
+        let specials = ["\n", "\r", "\u{2028}", "\u{2029}", "\u{2014}", "\u{2027}", "\u{202a}", "\u{e9}", "\u{1f680}", "\u{0b}", "\u{0d}x", "\u{0e}", "\u{0c}", "\u{7f}", "\u{80}"];
+        let fillers = ["a", " ", "\u{0f}", "~"];
+        for len in 0..20 {
+            for filler in fillers {
+                for special in specials {
+                    for at in 0..=len {
+                        let mut text = filler.repeat(at);
+                        text.push_str(special);
+                        text.push_str(&filler.repeat(len - at));
+                        assert_eq!(has_line_terminator(&text), reference(&text), "{text:?}");
+                        for second in specials {
+                            let both = format!("{text}{second}");
+                            assert_eq!(has_line_terminator(&both), reference(&both), "{both:?}");
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+

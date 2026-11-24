@@ -137,3 +137,92 @@ test('the engine scans paragraphs with @ (a table without a needle list) safely'
     assert.equal(engineRender(source, 0), await stock.useNizel({ anchors: false, autolinks: false, frontmatter: false, safe: false }).html(source), source);
   }
 });
+
+test('a task item opening a fence keeps tier 1 from cutting a stretch inside it', async () => {
+  // Found by the fuzzer: after a task box, an item's content can be a fence,
+  // which stays open across a blank line and takes the next lines lazily.
+  for (const source of [
+    "[r]: /url　||\n- [x] ``` filename='b' {2,1.5,x,0x3,1e1}\n\nlazy[r]: /url\n  - ===",
+    'http://x.y)\n- [x] ```js filename="a.js" {1-3,5}\n\nn-1: 2\n***<https://e.com/a?b>[a [b] c](d)',
+  ]) {
+    assert.equal(engineRender(source, 1 | 2 | 4), await stock.useNizel().html(source), JSON.stringify(source));
+  }
+});
+
+test('a fence-looking line inside a table is a row, not a fence', async () => {
+  // Found by the tier-1 fuzzer: rows go on while a line holds `|`, so a
+  // column-0 "```a | b" after table rows is a row.
+  const source = '\n10. ten\n| a | b |\n| --- | --- |\n| 1 | 2 |\n```a | b\n---|---\nc | d`a|b`\n- a\n  ```\n\ntext\n  ``` \n007. bond_u_---\n1. item\n\n   ```swift\n   code\n\n   ```\n';
+  assert.equal(engineRender(source, 0), await stock.useNizel({ anchors: false, autolinks: false, frontmatter: false, safe: false }).html(source));
+  assert.equal(engineRender(source, 1 | 2 | 4), await stock.useNizel().html(source));
+});
+
+test('a quoted definition after a tab or extra spaces defines its reference', async () => {
+  // Found by the JS fuzzer: extraction reads `>`, any one whitespace
+  // character and up to three spaces before a definition's `[`, so tier 1
+  // must not take such a line as plain text.
+  const bare = stock.useNizel({ anchors: false, autolinks: false, frontmatter: false, safe: false });
+  for (const source of [
+    '1. \\_\\\n1) [a](b(c)d)<\n>\t[r]: /urlK\n    code\n\n````\n[a]b]\n[r]: <a b>\n',
+    'text [r]\n\n>  [r]: /u\n\n```\n[x]: /y\n```\n',
+  ]) {
+    assert.equal(engineRender(source, 0), await bare.html(source), JSON.stringify(source));
+    assert.equal(engineRender(source, 1 | 2 | 4), await stock.useNizel().html(source), JSON.stringify(source));
+  }
+});
+
+test('a render after one with mapped lone surrogates keeps Private Use characters in hrefs', async () => {
+  // Found by the JS fuzzer: the mapped render left the engine's marker flag
+  // set, and the next document's stretches read U+E000 in a URL as a marker.
+  const backend = await import('../dist/wasm/backend.js');
+  const bare = { anchors: false, autolinks: false, frontmatter: false, safe: false };
+  const mapped = '&#xD800;"<!X**b**\ude80[a [b] c](d)&amp;\n* [X] > ![x][r]HTTP://Up.case';
+  const next = '[r]:\n/u\n2. )&copy;---[t](/u "a\\"b")![x][r]-####### *k**<![CDATA[';
+  assert.equal(backend.renderWasm(mapped, bare), await stock.useNizel(bare).html(mapped));
+  assert.equal(backend.renderWasm(next, bare), await stock.useNizel(bare).html(next));
+});
+
+test('underscore emphasis and code spans inside emphasis match the JavaScript engine', async () => {
+  // Tier 1 renders these paragraphs itself; the code span binds before the
+  // closer, and an intraword or unmatched underscore leaves it to the full engine.
+  const bare = stock.useNizel({ anchors: false, autolinks: false, frontmatter: false, safe: false });
+  for (const source of [
+    '_Reviewed with the full diff and the CI logs from run `#4821`._\n',
+    'A *see `x`* b __init__ c, _a `b_` c_ and _x `c_ d.\n\nsnake_case _x_y_ (_z_) _1_.\n',
+    'Text _a `b` `c`_ and **`a`**, _a\nb_ then __x_ and _`a_`_.\n',
+  ]) {
+    assert.equal(engineRender(source, 0), await bare.html(source), JSON.stringify(source));
+    assert.equal(engineRender(source, 1 | 2 | 4), await stock.useNizel().html(source), JSON.stringify(source));
+  }
+});
+
+test('an HTML block handed to the full engine in safe mode keeps reference definitions exact', async () => {
+  // Extraction skips an HTML block by its own rule whatever `safe` is; tier 1
+  // skips its definition check only when that block is exactly what the full
+  // engine took. An unclosed processing instruction runs past the last line
+  // (found by the JS fuzzer: it must not panic).
+  const bare = stock.useNizel({ anchors: false, autolinks: false, frontmatter: false, safe: false });
+  for (const source of [
+    '<p align="center">\n  <img src="a.svg">\n</p>\n\n# T\n\n```\n[x]: /u\n```\n\n[x]\n',
+    '<div>\n[x]: /u\n</div>\n\n[x]\n',
+    ' <?x!',
+    '\n> [q]: /q\n[t](/u "ti")&#99999999;<img src=\'y\' />\n   <!XKHTTP://Up.case',
+  ]) {
+    assert.equal(engineRender(source, 0), await bare.html(source), JSON.stringify(source));
+    assert.equal(engineRender(source, 1 | 2 | 4), await stock.useNizel().html(source), JSON.stringify(source));
+  }
+});
+
+test('a document with U+2028 in list items after one without keeps list markers exact', async () => {
+  // Tier 1 tells the list rules a document has no line terminators besides
+  // its newlines; that must not outlive the document it was found for.
+  const bare = stock.useNizel({ anchors: false, autolinks: false, frontmatter: false, safe: false });
+  for (const source of [
+    '1. one\n   - nested\n2. two\n',
+    '1. one\n   - a b\n2. two \n- c \n',
+    '- x\n  - y\n\ntext\n\n- [ ]  task\n',
+  ]) {
+    assert.equal(engineRender(source, 0), await bare.html(source), JSON.stringify(source));
+    assert.equal(engineRender(source, 1 | 2 | 4), await stock.useNizel().html(source), JSON.stringify(source));
+  }
+});
