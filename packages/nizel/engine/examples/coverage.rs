@@ -29,6 +29,9 @@ fn main() {
             share(inline),
             if accepted { "" } else { " (whole document to the full engine)" }
         );
+        // Paragraphs left to the full engine's inline parser come with length
+        // 0; `--why` lists the stretches.
+        stretches.retain(|(bytes, _)| *bytes > 0);
         stretches.sort_by(|a, b| b.0.cmp(&a.0));
         for (bytes, line) in stretches.iter().take(8) {
             println!("    {bytes:>6}  {}", line.chars().take(70).collect::<String>());

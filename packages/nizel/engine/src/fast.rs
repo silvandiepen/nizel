@@ -43,8 +43,12 @@ thread_local! {
     /// Bytes of paragraphs and table cells whose inline content the full
     /// engine parsed (tier 1 still read their extent).
     static INLINE_FALLBACK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    /// When set, each handed-over stretch's length and first line (see
-    /// `trace_handed_over`).
+    /// Whether the walk in progress resolves no references (see
+    /// `brackets_in_code_ok`).
+    static NO_REFERENCES: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+    /// When set, each handed-over stretch's length and first line, and each
+    /// paragraph whose inline content the full engine parsed (length 0, its
+    /// whole text; see `trace_handed_over`).
     static TRACE: std::cell::RefCell<Option<Vec<(usize, String)>>> = const { std::cell::RefCell::new(None) };
 }
 
@@ -98,6 +102,7 @@ fn render_inner(source: &str, options: &Options, out: &mut String) -> Option<()>
     let none = References::new();
     let plain = Ctx { options, references: &none };
     let mut state = Walk::new(source, options, &plain, has_pipe, false);
+    NO_REFERENCES.with(|flag| flag.set(true));
     if walk(source, &mut state, out, None).is_some() {
         return Some(());
     }
@@ -113,6 +118,7 @@ fn render_inner(source: &str, options: &Options, out: &mut String) -> Option<()>
     let (content, references) = block::extracted_content(source);
     let ctx = Ctx { options, references: &references };
     let mut state = Walk::new(&content, options, &ctx, has_pipe, true);
+    NO_REFERENCES.with(|flag| flag.set(references.is_empty()));
     walk(&content, &mut state, out, None)
 }
 
@@ -525,8 +531,15 @@ fn checked_paragraph(source: &str, pos: usize, state: &mut Walk, out: &mut Strin
             out.truncate(mark);
             let b = source.as_bytes();
             let (last, setext) = paragraph_extent(b, pos)?;
-            full_paragraph(source, pos, last, setext, state, out)?;
-            INLINE_FALLBACK.with(|bytes| bytes.set(bytes.get() + last - pos));
+            if !setext.is_some_and(|depth| setext_heading(source, pos, last, depth, state, out).is_some()) {
+                full_paragraph(source, pos, last, setext, state, out)?;
+                INLINE_FALLBACK.with(|bytes| bytes.set(bytes.get() + last - pos));
+                TRACE.with(|trace| {
+                    if let Some(trace) = trace.borrow_mut().as_mut() {
+                        trace.push((0, source[pos..last].to_string()));
+                    }
+                });
+            }
             // After the last line, and the underline of a setext heading.
             let after = if setext.is_some() { line_end(b, last + 1) } else { last };
             let end = if after < b.len() { after + 1 } else { b.len() };
@@ -960,7 +973,14 @@ fn paragraph(source: &str, start: usize, out: &mut String) -> Option<(usize, boo
                 match crate::inline::match_code_span(&b[..limit], i) {
                     Some((span_end, (value_start, value_end))) => {
                         let value = &source[value_start..value_end];
-                        if !code_span_in_subset(value) {
+                        if value.contains('[') {
+                            // Its lines are the document's too (the definition check).
+                            bracket = true;
+                            if !brackets_in_code_ok(&b[start..limit]) {
+                                return None;
+                            }
+                        }
+                        if !code_span_in_subset(value, true) {
                             return None;
                         }
                         out.push_str(&source[run..i]);
@@ -1092,6 +1112,28 @@ fn paragraph_extent(b: &[u8], start: usize) -> Option<(usize, Option<u8>)> {
     Some((eol, None))
 }
 
+/// A setext heading over `source[start..end]` in tier 1, when its text (the
+/// lines normalized and joined as `parseBlocks` builds it) is in the inline
+/// subset.
+fn setext_heading(source: &str, start: usize, end: usize, depth: u8, state: &mut Walk, out: &mut String) -> Option<()> {
+    let lines = &source[start..end];
+    let content: std::borrow::Cow<str> = if lines.contains('\n') {
+        let mut joined = String::with_capacity(lines.len());
+        for (index, line) in lines.split('\n').enumerate() {
+            if index > 0 {
+                joined.push('\n');
+            }
+            joined.push_str(block::normalize_paragraph_line(line));
+        }
+        let kept = joined.trim_end_matches([' ', '\t']).len();
+        joined.truncate(kept);
+        joined.into()
+    } else {
+        crate::js::trim(lines).into()
+    };
+    heading_content(depth, &content, state.options, &mut state.seen, &mut state.text, (&mut state.slug, &mut state.attribute), out)
+}
+
 /// The paragraph `source[start..end]` by the full engine (a heading with a
 /// setext underline): its lines normalized and joined as `parseBlocks` does,
 /// then `parseInline` and the block's rendering.
@@ -1153,8 +1195,30 @@ fn trim_spaces_end(b: &[u8], floor: usize, mut end: usize) -> usize {
 /// Code span content tier 1 can take: the balanced-link pre-scan sees `[`
 /// inside code too, tables see `|` anywhere on a line, and tabs or CR change
 /// how the whole document is read.
-fn code_span_in_subset(value: &str) -> bool {
-    !value.bytes().any(|c| matches!(c, b'[' | b'|' | b'\t' | b'\r'))
+/// A code span's value tier 1 writes itself. A `[` in it only with
+/// `brackets` (see `brackets_in_code_ok`): the full engine's balanced-link
+/// pre-scan looks at every `[`, code spans included.
+fn code_span_in_subset(value: &str, brackets: bool) -> bool {
+    !value.bytes().any(|c| matches!(c, b'|' | b'\t' | b'\r') || (c == b'[' && !brackets))
+}
+
+/// Can the balanced-link pre-scan (`scanBalancedInlineLinks`) over the
+/// inline source `b` find nothing? It acts on a label followed by `(` (an
+/// inline link), by `[` (an unresolved reference) or naming a reference; so
+/// with no references and neither `](` nor `][` anywhere it finds nothing,
+/// and a `[` inside a code span is as inert as the code span makes it.
+fn brackets_in_code_ok(b: &[u8]) -> bool {
+    if !NO_REFERENCES.with(std::cell::Cell::get) {
+        return false;
+    }
+    let mut from = 0;
+    while let Some(at) = crate::scan::find_byte(b, from, b']') {
+        if matches!(b.get(at + 1), Some(b'(' | b'[')) {
+            return false;
+        }
+        from = at + 1;
+    }
+    true
 }
 
 /// A table at `start` (header line, then a delimiter row), as `parseBlocks`
@@ -1372,10 +1436,14 @@ fn inline(source: &str, out: &mut String, mut text: Option<&mut String>) -> Opti
                 }
                 i += 1;
             }
+            // A soft break (a setext heading's lines); a space before it
+            // would make it a hard break or be trimmed.
+            NEWLINE if i > 0 && b[i - 1] != b' ' => i += 1,
             BACKTICK => match crate::inline::match_code_span(b, i) {
                 Some((end, (value_start, value_end))) => {
                     let value = &source[value_start..value_end];
-                    if !code_span_in_subset(value) {
+                    // A code span's newlines become spaces: outside the subset.
+                    if !code_span_in_subset(value, value.contains('[') && brackets_in_code_ok(b)) || value.contains('\n') {
                         return None;
                     }
                     out.push_str(&source[run..i]);
@@ -1605,13 +1673,28 @@ fn heading(line: &str, options: &Options, ctx: &Ctx, seen: &mut crate::slug::See
         && !line.trim_end_matches(' ').ends_with('#');
     if simple {
         let content = line[hashes..].trim_matches(' ');
+        if heading_content(hashes as u8, content, options, seen, text, buffers, out).is_some() {
+            return Some(());
+        }
+    }
+    let (depth, content) = block::atx_heading(line)?;
+    let content = block::trim_closing_heading_hashes(content);
+    let heading = block::heading(depth, &content, ctx, seen).ok()?;
+    crate::render::render_block(&heading, out);
+    Some(())
+}
+
+/// A heading of `depth` whose text is `content` (as `heading` gets it), when
+/// the content is in the inline subset; None leaves `out` as it was.
+fn heading_content(depth: u8, content: &str, options: &Options, seen: &mut crate::slug::Seen, text: &mut String, buffers: (&mut String, &mut String), out: &mut String) -> Option<()> {
+    {
         let mark = out.len();
         out.push_str("<h");
-        out.push((b'0' + hashes as u8) as char);
+        out.push((b'0' + depth) as char);
         if !options.anchors || content.is_empty() {
             out.push('>');
             if inline(content, out, None).is_some() {
-                close_heading(hashes as u8, out);
+                close_heading(depth, out);
                 return Some(());
             }
         } else {
@@ -1639,17 +1722,13 @@ fn heading(line: &str, options: &Options, ctx: &Ctx, seen: &mut crate::slug::See
                     attribute.push('"');
                     out.insert_str(body_start - 1, attribute);
                 }
-                close_heading(hashes as u8, out);
+                close_heading(depth, out);
                 return Some(());
             }
         }
         out.truncate(mark);
     }
-    let (depth, content) = block::atx_heading(line)?;
-    let content = block::trim_closing_heading_hashes(content);
-    let heading = block::heading(depth, &content, ctx, seen).ok()?;
-    crate::render::render_block(&heading, out);
-    Some(())
+    None
 }
 
 fn close_heading(depth: u8, out: &mut String) {

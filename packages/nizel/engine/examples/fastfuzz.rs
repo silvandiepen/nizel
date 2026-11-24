@@ -57,6 +57,8 @@ const ATOMS: &[&str] = &[
     "\n> quote\nlazy", "\n> a\n> b", "\n>no space", "\n> # h\n> - i", "\n> ```\n> code\n> ```", "\n> > nested", "\n>\n> after empty", "\n> a\n---", "\n> a\n===", "\n> [q]: /d\n\n[q]",
     "\n> - a\nb", "\n> | t | u |\n> |---|---|", "\n> a\n\n> b", "\n  > indented", "\n> <div>\nx", "\n>     code",
     "\n>\u{3000} [qe]: /u", "\n>\u{a0}[qf]: /u", "\n- a\n>\u{3000}[qg]: /u", "\n> > [qh]: /u", "\n>\t[qi]: /u",
+    "\ntitle: X\nicon: y\n---", "\nOne\n===", "\nA *b*\nc `d`\n---", "\nA `x\ny`\n---", "\nTrail \nnext\n---", "\nSame\n---\n\nSame\n---", "\n[l](u)\nz\n===",
+    " `[x]`", " `[a` b](c)", " `[[toc]]` and [l](u)", " `x][y`", " `[^id]`", "\n`a\n[r]: /u`", " `]` (p)", " `[` ](q)", "# `[h]`", "\n| `[c]` | d |\n|---|---|",
     // Just outside: the tier must decline, never differ.
     "*em*", "**strong**", "_u_", "[link](x)", "<b>", "&amp;", "\\*", "~~d~~", "| a | b |", "a@b.co", "http://e.com",
     "> quote", "- item", "1. one", "+ plus", "===", "--", "\t", "\r\n", ":: note", "[r]: /url", "![i](s)",
