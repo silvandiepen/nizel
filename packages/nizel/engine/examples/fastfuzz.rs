@@ -30,6 +30,7 @@ const ATOMS: &[&str] = &[
     "\n# getHTTPResponse", "\n## ABCdef", "\n# a1B2c", "\n# Repeat", "\n# Repeat", "\n# repeat-1", "\n# \u{dc}n\u{ef}code Title", "\n# x > y \"q\"", "\n# 123", "\n#  -lead- ", "\n# A--B", "\n# section",
     "\n<p align=\"center\">\n  <img src=\"a.svg\">\n</p>\n", "\n<div>\n[x]: /u\n</div>\n\n[x]\n", "\n<div>\n\n[y]: /v\n", "\n<!-- c -->\n[z]: /w\n", "\n  <div>x\n```\n", "\n<span>a</span>\n[q]: /q",
     "\n<p>\n> [r]: /r\n</p>", "\n<pre>\n[s]: /s\n\n</pre>\n", "\n<div>\n- a\n", "\n<DIV>\n```\n[t]: /t\n```", " <?x!", "\n   <!X", "\n<?a\n\n", "\n<![CDATA[x", "\n<!-- open",
+    "\n  a | b\n  --|--\n", "\na | `b`\n-|-\n", "\nx\na|b\n-|-\n", "\n a|b\n -|-", "\n   x | *y*\n---|---", "\nab | c\n:-|-:\n1|2", "\ntext |\nnext", "\n[a] | b\n-|-",
     " _a\nb_", " _x_y", " __x_", " _x__", " ___x___", " _x_)", " (_x_)", " _1_", " _x_ _y_", " *x* _y_", " _x *y* z_", " __init__", " a_b_ c", " _a`b`_", " _a `` c_",
     "\n1. item\n\n   ```swift\n   code\n\n   ```\n", "\n- a\n  ```\n\ntext\n  ```", "\n  ```\nx\n    ```", "\n- ```js", "\n   ~~~\n", "\n      ```", "\n  ````\n  ```\n  ````",
     "\n- [x] ```js", "\n- [ ] ```\n\nlazy", "\n- [X]\u{3000}```", "\n> - [x] ```", "\n1. [ ] ~~~",

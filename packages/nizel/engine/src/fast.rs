@@ -532,12 +532,14 @@ fn block<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, lines: &
     let b = source.as_bytes();
     let lead = b[pos];
     // `isTableStart` comes before paragraphs and lists (and after every
-    // construct that cannot hold a `|` line at a block start).
-    if (lead == b'|' || lead.is_ascii_alphabetic()) && table_starts(source, pos, state.has_pipe) {
+    // construct that cannot hold a `|` line at a block start). A letter's
+    // line is a paragraph's unless it holds `|`, which tier 1's paragraph
+    // declines: `checked_paragraph` asks then.
+    if lead == b'|' && table_starts(source, pos, state.has_pipe) {
         return Some((checked_table(source, pos, state, out)?, false));
     }
     if lead.is_ascii_alphabetic() {
-        return checked_paragraph(source, pos, state, out);
+        return checked_paragraph(source, pos, pos, state, out);
     }
     // Up to three spaces before a letter: only a paragraph (or a table,
     // checked on the whole line), whose first line `normalizeParagraphLine`
@@ -545,10 +547,7 @@ fn block<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, lines: &
     if lead == b' ' {
         let spaces = b[pos..].iter().take(3).take_while(|&&c| c == b' ').count();
         if b.get(pos + spaces).is_some_and(u8::is_ascii_alphabetic) {
-            if table_starts(source, pos, state.has_pipe) {
-                return Some((checked_table(source, pos, state, out)?, false));
-            }
-            return checked_paragraph(source, pos + spaces, state, out);
+            return checked_paragraph(source, pos, pos + spaces, state, out);
         }
     }
     let eol = line_end(b, pos);
@@ -573,8 +572,9 @@ fn block<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, lines: &
         b':' => !block::custom_block_start(crate::js::trim(line)),
         _ => false,
     };
-    if paragraph_lead && !line.contains(['\t', '|']) {
-        return checked_paragraph(source, pos, state, out);
+    let lb = line.as_bytes();
+    if paragraph_lead && !(state.has_tab && lb.contains(&b'\t')) && !(state.has_pipe && lb.contains(&b'|')) {
+        return checked_paragraph(source, pos, pos, state, out);
     }
     if lead != b'`' && line.bytes().any(|c| c == b'\t' || c == b'\r') {
         return None;
@@ -625,14 +625,21 @@ fn block<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, lines: &
 /// A paragraph (by tier 1, or by the full engine when its inline content is
 /// outside the subset), after checking a line of it that starts with `[` (one at the
 /// start, or a continuation) for a reference definition.
-fn checked_paragraph(source: &str, pos: usize, state: &mut Walk, out: &mut String) -> Option<(usize, bool)> {
+/// `line_start` is where the first line starts (`pos`, its text, may come
+/// after up to three spaces): a line holding `|` may start a table instead,
+/// which `isTableStart` tries first. Tier 1's paragraph declines any `|`, so
+/// that is only asked when it declines.
+fn checked_paragraph(source: &str, line_start: usize, pos: usize, state: &mut Walk, out: &mut String) -> Option<(usize, bool)> {
     let mark = out.len();
     let (end, bracket, paragraph) = match paragraph(source, pos, out) {
         Some((end, bracket)) => (end, bracket, true),
         None => {
+            out.truncate(mark);
+            if table_starts(source, line_start, state.has_pipe) {
+                return Some((checked_table(source, line_start, state, out)?, false));
+            }
             // Outside the inline subset (or not certain where it ends):
             // the full engine renders the paragraph when its extent is.
-            out.truncate(mark);
             let b = source.as_bytes();
             let (last, setext) = paragraph_extent(b, pos)?;
             if !setext.is_some_and(|depth| setext_heading(source, pos, last, depth, state, out).is_some()) {
