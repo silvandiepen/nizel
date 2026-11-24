@@ -105,6 +105,10 @@ pub fn unique_slug_in_place(slug: &mut String, seen: &mut Seen) {
     if slug.is_empty() {
         slug.push_str("section");
     }
+    // Room for a document's headings up front, rather than growing step by step.
+    if seen.capacity() == 0 {
+        seen.reserve(32);
+    }
     if let Some(count) = seen.get_mut(slug.as_str()) {
         let previous = *count;
         *count += 1;
@@ -226,25 +230,52 @@ fn ascii_slug_case(text: &str) -> String {
 }
 
 /// `ascii_slug_case` appended to `slug`.
+const OTHER: u8 = 0;
+const LOWER: u8 = 1;
+const DIGIT: u8 = 2;
+const UPPER: u8 = 3;
+
+/// Each byte's kind for the ASCII slug: other, lower-case, digit, upper-case.
+static SLUG_KIND: [u8; 256] = {
+    let mut table = [OTHER; 256];
+    let mut c = 0;
+    while c < 256 {
+        let b = c as u8;
+        table[c] = if b.is_ascii_lowercase() {
+            LOWER
+        } else if b.is_ascii_digit() {
+            DIGIT
+        } else if b.is_ascii_uppercase() {
+            UPPER
+        } else {
+            OTHER
+        };
+        c += 1;
+    }
+    table
+};
+
 fn ascii_slug_case_into(text: &str, slug: &mut String) {
     // Bytes in, bytes out (all ASCII): the string's buffer, taken without a
     // copy and checked once on the way back.
     let mut out = std::mem::take(slug).into_bytes();
     let bytes = text.as_bytes();
     let start = out.len();
+    out.reserve(bytes.len() + 8);
     let mut pending = false;
     for k in 0..bytes.len() {
         let c = bytes[k];
-        if !c.is_ascii_alphanumeric() {
+        let kind = SLUG_KIND[c as usize];
+        if kind == OTHER {
             pending = out.len() > start;
             continue;
         }
         // A case boundary starts a new word: an upper-case letter after a
         // lower-case one, or ending an upper-case run before a lower-case
         // letter. (Past the first byte: the slug is not empty then.)
-        if c.is_ascii_uppercase() && !pending && out.len() > start {
-            let previous = bytes[k - 1];
-            if previous.is_ascii_lowercase() || (previous.is_ascii_uppercase() && bytes.get(k + 1).is_some_and(u8::is_ascii_lowercase)) {
+        if kind == UPPER && !pending && out.len() > start {
+            let previous = SLUG_KIND[bytes[k - 1] as usize];
+            if previous == LOWER || (previous == UPPER && bytes.get(k + 1).is_some_and(|&next| SLUG_KIND[next as usize] == LOWER)) {
                 pending = true;
             }
         }
@@ -252,7 +283,8 @@ fn ascii_slug_case_into(text: &str, slug: &mut String) {
             out.push(b'-');
             pending = false;
         }
-        out.push(c.to_ascii_lowercase());
+        // Upper-case to lower-case is the 0x20 bit.
+        out.push(if kind == UPPER { c | 0x20 } else { c });
     }
     *slug = String::from_utf8(out).expect("an ASCII slug");
 }
