@@ -2105,7 +2105,7 @@ fn fenced_code(source: &str, start: usize, eol: usize, has_tab: bool, out: &mut 
     while next.is_none() {
         // No document with CR reaches tier 1, and one without tabs has
         // none in any of its parts.
-        let found = if has_tab { crate::scan::find_any_n(b, pos, *b"\n&<>\"\t") } else { crate::scan::find_any_n(b, pos, *b"\n&<>\"") };
+        let found = if has_tab { crate::scan::find_any_n(b, pos, *b"\n&<>\"\t") } else { crate::scan::find_code_special(b, pos) };
         match found {
             Some(i) => match b[i] {
                 b'\n' => {

@@ -88,9 +88,51 @@ pub fn find_any_n<const N: usize>(bytes: &[u8], from: usize, needles: [u8; N]) -
     bytes[at.min(bytes.len())..].iter().position(|b| needles.contains(b)).map(|i| at + i)
 }
 
+/// The first index at or after `from` holding `\n`, `&`, `<`, `>` or `"`
+/// (what code content stops at). Three tests a word cover the five: `<` and
+/// `>` differ only in bit 1, `"` and `&` only in bit 2, so setting that bit
+/// first makes each pair one byte value. In each test only the lowest flagged
+/// byte is exact, so the lowest across the three is a real match.
+#[inline]
+pub fn find_code_special(bytes: &[u8], from: usize) -> Option<usize> {
+    let mut at = from.min(bytes.len());
+    while at + 8 <= bytes.len() {
+        let word = u64::from_le_bytes(bytes[at..at + 8].try_into().expect("eight bytes"));
+        let hits = equal_bytes(word, b'\n') | equal_bytes(word | (LO * 0x02), b'>') | equal_bytes(word | (LO * 0x04), b'&');
+        if hits != 0 {
+            return Some(at + (hits.trailing_zeros() / 8) as usize);
+        }
+        at += 8;
+    }
+    bytes[at..].iter().position(|&c| matches!(c, b'\n' | b'&' | b'<' | b'>' | b'"')).map(|i| at + i)
+}
+
 #[cfg(test)]
 mod tests {
     use super::find_byte;
+
+    #[test]
+    fn find_code_special_matches_a_plain_search() {
+        // Every byte value at every position, with a second special after it.
+        let special = |c: u8| matches!(c, b'\n' | b'&' | b'<' | b'>' | b'"');
+        for len in 0..20usize {
+            for value in 0..=255u8 {
+                for at in 0..len {
+                    for filler in [b'a', b'=', 0x3d, 0x3f, 0x24, 0x27, 0x0b, 0xff] {
+                        let mut bytes = vec![filler; len];
+                        bytes[at] = value;
+                        if at + 2 < len {
+                            bytes[at + 2] = b'<';
+                        }
+                        for from in [0, at.saturating_sub(1), at] {
+                            let expected = bytes[from..].iter().position(|&c| special(c)).map(|i| from + i);
+                            assert_eq!(super::find_code_special(&bytes, from), expected, "{bytes:?} from {from}");
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn find_byte_matches_a_plain_search() {
