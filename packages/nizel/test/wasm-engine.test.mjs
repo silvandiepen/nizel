@@ -181,3 +181,17 @@ test('a render after one with mapped lone surrogates keeps Private Use character
   assert.equal(backend.renderWasm(mapped, bare), await stock.useNizel(bare).html(mapped));
   assert.equal(backend.renderWasm(next, bare), await stock.useNizel(bare).html(next));
 });
+
+test('underscore emphasis and code spans inside emphasis match the JavaScript engine', async () => {
+  // Tier 1 renders these paragraphs itself; the code span binds before the
+  // closer, and an intraword or unmatched underscore leaves it to the full engine.
+  const bare = stock.useNizel({ anchors: false, autolinks: false, frontmatter: false, safe: false });
+  for (const source of [
+    '_Reviewed with the full diff and the CI logs from run `#4821`._\n',
+    'A *see `x`* b __init__ c, _a `b_` c_ and _x `c_ d.\n\nsnake_case _x_y_ (_z_) _1_.\n',
+    'Text _a `b` `c`_ and **`a`**, _a\nb_ then __x_ and _`a_`_.\n',
+  ]) {
+    assert.equal(engineRender(source, 0), await bare.html(source), JSON.stringify(source));
+    assert.equal(engineRender(source, 1 | 2 | 4), await stock.useNizel().html(source), JSON.stringify(source));
+  }
+});

@@ -22,6 +22,8 @@ const ATOMS: &[&str] = &[
     "\n::note\n\nbody\n::", "\n    code\n\n    more", "\n| a | b |\n| - | - |", "\nTitle\n===", "\n[ref]: /u", "\n- *em* item", "\n**bold** para",
     " *em*", " **strong**", " *a b*", " **a**b", "a*b*", " *a *b**", " ***x***", " *x*.", " *x*)", "(*x*)", " _x_", " snake_case_name", " *x\ny*",
     " * x*", " *x *", " **x*", " *x**", " *`c`*", " _a_b", "a_", "_", " *x*`c`", "`c`*x*", " *x*:", " *x*?y", " *1*", "*z*", " **a b c**,",
+    " _x_.", " __x__", " _a b_", " _a `c` b_", " _run `#1`._", " *see `x`*", " **`a`**", " _`a_`_", " *`a*`*", " _a `b` `c`_", " _x `c_", " _a `[b]` c_",
+    " _a\nb_", " _x_y", " __x_", " _x__", " ___x___", " _x_)", " (_x_)", " _1_", " _x_ _y_", " *x* _y_", " _x *y* z_", " __init__", " a_b_ c", " _a`b`_", " _a `` c_",
     "\n1. item\n\n   ```swift\n   code\n\n   ```\n", "\n- a\n  ```\n\ntext\n  ```", "\n  ```\nx\n    ```", "\n- ```js", "\n   ~~~\n", "\n      ```", "\n  ````\n  ```\n  ````",
     "\n- [x] ```js", "\n- [ ] ```\n\nlazy", "\n- [X]\u{3000}```", "\n> - [x] ```", "\n1. [ ] ~~~",
     "\n\n::note\nbody\n::\n", "\n\n::warning title\nkey: v\n::\ntext\n::\n", "\n\n::tip\n", "\n::inline-ish", "\n  ::indented\n", "\n\n::bad!\n::\n", "\n\n::\n", "\n- item\n::lazy\n",

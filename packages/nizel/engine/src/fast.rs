@@ -15,8 +15,8 @@
 //! - thematic breaks
 //! - tables (cells in the inline subset)
 //! - inline links in their unambiguous shape (`inline_link`)
-//! - emphasis and strong in their unambiguous shape (`emphasis_pair`), and
-//!   intraword underscores
+//! - emphasis and strong (`*` and `_`) in their unambiguous shape
+//!   (`emphasis_pair`), code spans inside them, and intraword underscores
 //! - lists of every other shape through the full engine's own item rules
 //!   (`nested_list`), their items rendered by tier 1 as documents of their own
 //! - tight lists of single-line items (`-`, `*`, `+`, or `1.`/`1)`), one
@@ -1095,7 +1095,13 @@ fn paragraph(source: &str, start: usize, out: &mut String) -> Option<(usize, boo
                     None => i += 1,
                 }
             }
-            STAR => {
+            STAR | UNDERSCORE => {
+                if b[i] == b'_' {
+                    if let Some(next) = literal_underscores(b, start, i) {
+                        i = next;
+                        continue;
+                    }
+                }
                 let limit = match text_limit {
                     Some(limit) => limit,
                     None => {
@@ -1110,7 +1116,6 @@ fn paragraph(source: &str, start: usize, out: &mut String) -> Option<(usize, boo
                 i = pair.end;
                 run = pair.end;
             }
-            UNDERSCORE => i = literal_underscores(b, start, i)?,
             TILDE => i = lone_tilde(b, start, i)?,
             BRACKET => {
                 bracket = true;
@@ -1560,6 +1565,7 @@ fn inline(source: &str, out: &mut String, mut text: Option<&mut String>) -> Opti
                 }
                 None => i += 1,
             },
+            UNDERSCORE => i = literal_underscores(b, 0, i)?,
             STAR => {
                 let pair = emphasis_pair(b, 0, i, b.len())?;
                 out.push_str(&source[run..i]);
@@ -1570,7 +1576,6 @@ fn inline(source: &str, out: &mut String, mut text: Option<&mut String>) -> Opti
                 i = pair.end;
                 run = pair.end;
             }
-            UNDERSCORE => i = literal_underscores(b, 0, i)?,
             TILDE => i = lone_tilde(b, 0, i)?,
             BRACKET => {
                 let link = inline_link(b, 0, i)?;
@@ -1606,18 +1611,24 @@ struct EmphasisPair {
     content_start: usize,
     content_end: usize,
     end: usize,
+    /// Whether the content holds a code span.
+    code: bool,
 }
 
-/// A `*` pair whose result is provably the emphasis algorithm's: a run of one
-/// or two `*` after a space, a newline or the start (`floor`), followed by an
-/// ASCII letter or digit, so it can only open; plain text up to a run of the
-/// same length after an ASCII letter or digit, followed by a space, a
-/// newline, the end (`limit`) or `.,;:!?)`, or after one of `.,;:!?)` and
-/// followed by a space, a newline or the end, so it can only close. With every
-/// `*` in such disjoint pairs, each closer pairs with its own opener. Content
-/// may hold soft breaks but no other delimiter, code or syntax.
+/// A `*` or `_` pair whose result is provably the emphasis algorithm's: a run
+/// of one or two after a space, a newline or the start (`floor`), followed by
+/// an ASCII letter or digit, so it is left-flanking and not right-flanking
+/// and can only open (for `_` too); plain text up to a run of the same
+/// delimiter and length after an ASCII letter or digit, followed by a space,
+/// a newline, the end (`limit`) or `.,;:!?)`, or after one of `.,;:!?)` and
+/// followed by a space, a newline or the end, so it is right-flanking and not
+/// left-flanking and can only close. With every delimiter in such disjoint
+/// pairs, each closer pairs with its own opener. Content may hold soft breaks
+/// and code spans that close before the closer (they bind first, and no
+/// delimiter inside one counts), but no other delimiter or syntax.
 fn emphasis_pair(b: &[u8], floor: usize, opener: usize, limit: usize) -> Option<EmphasisPair> {
-    let length = b[opener..limit].iter().take_while(|&&c| c == b'*').count();
+    let delimiter = b[opener];
+    let length = b[opener..limit].iter().take_while(|&&c| c == delimiter).count();
     if length > 2 || (opener > floor && !matches!(b[opener - 1], b' ' | b'\n')) {
         return None;
     }
@@ -1626,10 +1637,11 @@ fn emphasis_pair(b: &[u8], floor: usize, opener: usize, limit: usize) -> Option<
         return None;
     }
     let mut j = content_start;
+    let mut code = false;
     while j < limit {
         match b[j] {
-            b'*' => {
-                let run = b[j..limit].iter().take_while(|&&c| c == b'*').count();
+            c if c == delimiter => {
+                let run = b[j..limit].iter().take_while(|&&c| c == delimiter).count();
                 let after = j + run;
                 // After a letter or digit, it closes before a space, a newline,
                 // the end or `.,;:!?)`; after `.,;:!?)` (right-flanking for
@@ -1642,7 +1654,19 @@ fn emphasis_pair(b: &[u8], floor: usize, opener: usize, limit: usize) -> Option<
                     } else {
                         matches!(b[j - 1], b'.' | b',' | b';' | b':' | b'!' | b'?' | b')') && followed_by_space
                     };
-                return closes.then_some(EmphasisPair { strong: length == 2, content_start, content_end: j, end: after });
+                return closes.then_some(EmphasisPair { strong: length == 2, content_start, content_end: j, end: after, code });
+            }
+            b'`' => {
+                // The code span must close before `limit`, on its line, and
+                // be in the subset with no `[` (the paragraph's bracket checks
+                // don't see it).
+                let (end, (value_start, value_end)) = crate::inline::match_code_span(&b[..limit], j)?;
+                let value = &b[value_start..value_end];
+                if value.iter().any(|&c| matches!(c, b'\n' | b'[' | b'|' | b'\t' | b'\r')) {
+                    return None;
+                }
+                code = true;
+                j = end;
             }
             b':' if b[j + 1..limit].starts_with(b"//") => return None,
             c if CLASS[c as usize] != PLAIN && !matches!(c, b'\n' | b'>' | b'"' | b':') => return None,
@@ -1653,17 +1677,30 @@ fn emphasis_pair(b: &[u8], floor: usize, opener: usize, limit: usize) -> Option<
 }
 
 fn emphasis(source: &str, pair: &EmphasisPair, out: &mut String, text: Option<&mut String>) {
-    let content = &source[pair.content_start..pair.content_end];
     let tag = if pair.strong { "strong" } else { "em" };
     out.push('<');
     out.push_str(tag);
     out.push('>');
-    escape_html_into(out, content);
+    let b = &source.as_bytes()[..pair.content_end];
+    let mut run = pair.content_start;
+    let mut text = text;
+    // Code spans as `emphasis_pair` matched them (the first closing run, so
+    // the same within the content).
+    while let Some(at) = if pair.code { crate::scan::find_byte(b, run, b'`') } else { None } {
+        let Some((end, (value_start, value_end))) = crate::inline::match_code_span(b, at) else { break };
+        escape_html_into(out, &source[run..at]);
+        if let Some(text) = text.as_deref_mut() {
+            text.push_str(&source[run..at]);
+        }
+        code_span(&source[value_start..value_end], out, text.as_deref_mut());
+        run = end;
+    }
+    escape_html_into(out, &source[run..pair.content_end]);
     out.push_str("</");
     out.push_str(tag);
     out.push('>');
     if let Some(text) = text {
-        text.push_str(content);
+        text.push_str(&source[run..pair.content_end]);
     }
 }
 
