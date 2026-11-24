@@ -539,7 +539,7 @@ fn block<'a, 'w: 'a>(source: &'a str, pos: usize, state: &mut Walk<'w>, lines: &
             // step with the blocks (after a list item's fence, say): a fence's
             // lines get the same check as any other.
             let mark = out.len();
-            let end = fenced_code(source, pos, eol, out)?;
+            let end = fenced_code(source, pos, eol, state.has_tab, out)?;
             if !state.skipped_by_extraction() && state.check_definitions(&source[pos..end.min(source.len())]).is_none() {
                 out.truncate(mark);
                 return None;
@@ -651,7 +651,7 @@ fn defines_at_paragraph(source: &str, pos: usize, block_end: usize) -> bool {
 /// definition (rows after the header can start with anything).
 fn checked_table(source: &str, pos: usize, state: &mut Walk, out: &mut String) -> Option<usize> {
     let mark = out.len();
-    let end = table(source, pos, state.ctx, out)?;
+    let end = table(source, pos, state.ctx, state.has_tab, out)?;
     if state.check_definitions(&source[pos..end]).is_none() {
         out.truncate(mark);
         return None;
@@ -1338,18 +1338,28 @@ fn brackets_in_code_ok(b: &[u8]) -> bool {
 /// A table: tier 1 reads its rows and writes each cell in the inline subset;
 /// a cell outside it is the full engine's `parseInline` and `renderInline`
 /// of that cell alone (cells resolve no references), as `tableCells` does.
-fn table(source: &str, start: usize, ctx: &Ctx, out: &mut String) -> Option<usize> {
+fn table(source: &str, start: usize, ctx: &Ctx, has_tab: bool, out: &mut String) -> Option<usize> {
     let b = source.as_bytes();
     let header_end = line_end(b, start);
     let delimiter_end = line_end(b, header_end + 1);
     let align: Vec<Option<&str>> =
         block::split_table_row(&source[header_end + 1..delimiter_end]).into_iter().map(block::cell_alignment).collect();
+    // `splitTableRow` in place: the trimmed line without one leading and one
+    // trailing `|`, split at every `|`. No document with CR reaches tier 1,
+    // and one without tabs has none in any line.
     let row = |line: &str, tag: &str, out: &mut String| -> Option<()> {
-        if line.bytes().any(|c| c == b'\t' || c == b'\r') {
+        if has_tab && line.as_bytes().contains(&b'\t') {
             return None;
         }
         out.push_str("<tr>");
-        for (index, cell) in block::split_table_row(line).into_iter().enumerate() {
+        let trimmed = crate::js::trim(line);
+        let t = trimmed.as_bytes();
+        let first = usize::from(t.first() == Some(&b'|'));
+        let last = if t.len() > first && t.last() == Some(&b'|') { t.len() - 1 } else { t.len() };
+        let mut from = first;
+        let mut index = 0;
+        loop {
+            let stop = crate::scan::find_byte(&t[..last], from, b'|').unwrap_or(last);
             out.push('<');
             out.push_str(tag);
             if let Some(Some(value)) = align.get(index) {
@@ -1358,7 +1368,7 @@ fn table(source: &str, start: usize, ctx: &Ctx, out: &mut String) -> Option<usiz
                 out.push('"');
             }
             out.push('>');
-            let cell = crate::js::trim(cell);
+            let cell = crate::js::trim(&trimmed[from..stop]);
             let mark = out.len();
             if inline(cell, out, None).is_none() {
                 out.truncate(mark);
@@ -1370,6 +1380,11 @@ fn table(source: &str, start: usize, ctx: &Ctx, out: &mut String) -> Option<usiz
             out.push_str("</");
             out.push_str(tag);
             out.push('>');
+            if stop >= last {
+                break;
+            }
+            from = stop + 1;
+            index += 1;
         }
         out.push_str("</tr>");
         Some(())
@@ -1384,7 +1399,7 @@ fn table(source: &str, start: usize, ctx: &Ctx, out: &mut String) -> Option<usiz
     while pos < b.len() {
         let eol = line_end(b, pos);
         let line = &source[pos..eol];
-        if !line.contains('|') || crate::js::trim(line).is_empty() {
+        if !line.as_bytes().contains(&b'|') || crate::js::trim(line).is_empty() {
             break;
         }
         row(line, "td", out)?;
@@ -1901,7 +1916,7 @@ fn close_heading(depth: u8, out: &mut String) {
 /// reads it; the position after its closing fence. The code is the source
 /// between the fences, escaped in place in one pass that also finds the
 /// closing fence and declines on tabs and CR.
-fn fenced_code(source: &str, start: usize, eol: usize, out: &mut String) -> Option<usize> {
+fn fenced_code(source: &str, start: usize, eol: usize, has_tab: bool, out: &mut String) -> Option<usize> {
     let b = source.as_bytes();
     let opening = &source[start..eol];
     if opening.bytes().any(|c| c == b'\t' || c == b'\r') {
@@ -1964,7 +1979,10 @@ fn fenced_code(source: &str, start: usize, eol: usize, out: &mut String) -> Opti
         }
     }
     while next.is_none() {
-        match crate::scan::find_any_n(b, pos, *b"\n&<>\"\t\r") {
+        // No document with CR reaches tier 1, and one without tabs has
+        // none in any of its parts.
+        let found = if has_tab { crate::scan::find_any_n(b, pos, *b"\n&<>\"\t") } else { crate::scan::find_any_n(b, pos, *b"\n&<>\"") };
+        match found {
             Some(i) => match b[i] {
                 b'\n' => {
                     if let Some(close_end) = closes(i + 1)? {
