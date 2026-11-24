@@ -38,3 +38,14 @@ test('canStartLazyBlockquoteContinuation delegates block-start checks for deepes
   assert.deepEqual(seen, ['continued', '# heading']);
   assert.equal(canStartLazyBlockquoteContinuation('    code', options, ['    code'], 0, isBlockStart), false);
 });
+
+test('quoted lines with line separators parse as quotes and always terminate (NIZEL-002)', async () => {
+  const { useNizel } = await import('../dist/index.js');
+  const nizel = useNizel();
+  // These never returned: the quote loop read lines with `.*`, which stops at U+2028/U+2029.
+  assert.equal(await nizel.html('x\n\n> a b'), '<p>x</p>\n<blockquote>\n<p>a b</p>\n</blockquote>');
+  assert.equal(await nizel.html('> one\n> two three\nlazy'), '<blockquote>\n<p>one\ntwo three\nlazy</p>\n</blockquote>');
+  // At the start of a document this emitted an empty quote and skipped the next line.
+  assert.equal(await nizel.html('> a b\nnext'), '<blockquote>\n<p>a b\nnext</p>\n</blockquote>');
+  assert.equal(lazyContinuationCandidate('> a b'), 'a b');
+});

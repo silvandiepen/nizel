@@ -9,4 +9,4 @@ npm run build --workspace nizel
 node apps/benchmarks/experiments/wasm-html/benchmark.mjs
 \`\`\`
 
-The drafts exercise the supported subset at scale. The repository fixtures show what happens when a realistic document falls back. Timings are warmed medians from one process and exclude initial module compilation. See the [package documentation](../../../../packages/nizel/README.md) for supported syntax and API usage.
+The drafts exercise the supported subset at scale. The repository fixtures show what happens when a realistic document falls back. Timings are warmed medians from one process and exclude initial module compilation. Each row reports wall time and process CPU time; on a busy machine wall time mostly measures the scheduler, so compare the CPU columns there. See the [package documentation](../../../../packages/nizel/README.md) for supported syntax and API usage.

@@ -58,7 +58,8 @@ export const lazyContinuationCandidate = (line: string): string => {
   let candidate = line;
 
   while (true) {
-    const quoteMarker = /^ {0,3}> ?(.*)$/.exec(candidate);
+    // `[^]*` as in parseBlocks: line separators are part of the quoted content.
+    const quoteMarker = /^ {0,3}> ?([^]*)$/.exec(candidate);
     if (quoteMarker) {
       candidate = quoteMarker[1];
       continue;

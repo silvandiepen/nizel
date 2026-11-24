@@ -24,6 +24,8 @@ type PreparedMarkdown<TRuntimeMeta extends Record<string, unknown> = Record<stri
 };
 
 type HtmlBackend = (markdown: string, options: NizelOptions) => string | undefined;
+/** Parses prepared Markdown into the same AST `parseMarkdown` builds, or undefined. */
+type AstBackend = (markdown: string, options: NizelOptions) => NizelRootNode | undefined;
 
 type PreparedMeta<TRuntimeMeta extends Record<string, unknown> = Record<string, unknown>> = {
   markdown: string;
@@ -37,6 +39,7 @@ type PreparedMeta<TRuntimeMeta extends Record<string, unknown> = Record<string, 
 function createNizel<TMeta extends Record<string, unknown> = Record<string, unknown>>(
   options: NizelOptions<TMeta> = {},
   htmlBackend?: HtmlBackend,
+  astBackend?: AstBackend,
 ): NizelProcessor {
   const presetOptions = options.preset ? resolvePreset(options.preset) : {};
   const effectiveOptions = { ...presetOptions, ...options, preset: undefined };
@@ -81,6 +84,8 @@ function createNizel<TMeta extends Record<string, unknown> = Record<string, unkn
     const source = prepareSource(prepared);
     const accelerated = htmlBackend?.(source, prepared.resolved);
     if (accelerated !== undefined) return applyAfterRender(accelerated, prepared.resolved);
+    const parsed = astBackend?.(source, prepared.resolved);
+    if (parsed !== undefined) return renderPreparedHtml(applyAstHooks(parsed, prepared.resolved), prepared.resolved);
     const { ast, resolved } = prepareMarkdown(markdown, runtimeOptions, prepared, source);
     return renderPreparedHtml(ast, resolved);
   };
@@ -99,7 +104,7 @@ function createNizel<TMeta extends Record<string, unknown> = Record<string, unkn
   ): Promise<TRuntimeMeta> => {
     return prepareMeta(markdown, runtimeOptions).meta as TRuntimeMeta;
   };
-  nizel.preset = (name) => createNizel(resolvePreset(name), htmlBackend);
+  nizel.preset = (name) => createNizel(resolvePreset(name), htmlBackend, astBackend);
   nizel.parse = async (markdown, runtimeOptions) => {
     const resolved = resolveRuntime(runtimeOptions as NizelOptions);
     const extracted = resolved.frontmatter === false ? { markdown, frontmatter: {} } : extractFrontmatter(markdown);
@@ -147,15 +152,7 @@ function createNizel<TMeta extends Record<string, unknown> = Record<string, unkn
       slugStyle: preparedMeta.resolved.slugStyle,
     });
 
-    for (const plugin of preparedMeta.resolved.plugins ?? []) {
-      const afterResult = plugin.hooks?.afterParse?.(ast, preparedMeta.resolved);
-      if (afterResult) ast = afterResult;
-    }
-
-    for (const transform of preparedMeta.resolved.transforms ?? []) {
-      const transformResult = transform(ast);
-      if (transformResult) ast = transformResult;
-    }
+    ast = applyAstHooks(ast, preparedMeta.resolved);
 
     return {
       ast,
@@ -234,6 +231,20 @@ function createNizel<TMeta extends Record<string, unknown> = Record<string, unkn
   }
 }
 
+/** Runs after-parse hooks, then transforms, on a freshly parsed AST. */
+function applyAstHooks(parsed: NizelRootNode, resolved: NizelOptions): NizelRootNode {
+  let ast = parsed;
+  for (const plugin of resolved.plugins ?? []) {
+    const afterResult = plugin.hooks?.afterParse?.(ast, resolved);
+    if (afterResult) ast = afterResult;
+  }
+  for (const transform of resolved.transforms ?? []) {
+    const transformResult = transform(ast);
+    if (transformResult) ast = transformResult;
+  }
+  return ast;
+}
+
 /** Applies before-parse hooks once before choosing the HTML rendering path. */
 function prepareSource(prepared: PreparedMeta): string {
   let markdown = prepared.markdown;
@@ -304,11 +315,11 @@ function hasRuntimeOptions(runtimeOptions?: NizelOptions): runtimeOptions is Niz
 }
 
 /** Creates an isolated processor factory with an optional HTML accelerator. */
-export function createNizelFactory(htmlBackend?: HtmlBackend): NizelUseNizel {
+export function createNizelFactory(htmlBackend?: HtmlBackend, astBackend?: AstBackend): NizelUseNizel {
   const factory = <TMeta extends Record<string, unknown>>(options?: NizelOptions<TMeta>) =>
-    createNizel(options, htmlBackend);
+    createNizel(options, htmlBackend, astBackend);
   return Object.assign(factory, {
-    preset: (name: NizelPresetName) => createNizel(resolvePreset(name), htmlBackend),
+    preset: (name: NizelPresetName) => createNizel(resolvePreset(name), htmlBackend, astBackend),
   });
 }
 

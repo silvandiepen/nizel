@@ -13,16 +13,21 @@ test('opt-in exports mirror stock entry points', () => {
   assert.deepEqual(Object.keys(browserWasm).sort(), Object.keys(browser).sort());
 });
 
-test('uses Wasm in both directions and rejects unsupported input', () => {
+test('uses Wasm in both directions and rejects unsupported input', async () => {
   const source = '# Hello World\n\nA **bold word** with a soft\nline break.';
   const html = '<h1 id="hello-world">Hello World</h1>\n<p>A <strong>bold word</strong> with a soft\nline break.</p>';
   assert.equal(renderWasm(source, {}), html);
   assert.equal(reverseWasm(html), '# Hello World\n\nA **bold word** with a soft line break.');
-  assert.equal(renderWasm('# Repeat\n\n# Repeat', {}), undefined);
-  assert.equal(renderWasm('<script>hello</script>', {}), undefined);
-  assert.equal(reverseWasm('<h1 id="different">Hello</h1>'), undefined);
-  assert.equal(reverseWasm('<table><tr><td>One</td></tr></table>'), undefined);
+  // The Rust engine covers what the AssemblyScript renderer declined; it must match JavaScript exactly.
+  assert.equal(renderWasm('# Repeat\n\n# Repeat', {}), await stock.useNizel().html('# Repeat\n\n# Repeat'));
+  assert.equal(renderWasm('<script>hello</script>', {}), await stock.useNizel().html('<script>hello</script>'));
+  assert.equal(renderWasm('a'.repeat(1024 * 1024 + 1), {}), undefined);
+  assert.equal(reverseWasm('<h1 id="different">Hello</h1>'), stock.htmlToMarkdown('<h1 id="different">Hello</h1>'));
+  assert.equal(reverseWasm('<table><tr><td>One</td></tr></table>'), stock.htmlToMarkdown('<table><tr><td>One</td></tr></table>'));
   assert.equal(reverseWasm('<p>'+'a'.repeat(1024 * 1024)+'</p>'), undefined);
+  // JavaScript throws on an out-of-range entity (NIZEL-003); the engine throws the same error.
+  assert.throws(() => stock.htmlToMarkdown('<p>&#99999999;</p>'), { name: 'RangeError', message: 'Invalid code point 99999999' });
+  assert.throws(() => reverseWasm('<p>&#99999999;</p>'), { name: 'RangeError', message: 'Invalid code point 99999999' });
 });
 
 test('matches forward and reverse HTML on the CommonMark corpus', async () => {
@@ -87,10 +92,17 @@ test('lets plugins that declare their reach keep the Wasm path', async () => {
 
   const reversePlugin = {htmlToMarkdown: node => node.tag === 'span' ? 'Converted by plugin' : undefined, htmlToMarkdownTags: ['span']};
   assert.equal(reverseWasm('<p>A <strong>bold</strong> word.</p>', {plugins:[reversePlugin]}), 'A **bold** word.');
-  assert.equal(reverseWasm('<p><span>x</span></p>', {plugins:[reversePlugin]}), undefined);
-  assert.equal(reverseWasm('<p><SPAN class="x">x</SPAN></p>', {plugins:[reversePlugin]}), undefined);
+  // Claimable elements are offered to the handlers from inside the engine.
+  for (const html of ['<p><span>x</span></p>', '<p><SPAN class="x">x</SPAN></p>', '<p>a <span>b</span> <em>c <span>d</span></em></p>']) {
+    assert.equal(reverseWasm(html, {plugins:[reversePlugin]}), stock.htmlToMarkdown(html, {plugins:[reversePlugin]}), html);
+  }
   assert.equal(wasm.htmlToMarkdown('<p><span>x</span></p>', {plugins:[reversePlugin]}), 'Converted by plugin');
-  assert.equal(reverseWasm('<p>A <strong>word</strong></p>', {plugins:[{htmlToMarkdown: () => undefined}]}), undefined);
+  // A handler that declares no tags is offered every element.
+  const anyPlugin = {htmlToMarkdown: (node, ctx) => node.tag === 'em' ? `_${ctx.inline(node)}_` : undefined};
+  assert.equal(reverseWasm('<p>A <strong>word</strong> <em>x <b>y</b></em></p>', {plugins:[anyPlugin]}), stock.htmlToMarkdown('<p>A <strong>word</strong> <em>x <b>y</b></em></p>', {plugins:[anyPlugin]}));
+  // Epilogue output is appended exactly as JavaScript does.
+  const notes = {htmlToMarkdownTags: ['sup'], htmlToMarkdown: (node, ctx) => { if (node.tag !== 'sup') return undefined; ctx.epilogue(`[^1]: ${ctx.text(node)}`); return '[^1]'; }};
+  assert.equal(reverseWasm('<p>a<sup>note</sup></p><p>b</p>', {plugins:[notes]}), stock.htmlToMarkdown('<p>a<sup>note</sup></p><p>b</p>', {plugins:[notes]}));
 });
 
 test('falls back when WebAssembly is unavailable', () => {

@@ -1,0 +1,118 @@
+//! Tier 1 against the full engine: random documents near the edges of the
+//! fast subset; wherever tier 1 accepts one, its HTML must equal the full
+//! engine's byte for byte.
+//! `cargo run --release --example fastfuzz -- [count] [seed]`.
+use nizel_engine::block::Options;
+
+const ATOMS: &[&str] = &[
+    // Inside the subset.
+    "Plain words here", "More text", "a", "Zeta", "x y z", " and ", "`code`", "``a ` b``", "` x `", "`",
+    "\n", "\n", "\n\n", "\n\n", "# Title", "## Sub title ##", "### `code` head", "#", "######", "#######",
+    "```", "```ts", "```js file=a.js {1,3}", "~~~", "---", "***", "___", "- - -",
+    "caf\u{e9}", "\u{1f680}", "na\u{ef}ve", "\u{2014}", "100%", "2024", "x.y", "end.", "Hello, world!", "a ! b",
+    "  ", " ", "    indented", "  two",
+    "a > b", "say \"hi\"", "`<b>*x*`", "`a|b`", "`[x](y)`", "x: y", "a://b", "`http://e.com`", "` `", "`  `",
+    "`\na\n`", "``` ```", "# a > b \"c\"", "# `x` y ##", "#  ", "```\ncode < & >\n```", "```py title\n", "text`", "a `b\n\nc` d", "x `y\n# z` w", "a `\tb`", "```\n\tcode\n```", "# a\tb", "-\t-\t-", "a\r\nb", "`a  ",
+    "# Caf\u{e9}", "#\u{b}x", "# x\u{c}", "# C# guide", "# a #", "# a#", "#   spaced   ", "###### six", "## `code` and > \"q\"",
+    "```rust,ignore", "```c++", "``` js ", "```{1,2}", "```js filename=\"a.js\"", "```j\u{e9}", "```a b", "    ```", "   ```",
+    "\n- item one", "\n- item two", "\n* star item", "\n+ plus item", "\n1. first", "\n2. second", "\n3) paren", "\n0. zero", "\n007. bond",
+    "\n10. ten", "\n1234567890. big", "\n-  two spaces", "\n- ", "\n-x", "\n- [ ] task", "\n- [x] done", "\n  continued", "\n   - nested",
+    "\n- `code` item", "\n- item > q", "\n- a  ", "\n1.x", "\n- - -", "\n* * *",
+    "\n- ```\n\n  code\n", "\n  ```", "\n- a\n\n  b", "\n> quoted\nlazy", "\n<div>\n\nx\n</div>", "\n<!--\n\ncomment -->", "\n<script>\n\n",
+    "\n::note\n\nbody\n::", "\n    code\n\n    more", "\n| a | b |\n| - | - |", "\nTitle\n===", "\n[ref]: /u", "\n- *em* item", "\n**bold** para",
+    " *em*", " **strong**", " *a b*", " **a**b", "a*b*", " *a *b**", " ***x***", " *x*.", " *x*)", "(*x*)", " _x_", " snake_case_name", " *x\ny*",
+    " * x*", " *x *", " **x*", " *x**", " *`c`*", " _a_b", "a_", "_", " *x*`c`", "`c`*x*", " *x*:", " *x*?y", " *1*", "*z*", " **a b c**,",
+    " _x_.", " __x__", " _a b_", " _a `c` b_", " _run `#1`._", " *see `x`*", " **`a`**", " _`a_`_", " *`a*`*", " _a `b` `c`_", " _x `c_", " _a `[b]` c_",
+    "\n| a || b |\n|---|---|---|\n|  |", "\n|\u{3000}a\u{3000}|b|\n|-|-|\n|\u{3000}|", "\na|\n-|\n|", "\n|a|b\n|:-|\n||\n | x | ", "\n| `a` | *b* |\n|-|-|\n|\ta|b|", "\n|a|\n|-|\n| ```x | y",
+    "\n> a\n>\n", "\n>\n", "\n   > x\n> y\n\nz", "\n> a\nlazy", "\n> a\n\u{a0}\n", "\n>a\n>  b", "\n> # h\n> - item\n", "\n> ```\n> code\n\n",
+    "\n    > code", "\n> > nested\n> back", "\n>  \n> x", "\n> x\n   \n> y", "\n> | a |\n> |---|", "\n> [r]: /u\n", "\n  >\n", "\n> a\n---", "\n> a\n> ---\n",
+    "[x]: /y\n", "\n[a]: <b>\n[a]\n", "[a]: /u\n[b]: /v", "\n[a]:\n/u\n\n[a]", "\n  [c]: /c 'title'\n", "[r]: /u\n\n",
+    "\n# getHTTPResponse", "\n## ABCdef", "\n# a1B2c", "\n# Repeat", "\n# Repeat", "\n# repeat-1", "\n# \u{dc}n\u{ef}code Title", "\n# x > y \"q\"", "\n# 123", "\n#  -lead- ", "\n# A--B", "\n# section",
+    "\n<p align=\"center\">\n  <img src=\"a.svg\">\n</p>\n", "\n<div>\n[x]: /u\n</div>\n\n[x]\n", "\n<div>\n\n[y]: /v\n", "\n<!-- c -->\n[z]: /w\n", "\n  <div>x\n```\n", "\n<span>a</span>\n[q]: /q",
+    "\n<p>\n> [r]: /r\n</p>", "\n<pre>\n[s]: /s\n\n</pre>\n", "\n<div>\n- a\n", "\n<DIV>\n```\n[t]: /t\n```", " <?x!", "\n   <!X", "\n<?a\n\n", "\n<![CDATA[x", "\n<!-- open",
+    "\n  a | b\n  --|--\n", "\na | `b`\n-|-\n", "\nx\na|b\n-|-\n", "\n a|b\n -|-", "\n   x | *y*\n---|---", "\nab | c\n:-|-:\n1|2", "\ntext |\nnext", "\n[a] | b\n-|-",
+    "\n- a\u{2028}b", "\n1. x\u{2029}", "\n- [ ] \u{2028}", "\n  - n\u{2028}\n- m", "\n-\u{2028}x", "\n> - q\u{2029}", "\n- a\n  b\u{2028}c\n- d", "\n10)\u{2028}",
+    "\n<div>\nx\n\u{a0}\ny\n", "\n<span>a</span>\n", "\n<script>\n\nx\n</script>\ny", "\n<!-- a\n\nb -->", "\n<div>", "\n<div>\n", "\n<pre>x</pre>z\n\n",
+    "\n<SCRIPT>\nx</Script>\ny", "\n<pre>\n</pre", "\n<style>a</STYLE >b\n", "\n<textarea>\n</textarea>", "\n<!-- a -- >\n-->", "\n<?x ?\n?>", "\n<!X\n>", "\n<![CDATA[\n]]\n]]>", "\n<pre-x>\n</pre-x>",
+    " _a\nb_", " _x_y", " __x_", " _x__", " ___x___", " _x_)", " (_x_)", " _1_", " _x_ _y_", " *x* _y_", " _x *y* z_", " __init__", " a_b_ c", " _a`b`_", " _a `` c_",
+    "\n1. item\n\n   ```swift\n   code\n\n   ```\n", "\n- a\n  ```\n\ntext\n  ```", "\n  ```\nx\n    ```", "\n- ```js", "\n   ~~~\n", "\n      ```", "\n  ````\n  ```\n  ````",
+    "\n- [x] ```js", "\n- [ ] ```\n\nlazy", "\n- [X]\u{3000}```", "\n> - [x] ```", "\n1. [ ] ~~~",
+    "\n\n::note\nbody\n::\n", "\n\n::warning title\nkey: v\n::\ntext\n::\n", "\n\n::tip\n", "\n::inline-ish", "\n  ::indented\n", "\n\n::bad!\n::\n", "\n\n::\n", "\n- item\n::lazy\n",
+    "\n| a | b |\n| --- | --- |\n| 1 | 2 |\n", "\n| L | C | R |\n|:--|:-:|--:|\n| x | y | z |", "a | b\n---|---\nc | d", "\n| one |\n| --- |", "\n| `a|b` | c |\n|---|---|",
+    "\n| *em* | **s** |\n|---|---|\n| x |", "\n|a|b|\n|-|-|", "\n| a |\n|---|---|\n| 1 | 2 | 3 |", "\nx\n| a | b |\n|---|---|", "\n| a | b |\n|---|---|\n\n", "\n| a\t| b |\n|---|---|",
+    "\n| > q | \"d\" |\n| --- | --- |", "\n|  |  |\n|---|---|", "\n| a | b |\n|---|---|\nnext",
+    " [link](https://example.com/a)", " [two words](/docs/x.md#y)", "[x](y)", " ![img](a.png)", " [js](javascript:alert)", " [js](JavaScript:x)", " [](x)", " [a]()",
+    " [a](b c)", " [a](b(c))", " [a](b \"t\")", " [a][ref]", " [a]", " *[a](b)*", " [a](b)*x*", " `[a](b)`", " [`a`](b)", "# [Head](h)", "\n| [a](b) | c |\n|---|---|",
+    " [a](b%20c)", " [a](b&c)", " [a](<b>)", " [a.b](mailto:x)",  " [a](b)c", " [a]  (b)", " [[a]](b)", " [a](b)[c](d)",
+    "\n- a\n  - b\n    - c", "\n- a\n  continued", "\n- a\nlazy", "\n- a\n\n  para two", "\n- a\n\n- b", "\n1. a\n   1. b\n2. c", "\n- [x] a\n  - [ ] b",
+    "\n- a\n  ```\n  code\n  ```", "\n- a\n  | x | y |\n  |---|---|", "\n- a\n  > q", "\n- # h\n  text", "\n-   wide\n    text", "\n3. three\n4. four", "\n- a\n\n\n- b",
+    "\n  - indented item", "\n- a\n    code-ish", "\n* a\n- b", "\n- **a**\n  *b* [c](d)",
+    "\npara\n- item", "\npara\n# head", "\npara\n---", "\npara\n***", "\npara\n- ", "\npara\n2. two", "\npara\n1. one", "\npara\n```\nx\n```", "\npara\n> q",
+    "\npara  \n- item", "\npara\n#tag", "\npara\n-x", "\npara\n=", "\npara\n* * *", "\npara\n+ p", "\npara\n- a | b", "\npara `x\n- y`",
+    "\n**Bold start** text", "\n*em start* x", "\n`code` start", "\n[link](u) start", "\n[ref]: /def", "\n![i](a.png) x", "\n(paren) x", "\n\"q\" x", "\n_u_ x",
+    "\ntext\n**more**", "\ntext\n`c` more", "\ntext\n[l](u)", "\ntext\n[ref]: /x", "\ntext\n2. not", "\ntext\n#tag", "\ntext\n-x", "\ntext\n+x", "\n**a\n**b",
+    "\n*\tx", "\n**x** | y", "\n``x``", "\n`x\n```",
+    "\n<div>\nx\n</div>", "\n<p align=\"center\">\n  <img src=\"a.png\">\n</p>", "\n<style>\na {}\n\nb {}\n</style>", "\n<!-- c\n\nd -->", "\n<!-- open", "\n<span>inline</span> text",
+    "\n<br>", "\n<x-y>", "\n<?php x ?>", "\n<![CDATA[ x ]]>", "\n<!DOCTYPE html>", "\n</div>", "\n<script>\n[ref]: /u\n</script>", "\n<pre>\n\n</pre>", "\n<a href=\"x\">a</a>", "\n<notatag",
+    "\n- a\n\n  ```\n  x\n\n```\n[ref]: /u\n```", "\n- a\n  ~~~\n", "\n```\n[r]: /x\n```", "\n| a | b |\n|---|---|\n``` | x", "\n| a |\n|---|\n<div> |", "\n> ```\n> x",
+    "\ntext\n```a`b", "\n```a`b c", "\n  ```\n  [q]: /y", "\n<!--\n```\n-->", "\n~~~\n[s]: /z\n~~~", "\n- ```\n\n[t]: /w\n```",
+    "\n>\t[qa]: /u", "\n>  [qb]: /u", "\n>\u{a0}[qc]: /u", "\n>\u{3000} [qd]: /u", "\n> \t[qe]: /u", "\n````\n[qf]: <a b>\n````",
+    "\n| `a\\|b` | <div class=\"x\">y</div> |\n|---|:-:|\n| \\`x\\` | ~~s~~ |", "\n| a | b |\n|--|--|\n| <https://e.com> | x@y.z |", "\n| &amp; | &#65; |\n|---|---|\n| [r] | ![i](s) |",
+    "\n| h |\n|---|\n| [^1] | x\\ |", "\n| <b>a</b> | `[x]` |\n|---|---|", "\n| a | b |\n|---|---|\n| www.e.com | https://e.com/x |", "\n| *a | b* |\n|---|---|",
+    "\nTitle\n===", "\nTwo\nlines\n---", "\nTrail  \n---", "\nNbsp\u{a0}\n---", "\nTwo \u{a0}\nlines\u{a0}\n===", "\n*Em* &amp; <b>x</b>\n---", "\n[r] text\n-", "\nSame\n---\nSame\n---", "\na\\\nb", "\na <https://e.com> b",
+    "\n:::details More\nHidden **x**.\n:::", "\n:: x", "\ntext\n::note\nbody\n::", "\ntext\n:::y", "\n::bad!\n", "\n:x: y", "\n  ::indented\n\n::", "\n\u{a0}::nbsp\n::",
+    "\n[a\\]b]: /u", "\n[a\\]\nb]: /u", "\n[multi\nline]: /u", "\n[]: /u", "\n[x] [y]: /u", "\n[link](u) and [r]: no", "\n- [ ] task [r]: /u", "\n[\\]]: /u", "\n> [q\\]]: /u", "\n[r]:\n/u", "\n [s] :/u",
+    "\n ```\n aaa\naaa\n```", "\n  ```\naaa\n  aaa\n  ```", "\n   ~~~ js\nx\n   ~~~", "\n~~~\n[f]: /g\n~~~", "\n ```a`b\nx", "\n  ~~~\nunclosed", "\n ````\n```\n ````", "\n ```\n\t```\n ```", "\n- a\n\n  ```\n  b\n  ```",
+    "\n aaa\n   bbb", "\n   three", "\n  two | x\n|---|---|", "\ntext\n     deep", "\ntext\n  [l](u)", "\ntext\n    - x", "\ntext\n   # h", "\n  a\n  ===", "\ntext\n \u{a0}x", "\n  [r]: /x",
+    "\ntext\n  ```\ncode\n  ```", "\ntext\n  - item", "\ntext\n   > q", "\ntext\n  ***", "\ntext\n  ---", "\ntext\n  -x", "\ntext\n  2. two", "\ntext\n  ::x", "\ntext\n   ```a`b",
+    " **Verdict:** go", " *Minor:* x", " **a.**", " *b?*\n", " **c)** d", " **d:**,", " *e!*.", " **f,**x", " *(g)* h", " **h;**", " **i:**\n**j**",
+    " ~2%", " a~b", " ~~s~~", " ~~", " a~ ~b", " ~x~", "~", " ~`c`~", " *a~b*", " [a~](b)",  " ~~a~b~~",
+    "\n> quote\nlazy", "\n> a\n> b", "\n>no space", "\n> # h\n> - i", "\n> ```\n> code\n> ```", "\n> > nested", "\n>\n> after empty", "\n> a\n---", "\n> a\n===", "\n> [q]: /d\n\n[q]",
+    "\n> - a\nb", "\n> | t | u |\n> |---|---|", "\n> a\n\n> b", "\n  > indented", "\n> <div>\nx", "\n>     code",
+    "\n>\u{3000} [qe]: /u", "\n>\u{a0}[qf]: /u", "\n- a\n>\u{3000}[qg]: /u", "\n> > [qh]: /u", "\n>\t[qi]: /u",
+    "\ntitle: X\nicon: y\n---", "\nOne\n===", "\nA *b*\nc `d`\n---", "\nA `x\ny`\n---", "\nTrail \nnext\n---", "\nSame\n---\n\nSame\n---", "\n[l](u)\nz\n===",
+    " `[x]`", " `[a` b](c)", " `[[toc]]` and [l](u)", " `x][y`", " `[^id]`", "\n`a\n[r]: /u`", " `]` (p)", " `[` ](q)", "# `[h]`", "\n| `[c]` | d |\n|---|---|",
+    "\n- a\n  ```\n  [d]: /e\n  ```\n\n```\n[f]: /g\n```", "\n- a\n  ```\n\n```\n[h]: /i\n```", "\n1. b\n   ~~~\n   x\n   ~~~", "\n- c\n  <div>\n\n```\n[j]: /k\n```",
+    // Just outside: the tier must decline, never differ.
+    "*em*", "**strong**", "_u_", "[link](x)", "<b>", "&amp;", "\\*", "~~d~~", "| a | b |", "a@b.co", "http://e.com",
+    "> quote", "- item", "1. one", "+ plus", "===", "--", "\t", "\r\n", ":: note", "[r]: /url", "![i](s)",
+    "  \n", "line  \nbreak", "\u{a0}", "\u{2028}", "trailing ",
+];
+
+fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    let count: usize = args.get(1).and_then(|n| n.parse().ok()).unwrap_or(200_000);
+    let mut seed: u64 = args.get(2).and_then(|n| n.parse().ok()).unwrap_or(1);
+    let mut random = |n: usize| {
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        ((seed >> 33) as usize) % n
+    };
+    let profiles = [
+        (7u32, Options { anchors: true, autolinks: true, safe: true, slug_classic: false }),
+        (0u32, Options { anchors: false, autolinks: false, safe: false, slug_classic: false }),
+    ];
+    let (mut accepted, mut diffs) = (0usize, 0usize);
+    for i in 0..count {
+        let mut doc = String::new();
+        for _ in 0..1 + random(16) {
+            doc.push_str(ATOMS[random(ATOMS.len())]);
+        }
+        let (flags, options) = &profiles[i % 2];
+        let mut fast = String::new();
+        if !nizel_engine::fast::render(&doc, options, &mut fast) {
+            continue;
+        }
+        accepted += 1;
+        let mut full = String::new();
+        if nizel_engine::render_markdown_full(&doc, *flags, &mut full).is_err() {
+            continue;
+        }
+        if fast != full {
+            diffs += 1;
+            if diffs <= 5 {
+                println!("DIFF flags {flags} doc {doc:?}\n  fast {fast:?}\n  full {full:?}");
+            }
+        }
+    }
+    println!("fastfuzz: {count} documents, {accepted} accepted by tier 1, {diffs} differences");
+}

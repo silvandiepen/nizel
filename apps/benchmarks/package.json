@@ -14,13 +14,13 @@
     "fixtures:commonmark": "node scripts/build-commonmark-fixture.js",
     "test": "node -e \"process.exit(0)\"",
     "typecheck": "node -e \"process.exit(0)\"",
-    "test:run": "node -e \"process.exit(0)\""
+    "test:run": "node -e \"process.exit(0)\"",
+    "compare": "node src/compare.mjs"
   },
   "dependencies": {
     "@comark/html": "^0.6.2",
     "comark": "^0.6.2",
     "commonmark-spec": "^0.31.2",
-    "markdown-it": "^14.1.0",
     "marked": "^18.0.3",
     "nizel": "^0.1.0",
     "nizel-kit": "^0.1.0",
@@ -48,5 +48,10 @@
     "remark-parse": "^11.0.0",
     "tinybench": "^4.1.0",
     "unified": "^11.0.5"
+  },
+  "devDependencies": {
+    "@pierre/words": "^0.3.0",
+    "markdown-it": "^15.0.3",
+    "md4x": "^0.0.30"
   }
 }

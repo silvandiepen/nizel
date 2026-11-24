@@ -44,6 +44,9 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Rust Wasm target
+        run: rustup target add wasm32-unknown-unknown
+
       - name: Version packages
         env:
           RELEASE_SCOPE: ${{ inputs.scope || 'all' }}
