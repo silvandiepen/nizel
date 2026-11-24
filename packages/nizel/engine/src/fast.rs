@@ -1077,18 +1077,19 @@ fn paragraph(source: &str, start: usize, out: &mut String) -> Option<(usize, boo
                 match crate::inline::match_code_span(&b[..limit], i) {
                     Some((span_end, (value_start, value_end))) => {
                         let value = &source[value_start..value_end];
-                        if value.contains('[') {
+                        let bytes = code_bytes(value.as_bytes());
+                        if bytes & CODE_BRACKET != 0 {
                             // Its lines are the document's too (the definition check).
                             bracket = true;
                             if !brackets_in_code_ok(&b[start..limit]) {
                                 return None;
                             }
                         }
-                        if !code_span_in_subset(value, true) {
+                        if bytes & CODE_OUTSIDE != 0 {
                             return None;
                         }
                         out.push_str(&source[run..i]);
-                        code_span(value, out, None);
+                        code_span(value, bytes & CODE_NEWLINE != 0, out, None);
                         i = span_end;
                         run = span_end;
                     }
@@ -1301,14 +1302,25 @@ fn trim_spaces_end(b: &[u8], floor: usize, mut end: usize) -> usize {
     end
 }
 
-/// Code span content tier 1 can take: the balanced-link pre-scan sees `[`
-/// inside code too, tables see `|` anywhere on a line, and tabs or CR change
-/// how the whole document is read.
-/// A code span's value tier 1 writes itself. A `[` in it only with
-/// `brackets` (see `brackets_in_code_ok`): the full engine's balanced-link
-/// pre-scan looks at every `[`, code spans included.
-fn code_span_in_subset(value: &str, brackets: bool) -> bool {
-    !value.bytes().any(|c| matches!(c, b'|' | b'\t' | b'\r') || (c == b'[' && !brackets))
+const CODE_BRACKET: u8 = 1;
+const CODE_NEWLINE: u8 = 2;
+/// `|` (a table cell boundary to the full engine's row split), a tab or CR.
+const CODE_OUTSIDE: u8 = 4;
+
+static CODE_BYTE: [u8; 256] = {
+    let mut table = [0; 256];
+    table[b'[' as usize] = CODE_BRACKET;
+    table[b'\n' as usize] = CODE_NEWLINE;
+    table[b'|' as usize] = CODE_OUTSIDE;
+    table[b'\t' as usize] = CODE_OUTSIDE;
+    table[b'\r' as usize] = CODE_OUTSIDE;
+    table
+};
+
+/// What a code span's value holds that matters, in one pass: `[` (the
+/// bracket checks), a newline, or bytes outside the subset.
+fn code_bytes(value: &[u8]) -> u8 {
+    value.iter().fold(0, |kinds, &c| kinds | CODE_BYTE[c as usize])
 }
 
 /// Can the balanced-link pre-scan (`scanBalancedInlineLinks`) over the
@@ -1567,14 +1579,15 @@ fn inline(source: &str, out: &mut String, mut text: Option<&mut String>) -> Opti
                 Some((end, (value_start, value_end))) => {
                     let value = &source[value_start..value_end];
                     // A code span's newlines become spaces: outside the subset.
-                    if !code_span_in_subset(value, value.contains('[') && brackets_in_code_ok(b)) || value.contains('\n') {
+                    let bytes = code_bytes(value.as_bytes());
+                    if bytes & (CODE_OUTSIDE | CODE_NEWLINE) != 0 || (bytes & CODE_BRACKET != 0 && !brackets_in_code_ok(b)) {
                         return None;
                     }
                     out.push_str(&source[run..i]);
                     if let Some(text) = text.as_deref_mut() {
                         text.push_str(&source[run..i]);
                     }
-                    code_span(value, out, text.as_deref_mut());
+                    code_span(value, false, out, text.as_deref_mut());
                     i = end;
                     run = end;
                 }
@@ -1676,8 +1689,7 @@ fn emphasis_pair(b: &[u8], floor: usize, opener: usize, limit: usize) -> Option<
                 // be in the subset with no `[` (the paragraph's bracket checks
                 // don't see it).
                 let (end, (value_start, value_end)) = crate::inline::match_code_span(&b[..limit], j)?;
-                let value = &b[value_start..value_end];
-                if value.iter().any(|&c| matches!(c, b'\n' | b'[' | b'|' | b'\t' | b'\r')) {
+                if code_bytes(&b[value_start..value_end]) != 0 {
                     return None;
                 }
                 code = true;
@@ -1707,7 +1719,7 @@ fn emphasis(source: &str, pair: &EmphasisPair, out: &mut String, text: Option<&m
         if let Some(text) = text.as_deref_mut() {
             text.push_str(&source[run..at]);
         }
-        code_span(&source[value_start..value_end], out, text.as_deref_mut());
+        code_span(&source[value_start..value_end], false, out, text.as_deref_mut());
         run = end;
     }
     escape_html_into(out, &source[run..pair.content_end]);
@@ -1812,7 +1824,7 @@ fn literal_underscores(b: &[u8], floor: usize, at: usize) -> Option<usize> {
 
 /// `<code>` with `normalizeCodeSpan` applied: newlines become spaces, and one
 /// space comes off each end when both ends have one and it is not all spaces.
-fn code_span(value: &str, out: &mut String, text: Option<&mut String>) {
+fn code_span(value: &str, newline: bool, out: &mut String, text: Option<&mut String>) {
     let b = value.as_bytes();
     let strip = b.len() >= 2
         && matches!(b[0], b' ' | b'\n')
@@ -1822,14 +1834,18 @@ fn code_span(value: &str, out: &mut String, text: Option<&mut String>) {
     out.push_str("<code>");
     let mark = out.len();
     escape_html_into(out, inner);
-    if inner.contains('\n') {
+    if newline && inner.contains('\n') {
         // Only the newlines change, and escaping leaves them alone.
         let replaced = out[mark..].replace('\n', " ");
         out.truncate(mark);
         out.push_str(&replaced);
     }
     if let Some(text) = text {
-        text.push_str(&inner.replace('\n', " "));
+        if newline {
+            text.push_str(&inner.replace('\n', " "));
+        } else {
+            text.push_str(inner);
+        }
     }
     out.push_str("</code>");
 }
