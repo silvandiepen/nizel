@@ -4,11 +4,11 @@
 use crate::backtrack::first_match;
 use crate::block::is_thematic_break;
 use crate::common::{decode_string_content, normalize_href, normalize_reference, Reference};
-use crate::html::read_html_block;
+use crate::html::html_block_lines;
 use crate::js;
 use std::collections::HashMap;
 
-pub type References = HashMap<String, Reference>;
+pub type References = HashMap<String, Reference, crate::hash::FastBuild>;
 
 /// `extractReferenceDefinitions` → (content lines, references).
 /// The content lines borrow the input (a quoted definition becomes `>`).
@@ -25,7 +25,7 @@ pub fn defines_any(lines: &[&str]) -> bool {
 }
 
 fn scan_definitions<'a>(lines: &[&'a str], mut content: Option<&mut Vec<&'a str>>, first_only: bool) -> References {
-    let mut references = References::new();
+    let mut references = References::default();
     let mut previous_was_reference = false;
     let mut index = 0;
     while index < lines.len() {
@@ -43,7 +43,7 @@ fn scan_definitions<'a>(lines: &[&'a str], mut content: Option<&mut Vec<&'a str>
             index += 1;
             continue;
         }
-        if let Some((_, end)) = read_html_block(lines, index) {
+        if let Some((_, end)) = html_block_lines(lines, index) {
             if let Some(content) = content.as_deref_mut() {
                 content.extend_from_slice(&lines[index..(end + 1).min(lines.len())]);
             }

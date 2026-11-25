@@ -128,18 +128,20 @@ pub(crate) fn extracted_content(markdown: &str) -> (String, References) {
         let (content, references) = refs::extract(&base);
         (content.join("\n"), references)
     } else {
-        (base.join("\n"), References::new())
+        (base.join("\n"), References::default())
     }
 }
 
 /// `extracted_content` for a document without CR or tabs, over `lines` (its
 /// lines): the lines extraction keeps, and what it extracted.
+///
+/// `lines` must be `markdown` split at `\n`: the gate reads them in place of
+/// splitting it again.
 pub(crate) fn extracted_lines<'a>(markdown: &str, lines: &[&'a str]) -> (Vec<&'a str>, References) {
-    let (_, _, _, has_reference) = scan_source(markdown);
-    if has_reference && has_possible_reference_definition_start(markdown) {
+    if has_reference_marker(markdown.as_bytes()) && lines.iter().any(|line| possible_reference_definition_start(line)) {
         refs::extract(lines)
     } else {
-        (lines.to_vec(), References::new())
+        (lines.to_vec(), References::default())
     }
 }
 
@@ -167,7 +169,7 @@ fn parse_markdown_prepared(
         let (content, references) = refs::extract(&base);
         (Some(content), references)
     } else {
-        (None, References::new())
+        (None, References::default())
     };
     let lines: &[&str] = content.as_deref().unwrap_or(&base);
     let ctx = Ctx { options, references: given.unwrap_or(&references) };
@@ -216,17 +218,32 @@ fn expand_leading_tabs_in_line(line: &str) -> String {
 
 /// `/(^|\n)(?: {0,3}> ?| {0,3})\[/`
 pub(crate) fn has_possible_reference_definition_start(markdown: &str) -> bool {
-    markdown.split('\n').any(|line| {
-        let after = &line[js::up_to_three_spaces(line)..];
-        if after.starts_with('[') {
+    markdown.split('\n').any(possible_reference_definition_start)
+}
+
+/// The line test of `has_possible_reference_definition_start`.
+fn possible_reference_definition_start(line: &str) -> bool {
+    let after = &line[js::up_to_three_spaces(line)..];
+    if after.starts_with('[') {
+        return true;
+    }
+    if let Some(quoted) = after.strip_prefix('>') {
+        let quoted = quoted.strip_prefix(' ').unwrap_or(quoted);
+        return quoted.starts_with('[');
+    }
+    false
+}
+
+/// `scan_source`'s `]:` test alone: a `]` followed by `:`.
+fn has_reference_marker(b: &[u8]) -> bool {
+    let mut at = 0;
+    while let Some(i) = crate::scan::find_byte(b, at, b']') {
+        if b.get(i + 1) == Some(&b':') {
             return true;
         }
-        if let Some(quoted) = after.strip_prefix('>') {
-            let quoted = quoted.strip_prefix(' ').unwrap_or(quoted);
-            return quoted.starts_with('[');
-        }
-        false
-    })
+        at = i + 1;
+    }
+    false
 }
 
 fn as_strs(lines: &[String]) -> Vec<&str> {
@@ -352,7 +369,7 @@ pub(crate) fn parse_blocks_until(lines: &[&str], start: usize, ctx: &Ctx, seen: 
 
         if is_table_start(lines, index) {
             // Cells go through `parseInline`: the document's references are not visible there.
-            let empty = References::new();
+            let empty = References::default();
             let cell_ctx = Ctx { options, references: &empty };
             let align = split_table_row(&lines[index + 1]).into_iter().map(cell_alignment).collect();
             let mut rows = vec![table_cells(&lines[index], &cell_ctx)?];

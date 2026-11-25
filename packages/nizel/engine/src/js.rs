@@ -53,16 +53,39 @@ pub fn has_line_terminator(text: &str) -> bool {
     (at..b.len()).any(terminator_at)
 }
 
+/// The ASCII part of `is_space`.
+fn is_ascii_space(b: u8) -> bool {
+    matches!(b, b'\t' | b'\n' | 0x0b | 0x0c | b'\r' | b' ')
+}
+
+/// `String.prototype.trim`: ASCII bytes at each end are tested as bytes;
+/// from a non-ASCII one on, characters are.
 pub fn trim(s: &str) -> &str {
-    s.trim_matches(is_space)
+    trim_end(trim_start(s))
 }
 
 pub fn trim_start(s: &str) -> &str {
-    s.trim_start_matches(is_space)
+    let b = s.as_bytes();
+    let mut i = 0;
+    while i < b.len() && is_ascii_space(b[i]) {
+        i += 1;
+    }
+    if i < b.len() && b[i] >= 0x80 {
+        return s[i..].trim_start_matches(is_space);
+    }
+    &s[i..]
 }
 
 pub fn trim_end(s: &str) -> &str {
-    s.trim_end_matches(is_space)
+    let b = s.as_bytes();
+    let mut j = b.len();
+    while j > 0 && is_ascii_space(b[j - 1]) {
+        j -= 1;
+    }
+    if j > 0 && b[j - 1] >= 0x80 {
+        return s[..j].trim_end_matches(is_space);
+    }
+    &s[..j]
 }
 
 /// `/^ {0,3}/` — the number of leading spaces, at most three.
@@ -157,3 +180,29 @@ mod line_terminator_tests {
     }
 }
 
+
+#[cfg(test)]
+mod trim_tests {
+    use super::*;
+
+    #[test]
+    fn trims_as_the_character_definition_does() {
+        // Every string up to length 6 over ASCII and non-ASCII spaces and not.
+        let alphabet = [" ", "\t", "\n", "\u{0b}", "\r", "a", "\u{a0}", "\u{2028}", "\u{3000}", "\u{feff}", "é", "\u{200b}"];
+        let mut strings = vec![String::new()];
+        for _ in 0..6 {
+            let mut next = Vec::new();
+            for s in &strings {
+                for c in alphabet {
+                    next.push(format!("{s}{c}"));
+                }
+            }
+            for s in &next {
+                assert_eq!(trim(s), s.trim_matches(is_space), "{s:?}");
+                assert_eq!(trim_start(s), s.trim_start_matches(is_space), "{s:?}");
+                assert_eq!(trim_end(s), s.trim_end_matches(is_space), "{s:?}");
+            }
+            strings = next;
+        }
+    }
+}

@@ -44,8 +44,26 @@ pub enum Inline {
     Delete { children: Vec<Inline> },
     /// `has_title`: the JavaScript node has a `title` key (possibly undefined);
     /// autolinks have none. `external` is `isExternalHref` or fixed by kind.
-    Link { href: String, title: Option<String>, has_title: bool, external: bool, children: Vec<Inline> },
-    Image { src: String, alt: String, title: Option<String> },
+    Link(Box<LinkNode>),
+    Image(Box<ImageNode>),
+}
+
+/// A link's fields, boxed: links are rare next to text, and keeping them
+/// out of line keeps every `Inline` small.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LinkNode {
+    pub href: String,
+    pub title: Option<String>,
+    pub has_title: bool,
+    pub external: bool,
+    pub children: Vec<Inline>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImageNode {
+    pub src: String,
+    pub alt: String,
+    pub title: Option<String>,
 }
 
 impl Inline {
@@ -53,11 +71,18 @@ impl Inline {
         Inline::Text { value: value.into(), escaped: false }
     }
 
+    pub fn link(href: String, title: Option<String>, has_title: bool, external: bool, children: Vec<Inline>) -> Self {
+        Inline::Link(Box::new(LinkNode { href, title, has_title, external, children }))
+    }
+
+    pub fn image(src: String, alt: String, title: Option<String>) -> Self {
+        Inline::Image(Box::new(ImageNode { src, alt, title }))
+    }
+
     pub fn children(&self) -> Option<&[Inline]> {
         match self {
-            Inline::Strong { children } | Inline::Emphasis { children } | Inline::Delete { children } | Inline::Link { children, .. } => {
-                Some(children)
-            }
+            Inline::Strong { children } | Inline::Emphasis { children } | Inline::Delete { children } => Some(children),
+            Inline::Link(link) => Some(&link.children),
             _ => None,
         }
     }
@@ -77,7 +102,7 @@ fn strip_into(nodes: &[Inline], text: &mut String) {
             Inline::LineBreak { .. } => text.push('\n'),
             Inline::InlineCode { code } => text.push_str(code),
             Inline::InlineHtml { .. } => {}
-            Inline::Image { alt, .. } => text.push_str(alt),
+            Inline::Image(image) => text.push_str(&image.alt),
             other => strip_into(other.children().unwrap_or(&[]), text),
         }
     }

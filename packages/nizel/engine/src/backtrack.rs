@@ -23,8 +23,12 @@ where
         options: Vec<S>,
         tried: usize,
     }
-    let mut failed: HashSet<S> = HashSet::new();
     let options = next(&start);
+    // A state with no alternative to try only has its continuation.
+    if options.is_empty() {
+        return stop(&start);
+    }
+    let mut failed: HashSet<S, crate::hash::FastBuild> = HashSet::default();
     let mut stack = vec![Frame { state: start, options, tried: 0 }];
     while let Some(frame) = stack.last_mut() {
         if frame.tried < frame.options.len() {
