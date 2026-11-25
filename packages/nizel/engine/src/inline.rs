@@ -42,7 +42,7 @@ pub fn parse_inline_owned(source: String, ctx: &Ctx) -> Result<Vec<Inline>> {
 
 /// `stripInlineMarkdown`: parsed with the same options but no references.
 fn strip_inline_markdown(source: &str, ctx: &Ctx) -> Result<String> {
-    let empty = References::new();
+    let empty = References::default();
     let bare = Ctx { options: ctx.options, references: &empty };
     Ok(strip_inline(&parse_inline_with_state(source, &bare, true)?))
 }
@@ -91,85 +91,61 @@ fn parse_inline_with_state(source: &str, ctx: &Ctx, extract_nested_links: bool) 
             Token::RefImage { alt, label } => {
                 let key = normalize_reference_label_for_lookup(if label.0 == label.1 { slice(alt) } else { slice(label) });
                 match ctx.references.get(&key) {
-                    Some(reference) => nodes.push(Inline::Image {
-                        alt: strip_inline_markdown(slice(alt), ctx)?,
-                        src: reference.href.clone(),
-                        title: reference.title.clone(),
-                    }),
+                    Some(reference) => nodes.push(Inline::image(reference.href.clone(), strip_inline_markdown(slice(alt), ctx)?, reference.title.clone())),
                     None => nodes.push(Inline::text(decode_string_content(matched))),
                 }
             }
             Token::RefLink { text, label } => {
                 let key = normalize_reference_label_for_lookup(if label.0 == label.1 { slice(text) } else { slice(label) });
                 match ctx.references.get(&key) {
-                    Some(reference) => nodes.push(Inline::Link {
-                        href: reference.href.clone(),
-                        title: reference.title.clone(),
-                        has_title: true,
-                        external: is_external_href(&reference.href),
-                        children: parse_inline_with_state(slice(text), ctx, true)?,
-                    }),
+                    Some(reference) => nodes.push(Inline::link(reference.href.clone(), reference.title.clone(), true, is_external_href(&reference.href), parse_inline_with_state(slice(text), ctx, true)?)),
                     None => nodes.push(Inline::text(decode_string_content(matched))),
                 }
             }
-            Token::InlineImage { text, href, title } => nodes.push(Inline::Image {
-                alt: strip_inline_markdown(slice(text), ctx)?,
-                src: normalize_href(&decode_string_content(normalize_inline_destination(slice(href)))),
-                title: title.map(|t| decode_string_content(slice(t))),
-            }),
+            Token::InlineImage { text, href, title } => {
+                let alt = strip_inline_markdown(slice(text), ctx)?;
+                let src = normalize_href(&decode_string_content(normalize_inline_destination(slice(href))));
+                nodes.push(Inline::image(src, alt, title.map(|t| decode_string_content(slice(t)))));
+            }
             Token::InlineLink { text, href, title } => {
                 let href = normalize_href(&decode_string_content(normalize_inline_destination(slice(href))));
-                nodes.push(Inline::Link {
-                    external: is_external_href(&href),
-                    href,
-                    title: title.map(|t| decode_string_content(slice(t))),
-                    has_title: true,
-                    children: parse_inline_with_state(slice(text), ctx, true)?,
-                });
+                let external = is_external_href(&href);
+                nodes.push(Inline::link(href, title.map(|t| decode_string_content(slice(t))), true, external, parse_inline_with_state(slice(text), ctx, true)?));
             }
             Token::AngleUrl => {
                 let url = &matched[1..matched.len() - 1];
                 let href = normalize_href(url);
-                nodes.push(Inline::Link { external: is_external_href(&href), href, title: None, has_title: false, children: vec![Inline::text(url)] });
+                let external = is_external_href(&href);
+                nodes.push(Inline::link(href, None, false, external, vec![Inline::text(url)]));
             }
             Token::AngleEmail => {
                 let email = &matched[1..matched.len() - 1];
-                nodes.push(Inline::Link { href: format!("mailto:{email}"), title: None, has_title: false, external: false, children: vec![Inline::text(email)] });
+                nodes.push(Inline::link(format!("mailto:{email}"), None, false, false, vec![Inline::text(email)]));
             }
             Token::ShortcutImage { text } => {
                 let alt = decode_string_content(slice(text));
                 match ctx.references.get(&normalize_reference(&alt)) {
-                    Some(reference) => nodes.push(Inline::Image {
-                        alt: strip_inline_markdown(&alt, ctx)?,
-                        src: reference.href.clone(),
-                        title: reference.title.clone(),
-                    }),
+                    Some(reference) => nodes.push(Inline::image(reference.href.clone(), strip_inline_markdown(&alt, ctx)?, reference.title.clone())),
                     None => nodes.push(Inline::text(decode_string_content(matched))),
                 }
             }
             Token::ShortcutLink { text } => {
                 let label = decode_string_content(slice(text));
                 match ctx.references.get(&normalize_reference(&label)) {
-                    Some(reference) => nodes.push(Inline::Link {
-                        href: reference.href.clone(),
-                        title: reference.title.clone(),
-                        has_title: true,
-                        external: is_external_href(&reference.href),
-                        children: parse_inline_with_state(&label, ctx, true)?,
-                    }),
+                    Some(reference) => nodes.push(Inline::link(reference.href.clone(), reference.title.clone(), true, is_external_href(&reference.href), parse_inline_with_state(&label, ctx, true)?)),
                     None => nodes.push(Inline::text(decode_string_content(matched))),
                 }
             }
             Token::Delete => nodes.push(Inline::Delete { children: parse_inline_with_state(&matched[2..matched.len() - 2], ctx, true)? }),
             Token::BareUrl if options.autolinks => {
                 let href = trim_trailing_punctuation(matched);
-                nodes.push(Inline::Link { href: href.to_string(), title: None, has_title: false, external: true, children: vec![Inline::text(href)] });
+                nodes.push(Inline::link(href.to_string(), None, false, true, vec![Inline::text(href)]));
                 if href.len() < matched.len() {
                     nodes.push(Inline::text(&matched[href.len()..]));
                 }
             }
             Token::BareEmail if options.autolinks => {
-                nodes.push(Inline::Link { href: format!("mailto:{matched}"), title: None, has_title: false, external: false, children: vec![Inline::text(matched)] });
+                nodes.push(Inline::link(format!("mailto:{matched}"), None, false, false, vec![Inline::text(matched)]));
             }
             Token::BareUrl | Token::BareEmail => nodes.push(Inline::text(matched)),
         }
@@ -236,9 +212,10 @@ fn scan_balanced_inline_links(source: &str, ctx: &Ctx) -> Result<Option<Vec<Inli
         let href = normalize_href(&decode_string_content(&destination.href));
         let title = destination.title.as_deref().map(decode_string_content);
         if image {
-            nodes.push(Inline::Image { alt: strip_inline_markdown(label, ctx)?, src: href, title });
+            nodes.push(Inline::image(href, strip_inline_markdown(label, ctx)?, title));
         } else {
-            nodes.push(Inline::Link { external: is_external_href(&href), href, title, has_title: true, children: parse_inline_with_state(label, ctx, false)? });
+            let external = is_external_href(&href);
+            nodes.push(Inline::link(href, title, true, external, parse_inline_with_state(label, ctx, false)?));
         }
         found = true;
         cursor = destination.end + 1;
@@ -819,25 +796,78 @@ fn match_title(s: &str, q: usize) -> Option<(Range, usize)> {
 }
 
 /// `(?:\\\]|[^\]`<\[])+\]` after the opening bracket → (end, text range).
+///
+/// The backtracking order, in one pass: the loop runs greedily (taking `\]`
+/// as one item where it can) to the first byte no item matches. A `]` there
+/// ends the match when an item came before it. Otherwise the regex backs up
+/// to the last `\]` it took as one item and takes its `\` alone instead,
+/// which ends the match at that `]`; with no such `\]`, there is no match.
 fn match_shortcut(s: &str, start: usize) -> Option<(usize, Range)> {
     let b = s.as_bytes();
-    first_match(
-        (start, false),
-        |&(p, _)| {
-            let mut next = Vec::with_capacity(2);
-            if b.get(p) == Some(&b'\\') && b.get(p + 1) == Some(&b']') {
-                next.push((p + 2, true));
+    let mut p = start;
+    let mut last_escaped: Option<usize> = None;
+    loop {
+        match b.get(p) {
+            Some(b']') if p > start => return Some((p + 1, (start, p))),
+            None | Some(b']' | b'`' | b'<' | b'[') => break,
+            Some(b'\\') if b.get(p + 1) == Some(&b']') => {
+                last_escaped = Some(p + 1);
+                p += 2;
             }
-            if let Some(c) = s[p..].chars().next().filter(|&c| !matches!(c, ']' | '`' | '<' | '[')) {
-                next.push((p + c.len_utf8(), true));
-            }
-            next
-        },
-        |&(p, any)| (any && b.get(p) == Some(&b']')).then_some((p + 1, (start, p))),
-    )
+            Some(_) => p += s[p..].chars().next().map_or(1, char::len_utf8),
+        }
+    }
+    last_escaped.map(|close| (close + 1, (start, close)))
 }
 
 /// The tag alternative of `inlineHtml` (letters folded by `iu`).
 fn match_html_tag(s: &str, at: usize) -> Option<usize> {
     match_tag(s, at, letter_iu, true, &|_| true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The backtracking definition `match_shortcut` replaces.
+    fn match_shortcut_backtracking(s: &str, start: usize) -> Option<(usize, Range)> {
+        let b = s.as_bytes();
+        first_match(
+            (start, false),
+            |&(p, _)| {
+                let mut next = Vec::with_capacity(2);
+                if b.get(p) == Some(&b'\\') && b.get(p + 1) == Some(&b']') {
+                    next.push((p + 2, true));
+                }
+                if let Some(c) = s[p..].chars().next().filter(|&c| !matches!(c, ']' | '`' | '<' | '[')) {
+                    next.push((p + c.len_utf8(), true));
+                }
+                next
+            },
+            |&(p, any)| (any && b.get(p) == Some(&b']')).then_some((p + 1, (start, p))),
+        )
+    }
+
+    #[test]
+    fn match_shortcut_matches_the_backtracking_definition() {
+        // Every string up to length 7 over the bytes that matter.
+        let alphabet = ['a', '\\', ']', '[', '`', '<', 'é'];
+        let mut strings = vec![String::new()];
+        for _ in 0..7 {
+            let mut next = Vec::new();
+            for s in &strings {
+                for c in alphabet {
+                    let mut t = s.clone();
+                    t.push(c);
+                    next.push(t);
+                }
+            }
+            for s in &next {
+                for (start, _) in s.char_indices() {
+                    assert_eq!(match_shortcut(s, start), match_shortcut_backtracking(s, start), "{s:?} at {start}");
+                }
+            }
+            strings = next;
+        }
+    }
 }

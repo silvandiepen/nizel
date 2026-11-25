@@ -185,7 +185,8 @@ fn inlines_into(nodes: &[Inline], out: &mut Vec<u8>) {
                 u8(out, 8);
                 inlines_into(children, out);
             }
-            Inline::Link { href, title, has_title, external, children } => {
+            Inline::Link(link) => {
+                let crate::ast::LinkNode { href, title, has_title, external, children } = &**link;
                 u8(out, 9);
                 str(out, href);
                 u8(out, u8::from(*has_title));
@@ -193,7 +194,8 @@ fn inlines_into(nodes: &[Inline], out: &mut Vec<u8>) {
                 u8(out, u8::from(*external));
                 inlines_into(children, out);
             }
-            Inline::Image { src, alt, title } => {
+            Inline::Image(image) => {
+                let crate::ast::ImageNode { src, alt, title } = &**image;
                 u8(out, 10);
                 str(out, alt);
                 str(out, src);

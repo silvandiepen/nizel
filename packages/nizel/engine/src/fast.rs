@@ -111,7 +111,7 @@ fn render_inner(source: &str, options: &Options, out: &mut String) -> Option<()>
     };
     let has_pipe = crate::scan::find_byte(b, 0, b'|').is_some();
     let start = out.len();
-    let none = References::new();
+    let none = References::default();
     let plain = Ctx { options, references: &none };
     let mut state = Walk::new(source, options, &plain, has_tab, has_pipe, false);
     NO_REFERENCES.with(|flag| flag.set(true));
@@ -407,7 +407,7 @@ fn walk(source: &str, state: &mut Walk, out: &mut String, mut spans: Option<&mut
                     // and stays in step.
                     let skipped = state.skipped_by_extraction()
                         && b[pos..].iter().take(4).any(|&c| c == b'<')
-                        && crate::html::read_html_block(&table.lines, index).is_some_and(|(_, last)| table.lines.get(last + 1..next).is_some_and(|between| between.iter().all(|line| line.is_empty())));
+                        && crate::html::html_block_lines(&table.lines, index).is_some_and(|(_, last)| table.lines.get(last + 1..next).is_some_and(|between| between.iter().all(|line| line.is_empty())));
                     if !skipped {
                         state.check_definitions(&source[pos..end])?;
                     }
@@ -1545,7 +1545,7 @@ fn table(source: &str, start: usize, ctx: &Ctx, has_tab: bool, out: &mut String)
             let mark = out.len();
             if inline(cell, out, None).is_none() {
                 out.truncate(mark);
-                let empty = References::new();
+                let empty = References::default();
                 let cell_ctx = Ctx { options: ctx.options, references: &empty };
                 crate::render::render_inline(&crate::inline::parse_inline(cell, &cell_ctx).ok()?, out);
                 INLINE_FALLBACK.with(|bytes| bytes.set(bytes.get() + cell.len()));

@@ -17,6 +17,7 @@ pub mod ast;
 pub mod backtrack;
 pub mod block;
 pub mod fast;
+pub mod hash;
 pub mod codec;
 pub mod common;
 pub mod emphasis;

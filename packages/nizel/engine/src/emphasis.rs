@@ -36,7 +36,8 @@ impl Unit {
     }
 
     fn is_punctuation(self) -> bool {
-        matches!(self, Unit::Char(c) if in_table(PUNCTUATION, c))
+        // ASCII punctuation is exactly the table's ASCII part (tested below).
+        matches!(self, Unit::Char(c) if if c.is_ascii() { c.is_ascii_punctuation() } else { in_table(PUNCTUATION, c) })
     }
 }
 
@@ -152,7 +153,7 @@ fn first_inline_character(node: &Inline) -> Unit {
         Inline::Text { value, .. } => Unit::first_of(value),
         Inline::LineBreak { .. } => Unit::Char('\n'),
         Inline::InlineCode { code } => Unit::first_of(code),
-        Inline::Image { alt, .. } => Unit::first_of(alt),
+        Inline::Image(image) => Unit::first_of(&image.alt),
         Inline::InlineHtml { .. } => Unit::None,
         other => next_inline_character(other.children().unwrap_or(&[])),
     }
@@ -179,7 +180,7 @@ fn last_inline_character(node: &Inline) -> Unit {
         Inline::Text { value, .. } => Unit::last_of(value),
         Inline::LineBreak { .. } => Unit::Char('\n'),
         Inline::InlineCode { code } => Unit::last_of(code),
-        Inline::Image { alt, .. } => Unit::last_of(alt),
+        Inline::Image(image) => Unit::last_of(&image.alt),
         Inline::InlineHtml { .. } => Unit::None,
         other => other.children().unwrap_or(&[]).iter().rev().map(last_inline_character).find(|u| *u != Unit::None).unwrap_or(Unit::None),
     }
@@ -218,8 +219,27 @@ fn tokens_to_nodes(tokens: Vec<Token>) -> Vec<Inline> {
     nodes
 }
 
-/// `inlineTokensToNodes` over nodes alone: adjacent text merges, `escaped` drops.
-fn merge_text(nodes: Vec<Inline>) -> Vec<Inline> {
+/// `inlineTokensToNodes` over nodes alone: adjacent text merges, empty text
+/// drops, `escaped` drops. In place when nothing merges or drops.
+fn merge_text(mut nodes: Vec<Inline>) -> Vec<Inline> {
+    let mut previous_text = false;
+    let mut in_place = true;
+    for node in &mut nodes {
+        match node {
+            Inline::Text { value, escaped } => {
+                if previous_text || value.is_empty() {
+                    in_place = false;
+                    break;
+                }
+                *escaped = false;
+                previous_text = true;
+            }
+            _ => previous_text = false,
+        }
+    }
+    if in_place {
+        return nodes;
+    }
     let mut merged: Vec<Inline> = Vec::with_capacity(nodes.len());
     for node in nodes {
         match node {
@@ -242,3 +262,15 @@ fn append_owned_text(nodes: &mut Vec<Inline>, value: String) {
     nodes.push(Inline::Text { value, escaped: false });
 }
 
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ascii_punctuation_is_the_tables_ascii_part() {
+        for b in 0u8..128 {
+            assert_eq!((b as char).is_ascii_punctuation(), in_table(PUNCTUATION, b as char), "{b}");
+        }
+    }
+}

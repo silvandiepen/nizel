@@ -179,7 +179,8 @@ pub(crate) fn render_inline(nodes: &[Inline], out: &mut String) {
             Inline::Strong { children } => wrap(out, "strong", children),
             Inline::Emphasis { children } => wrap(out, "em", children),
             Inline::Delete { children } => wrap(out, "del", children),
-            Inline::Image { src, alt, title } => {
+            Inline::Image(image) => {
+                let crate::ast::ImageNode { src, alt, title } = &**image;
                 out.push_str("<img");
                 attr(out, "src", src);
                 attr(out, "alt", alt);
@@ -188,10 +189,11 @@ pub(crate) fn render_inline(nodes: &[Inline], out: &mut String) {
                 }
                 out.push_str(" />");
             }
-            Inline::Link { href, title, children, .. } => {
+            Inline::Link(link) => {
+                let crate::ast::LinkNode { href, title, children, .. } = &**link;
                 out.push_str("<a");
                 // `node.href?.toLowerCase().trim().startsWith('javascript:')` drops the href.
-                if !crate::js::trim(&href.to_lowercase()).starts_with("javascript:") {
+                if !is_javascript_href(href) {
                     out.push_str(" href=\"");
                     escape_html_into(out, href);
                     out.push('"');
@@ -225,4 +227,14 @@ fn wrap(out: &mut String, tag: &str, children: &[Inline]) {
     out.push_str("</");
     out.push_str(tag);
     out.push('>');
+}
+
+/// `href.toLowerCase().trim().startsWith('javascript:')`. An ASCII href
+/// lower-cases byte by byte, so it is compared in place.
+fn is_javascript_href(href: &str) -> bool {
+    if href.is_ascii() {
+        let trimmed = crate::js::trim(href).as_bytes();
+        return trimmed.len() >= 11 && trimmed[..11].eq_ignore_ascii_case(b"javascript:");
+    }
+    crate::js::trim(&href.to_lowercase()).starts_with("javascript:")
 }

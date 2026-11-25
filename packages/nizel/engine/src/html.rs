@@ -254,6 +254,14 @@ fn html_line_start(line: &str) -> bool {
 
 /// `readHtmlBlock` → (value, end index).
 pub fn read_html_block(lines: &[&str], start: usize) -> Option<(String, usize)> {
+    let (last, end) = html_block_lines(lines, start)?;
+    Some((lines[start..=last].join("\n"), end))
+}
+
+/// `readHtmlBlock` without its value: (index of the block's last line, end
+/// index). The end index is `lines.len()` for a block whose closing
+/// pattern never matches (its last line is then the input's last).
+pub fn html_block_lines(lines: &[&str], start: usize) -> Option<(usize, usize)> {
     let line = &lines[start];
     if !html_line_start(line) {
         return None;
@@ -267,15 +275,14 @@ pub fn read_html_block(lines: &[&str], start: usize) -> Option<(String, usize)> 
             }
             end += 1;
         }
-        let last = end.min(lines.len() - 1);
-        return Some((lines[start..=last].join("\n"), end));
+        return Some((end.min(lines.len() - 1), end));
     }
     if is_block_tag_start(trimmed) || is_valid_inline_html_tag(trimmed) {
         let mut end = start;
         while end < lines.len() && !js::trim(&lines[end]).is_empty() {
             end += 1;
         }
-        return Some((lines[start..end].join("\n"), end - 1));
+        return Some((end - 1, end - 1));
     }
     None
 }
@@ -325,7 +332,7 @@ pub(crate) fn read_html_block_from(source: &str, pos: usize) -> Option<(&str, us
 /// Whether `readHtmlBlock` reads a block starting at `line` (it decides on
 /// that line alone).
 pub fn starts_html_block(line: &str) -> bool {
-    read_html_block(&[line], 0).is_some()
+    html_block_lines(&[line], 0).is_some()
 }
 
 /// `isInterruptingHtmlBlockStart`.
